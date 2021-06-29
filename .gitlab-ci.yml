@@ -16,7 +16,7 @@ tests:
     POSTGRES_PASSWORD: ""
     POSTGRES_HOST_AUTH_METHOD: trust
     LOG_FORMATTER: brief
-    SQLALCHEMY_DATABASE_URI: "postgresql://postgres@postgres:5432/carina"
+    SQLALCHEMY_DATABASE_URI: "postgresql+asyncpg://postgres@postgres:5432/carina"
     TESTING: "True"
   before_script:
     - pip install pipenv
@@ -24,7 +24,7 @@ tests:
     - pip freeze
   script:
     - alembic upgrade head
-    # - pytest --verbose --cov app --cov-report term-missing
+    - pytest --verbose --cov app --cov-report term-missing
   services:
     - postgres:11
 

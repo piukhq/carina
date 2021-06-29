@@ -1,0 +1,9 @@
+[run]
+omit = *test*
+       *alembic*
+        app/version.py
+branch = True
+
+[report]
+fail_under = 70
+exclude_lines = pragma: no cover

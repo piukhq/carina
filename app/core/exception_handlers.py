@@ -1,0 +1,46 @@
+from typing import List, Tuple, Union
+
+from fastapi import Request, Response
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import UJSONResponse
+from starlette.exceptions import HTTPException
+from starlette.status import HTTP_400_BAD_REQUEST, HTTP_422_UNPROCESSABLE_ENTITY
+
+
+def _format_validation_errors(payload: List[dict]) -> Tuple[int, Union[List[dict], dict]]:
+    fields = []
+    for error in payload:
+        if error["type"] == "value_error.jsondecode":
+            return (
+                HTTP_400_BAD_REQUEST,
+                {"display_message": "Malformed request.", "error": "MALFORMED_REQUEST"},
+            )
+
+        else:
+            fields.append(error["loc"][-1])
+
+    content = {
+        "display_message": "Submitted fields are missing or invalid.",
+        "error": "FIELD_VALIDATION_ERROR",
+        "fields": fields,
+    }
+
+    return HTTP_422_UNPROCESSABLE_ENTITY, content
+
+
+# customise Api RequestValidationError
+async def request_validation_handler(request: Request, exc: RequestValidationError) -> Response:
+    status_code, content = _format_validation_errors(exc.errors())
+    return UJSONResponse(status_code=status_code, content=content)
+
+
+# customise Api HTTPException to remove "details" and handle manually raised ValidationErrors
+async def http_exception_handler(request: Request, exc: HTTPException) -> UJSONResponse:
+
+    if exc.status_code == HTTP_422_UNPROCESSABLE_ENTITY and isinstance(exc.detail, list):
+        status_code, content = _format_validation_errors(exc.detail)
+    else:
+        status_code, content = exc.status_code, exc.detail
+
+    headers = getattr(exc, "headers", None)
+    return UJSONResponse(content, status_code=status_code, headers=headers)

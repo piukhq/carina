@@ -5,7 +5,7 @@ import sys
 from logging.config import dictConfig
 from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
-from pydantic import BaseSettings, PostgresDsn, validator
+from pydantic import BaseSettings, HttpUrl, PostgresDsn, validator
 from pydantic.validators import str_validator
 
 if TYPE_CHECKING:
@@ -77,6 +77,21 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str = ""
     POSTGRES_DB: str = "carina"
     SQLALCHEMY_DATABASE_URI: Optional[str] = None
+    SENTRY_DSN: Optional[HttpUrl] = None
+    SENTRY_ENV: Optional[str] = None
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.0
+
+    @validator("SENTRY_DSN", pre=True)
+    def sentry_dsn_can_be_blank(cls, v: str) -> Optional[str]:
+        if v is not None and len(v) == 0:
+            return None
+        return v
+
+    @validator("SENTRY_TRACES_SAMPLE_RATE")
+    def validate_sentry_traces_sample_rate(cls, v: float) -> float:
+        if not (0 <= v <= 1):
+            raise ValueError("SENTRY_TRACES_SAMPLE_RATE must be between 0.0 and 1.0")
+        return v
 
     @validator("SQLALCHEMY_DATABASE_URI", pre=True)
     def assemble_db_connection(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
@@ -85,7 +100,7 @@ class Settings(BaseSettings):
 
         else:
             db_uri = PostgresDsn.build(
-                scheme="postgresql+psycopg2",
+                scheme="postgresql+asyncpg",
                 user=values.get("POSTGRES_USER"),
                 password=values.get("POSTGRES_PASSWORD"),
                 host=values.get("POSTGRES_HOST"),

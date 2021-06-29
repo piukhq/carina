@@ -1,4 +1,5 @@
 from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 
@@ -11,7 +12,15 @@ else:
 
 
 # future=True enables sqlalchemy core 2.0
-engine = create_engine(
-    settings.SQLALCHEMY_DATABASE_URI, pool_pre_ping=True, poolclass=NullPool, echo=settings.SQL_DEBUG, future=True
+async_engine = create_async_engine(
+    settings.SQLALCHEMY_DATABASE_URI, pool_pre_ping=True, future=True, echo=settings.SQL_DEBUG, **null_pool
 )
-SessionMaker = sessionmaker(bind=engine, future=True, expire_on_commit=False)
+sync_engine = create_engine(
+    settings.SQLALCHEMY_DATABASE_URI.replace("+asyncpg", ""),
+    pool_pre_ping=True,
+    poolclass=NullPool,
+    echo=settings.SQL_DEBUG,
+    future=True,
+)
+AsyncSessionMaker = sessionmaker(bind=async_engine, future=True, expire_on_commit=False, class_=AsyncSession)
+SyncSessionMaker = sessionmaker(bind=sync_engine, future=True, expire_on_commit=False)
