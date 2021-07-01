@@ -2,11 +2,10 @@ stages:
   - tests
   - dev
   - staging
-  - preprod
   - prod
 
 default:
-  image: binkhq/python:3.9
+  image: ghcr.io/binkhq/python:3.9
 
 tests:
   stage: tests
@@ -19,7 +18,6 @@ tests:
     SQLALCHEMY_DATABASE_URI: "postgresql+asyncpg://postgres@postgres:5432/carina"
     TESTING: "True"
   before_script:
-    - pip install pipenv
     - pipenv install --dev --system --deploy --ignore-pipfile
     - pip freeze
   script:
@@ -62,8 +60,9 @@ dev:
   script:
     - export CTAG="develop-$(date +%F-%H%M%S)"
     - docker build --pull -t "$CI_REGISTRY/carina:$CTAG" .
-    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$CI_REGISTRY/aqua-scanner:5.0" scan --local "$CI_REGISTRY/carina:$CTAG" --host https://aqua.uksouth.bink.sh:30001/ --user scanner --password $AQUA_PASSWORD --show-negligible --policies Bink --text
+    - docker tag "$CI_REGISTRY/carina:$CTAG" "$CI_REGISTRY/carina:dev"
     - docker push "$CI_REGISTRY/carina:$CTAG"
+    - docker push "$CI_REGISTRY/carina:dev"
   only:
     - develop
 
@@ -78,19 +77,9 @@ staging:
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
   script:
     - docker build --pull -t "$CI_REGISTRY/carina:staging-$CI_COMMIT_TAG" .
-    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$CI_REGISTRY/aqua-scanner:5.0" scan --local "$CI_REGISTRY/carina:staging-$CI_COMMIT_TAG" --host https://aqua.uksouth.bink.sh:30001/ --user scanner --password $AQUA_PASSWORD --show-negligible --policies Bink --text
+    - docker tag "$CI_REGISTRY/carina:staging-$CI_COMMIT_TAG" "$CI_REGISTRY/carina:staging"
     - docker push "$CI_REGISTRY/carina:staging-$CI_COMMIT_TAG"
-  only:
-    - tags
-
-preprod:
-  stage: preprod
-  image: binkops.azurecr.io/tagbot:latest
-  environment:
-    name: preprod
-  script:
-    - tagbot --username "$CI_REGISTRY_USER" --password "$CI_REGISTRY_PASSWORD" --source "$CI_REGISTRY/carina:staging-$CI_COMMIT_TAG" --tag "preprod-$CI_COMMIT_TAG"
-  when: manual
+    - docker push "$CI_REGISTRY/carina:staging"
   only:
     - tags
 
@@ -101,6 +90,7 @@ prod:
     name: prod
   script:
     - tagbot --username "$CI_REGISTRY_USER" --password "$CI_REGISTRY_PASSWORD" --source "$CI_REGISTRY/carina:staging-$CI_COMMIT_TAG" --tag "prod-$CI_COMMIT_TAG"
+    - tagbot --username "$CI_REGISTRY_USER" --password "$CI_REGISTRY_PASSWORD" --source "$CI_REGISTRY/carina:staging-$CI_COMMIT_TAG" --tag "prod"
   when: manual
   only:
     - tags
