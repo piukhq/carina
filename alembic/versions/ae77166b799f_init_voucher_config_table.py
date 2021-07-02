@@ -30,6 +30,7 @@ def upgrade() -> None:
         sa.Column("validity_days", sa.Integer(), nullable=False),
         sa.Column("retailer_slug", sa.String(length=32), nullable=False),
         sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("voucher_type_slug", "retailer_slug", name="voucher_type_slug_retailer_slug_unq"),
     )
     op.create_index(op.f("ix_voucher_config_id"), "voucher_config", ["id"], unique=False)
     op.create_index(op.f("ix_voucher_config_retailer_slug"), "voucher_config", ["retailer_slug"], unique=False)
