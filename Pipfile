@@ -23,11 +23,15 @@ requests = "*"
 sqlalchemy-stubs = "*"
 flake8 = "*"
 isort = "*"
-black = "==20.8b1"
+black = "*"
 mypy = "*"
 ipython = "*"
 pytest = "*"
 pytest-cov = "*"
+xenon = "*"
 
 [requires]
 python_version = "3.9"
+
+[pipenv]
+allow_prereleases = true
