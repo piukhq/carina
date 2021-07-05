@@ -1,96 +1,107 @@
 stages:
-  - tests
-  - dev
-  - staging
-  - prod
+  - test
+  - build
+  - deploy
 
 default:
   image: ghcr.io/binkhq/python:3.9
 
-tests:
-  stage: tests
-  variables:
-    POSTGRES_DB: carina_test
-    POSTGRES_USER: postgres
-    POSTGRES_PASSWORD: ""
-    POSTGRES_HOST_AUTH_METHOD: trust
-    LOG_FORMATTER: brief
-    SQLALCHEMY_DATABASE_URI: "postgresql+asyncpg://postgres@postgres:5432/carina"
-    TESTING: "True"
+variables:
+  POSTGRES_DB: carina_test
+  POSTGRES_HOST_AUTH_METHOD: trust
+  LOG_FORMATTER: brief
+  SQLALCHEMY_DATABASE_URI: "postgresql+asyncpg://postgres@postgres:5432/carina"
+  TESTING: "True"
+
+test:style: &test
+  stage: test
   before_script:
     - pipenv install --dev --system --deploy --ignore-pipfile
     - pip freeze
   script:
-    - alembic upgrade head
-    - pytest --verbose --cov app --cov-report term-missing
-  services:
-    - postgres:11
-
-complexity:
-  stage: tests
-  before_script:
-    - pip install xenon
-  script:
-    - xenon --no-assert --max-average A --max-modules B --max-absolute B .
-
-style:
-  stage: tests
-  before_script:
-    - pip install flake8 black
-  script:
     - flake8
     - black --line-length 120 --check .
 
-type-check:
-  stage: tests
-  before_script:
-    - pip install mypy sqlalchemy-stubs pydantic types-requests
+test:complexity:
+  <<: *test
+  script:
+    - xenon --no-assert --max-average A --max-modules B --max-absolute B .
+
+test:type-check:
+  <<: *test
   script:
     - mypy app
 
-dev:
-  stage: dev
+test:pytest:
+  <<: *test
+  script:
+    - alembic upgrade head
+    - pytest --verbose --cov app --cov-report term-missing
+  services:
+    - postgres:latest
+
+build:develop: &build
+  stage: build
+  needs: ["test:pytest", "test:complexity", "test:style", "test:type-check"]
   image: docker:latest
   services:
     - docker:dind
-  environment:
-    name: dev
   before_script:
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+    - export CTAG=$(echo -n "$CI_PIPELINE_CREATED_AT" | sed s/\://g)
   script:
-    - export CTAG="develop-$(date +%F-%H%M%S)"
-    - docker build --pull -t "$CI_REGISTRY/carina:$CTAG" .
-    - docker tag "$CI_REGISTRY/carina:$CTAG" "$CI_REGISTRY/carina:dev"
-    - docker push "$CI_REGISTRY/carina:$CTAG"
-    - docker push "$CI_REGISTRY/carina:dev"
+    - docker build --pull --tag "$CI_REGISTRY/$CI_PROJECT_NAME:$CTAG" .
+    - docker push "$CI_REGISTRY/$CI_PROJECT_NAME:$CTAG"
   only:
     - develop
 
-staging:
-  stage: staging
-  image: docker:latest
-  services:
-    - docker:dind
-  environment:
-    name: staging
+build:tag:
+  <<: *build
   before_script:
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
-  script:
-    - docker build --pull -t "$CI_REGISTRY/carina:staging-$CI_COMMIT_TAG" .
-    - docker tag "$CI_REGISTRY/carina:staging-$CI_COMMIT_TAG" "$CI_REGISTRY/carina:staging"
-    - docker push "$CI_REGISTRY/carina:staging-$CI_COMMIT_TAG"
-    - docker push "$CI_REGISTRY/carina:staging"
+    - export CTAG=$CI_COMMIT_TAG
   only:
     - tags
 
-prod:
-  stage: prod
+deploy:dev: &deploy
+  stage: deploy
+  needs: ["build:develop"]
   image: binkops.azurecr.io/tagbot:latest
   environment:
-    name: prod
+    name: dev
+  before_script:
+    - export CTAG=$(echo -n "$CI_PIPELINE_CREATED_AT" | sed s/\://g)
   script:
-    - tagbot --username "$CI_REGISTRY_USER" --password "$CI_REGISTRY_PASSWORD" --source "$CI_REGISTRY/carina:staging-$CI_COMMIT_TAG" --tag "prod-$CI_COMMIT_TAG"
-    - tagbot --username "$CI_REGISTRY_USER" --password "$CI_REGISTRY_PASSWORD" --source "$CI_REGISTRY/carina:staging-$CI_COMMIT_TAG" --tag "prod"
+    - tagbot
+      --username "$CI_REGISTRY_USER"
+      --password "$CI_REGISTRY_PASSWORD"
+      --source "$CI_REGISTRY/$CI_PROJECT_NAME:$CTAG"
+      --tag "$CI_ENVIRONMENT_NAME-$CTAG"
+    - tagbot
+      --username "$CI_REGISTRY_USER"
+      --password "$CI_REGISTRY_PASSWORD"
+      --source "$CI_REGISTRY/$CI_PROJECT_NAME:$CTAG"
+      --tag "$CI_ENVIRONMENT_NAME"
+  only:
+    - develop
+
+deploy:staging:
+  <<: *deploy
+  needs: ["build:tag"]
+  environment:
+    name: staging
+  before_script:
+    - export CTAG=$CI_COMMIT_TAG
+  only:
+    - tags
+
+deploy:prod:
+  <<: *deploy
+  needs: ["build:tag"]
+  environment:
+    name: prod
+  before_script:
+    - export CTAG=$CI_COMMIT_TAG
   when: manual
   only:
     - tags
