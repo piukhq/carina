@@ -7,7 +7,7 @@ class VoucherConfig(Base, TimestampMixin):
     __tablename__ = "voucher_config"
 
     voucher_type_slug = Column(String(32), index=True, nullable=False)
-    validity_days = Column(Integer, nullable=False)
+    validity_days = Column(Integer, nullable=True)
     retailer_slug = Column(String(32), index=True, nullable=False)
 
     __mapper_args__ = {"eager_defaults": True}
