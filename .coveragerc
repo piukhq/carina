@@ -5,5 +5,5 @@ omit = *test*
 branch = True
 
 [report]
-fail_under = 70
+fail_under = 69.50
 exclude_lines = pragma: no cover

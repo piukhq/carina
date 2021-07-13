@@ -19,7 +19,7 @@ async def livez() -> Any:
 async def readyz(db_session: AsyncSession = Depends(get_session)) -> Any:
     try:
         await db_session.execute(text("SELECT 1"))
-    except Exception as e:
+    except Exception as e:  # pragma: no cover
         raise HTTPException(
             detail={"postgres": f"failed to connect to postgres due to error: {repr(e)}"},
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
