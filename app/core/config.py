@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str = ""
     POSTGRES_DB: str = "carina"
     SQLALCHEMY_DATABASE_URI: Optional[str] = None
+    DB_CONNECTION_RETRY_TIMES: int = 3
     SENTRY_DSN: Optional[HttpUrl] = None
     SENTRY_ENV: Optional[str] = None
     SENTRY_TRACES_SAMPLE_RATE: float = 0.0
