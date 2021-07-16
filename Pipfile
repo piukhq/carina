@@ -18,6 +18,12 @@ prometheus-client = "*"
 blinker = "*"
 gunicorn = "*"
 requests = "*"
+httpx = "*"
+rq = "*"
+redis = "*"
+tenacity = "*"
+azure-identity = "*"
+azure-keyvault = "*"
 
 [dev-packages]
 sqlalchemy-stubs = "*"
