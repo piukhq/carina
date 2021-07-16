@@ -71,7 +71,8 @@ def downgrade():
         "voucher_config", sa.Column("retailer_slug", sa.VARCHAR(length=32), autoincrement=False, nullable=True)
     )
     op.execute(
-        "UPDATE voucher_config SET retailer_slug = (SELECT retailer_slug FROM voucher_retailer LIMIT 1) "
+        "UPDATE voucher_config SET retailer_slug = "
+        "(SELECT retailer_slug FROM voucher_retailer where voucher_retailer.id = voucher_config.voucher_retailer_id) "
         "WHERE retailer_slug IS NULL"
     )
     op.alter_column("voucher_config", "retailer_slug", nullable=False)
