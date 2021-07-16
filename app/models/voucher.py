@@ -12,8 +12,8 @@ class VoucherRetailer(Base):  # pragma: no cover
 
     id = Column(Integer, primary_key=True, index=True)
     retailer_slug = Column(String(32), index=True, unique=True, nullable=False)
-    vouchers = relationship("Voucher", back_populates="voucher_retailer", lazy="joined")
-    voucher_configs = relationship("VoucherConfig", back_populates="voucher_retailer", lazy="joined")
+    vouchers = relationship("Voucher", back_populates="voucher_retailer")
+    voucher_configs = relationship("VoucherConfig", back_populates="voucher_retailer")
 
     __mapper_args__ = {"eager_defaults": True}
 
@@ -40,7 +40,7 @@ class VoucherConfig(Base, TimestampMixin):  # pragma: no cover
 
     voucher_type_slug = Column(String(32), index=True, nullable=False)
     validity_days = Column(Integer, nullable=True)
-    vouchers = relationship("Voucher", back_populates="voucher_config", lazy="joined")
+    vouchers = relationship("Voucher", back_populates="voucher_config")
     voucher_retailer_id = Column(Integer, ForeignKey("voucher_retailer.id"), nullable=True)
     voucher_retailer = relationship("VoucherRetailer", back_populates="voucher_configs")
 
