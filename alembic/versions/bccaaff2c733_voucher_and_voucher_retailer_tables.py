@@ -58,9 +58,12 @@ def upgrade():
     op.create_foreign_key(
         "fk_voucher_config_voucher_retailer", "voucher_config", "voucher_retailer", ["voucher_retailer_id"], ["id"]
     )
-    op.execute("INSERT INTO voucher_retailer (retailer_slug) SELECT retailer_slug FROM voucher_config LIMIT 1")
+    op.execute("INSERT INTO voucher_retailer (retailer_slug) SELECT distinct retailer_slug FROM voucher_config")
+    op.execute(
+        "UPDATE voucher_config SET voucher_retailer_id = voucher_retailer.id "
+        "FROM voucher_retailer WHERE voucher_retailer.retailer_slug = voucher_config.retailer_slug"
+    )
     op.drop_column("voucher_config", "retailer_slug")
-    op.execute("UPDATE voucher_config SET voucher_retailer_id=1")
     op.alter_column("voucher_config", "voucher_retailer_id", nullable=False)
     # ### end Alembic commands ###
 
