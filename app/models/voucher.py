@@ -7,7 +7,7 @@ from sqlalchemy.orm import relationship
 from app.db.base_class import Base, TimestampMixin
 
 
-class VoucherRetailer(Base):  # pragma: no cover
+class VoucherRetailer(Base, TimestampMixin):  # pragma: no cover
     __tablename__ = "voucher_retailer"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -16,6 +16,9 @@ class VoucherRetailer(Base):  # pragma: no cover
     voucher_configs = relationship("VoucherConfig", back_populates="voucher_retailer")
 
     __mapper_args__ = {"eager_defaults": True}
+
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__}({self.retailer_slug}"
 
 
 class Voucher(Base, TimestampMixin):  # pragma: no cover
