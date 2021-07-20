@@ -24,7 +24,7 @@ class Voucher(Base, TimestampMixin):  # pragma: no cover
         return f"{self.__class__.__name__}({self.retailer_slug}, " f"{self.voucher_code}, {self.allocated})"
 
 
-class VoucherConfig(Base, TimestampMixin):
+class VoucherConfig(Base, TimestampMixin):  # pragma: no cover
     __tablename__ = "voucher_config"
 
     voucher_type_slug = Column(String(32), index=True, nullable=False)
