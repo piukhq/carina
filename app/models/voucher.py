@@ -10,7 +10,7 @@ from app.db.base_class import Base, TimestampMixin
 class Voucher(Base, TimestampMixin):  # pragma: no cover
     __tablename__ = "voucher"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     voucher_code = Column(String, nullable=False, index=True)
     allocated = Column(Boolean, default=False, nullable=False)
     voucher_config_id = Column(Integer, ForeignKey("voucher_config.id"), nullable=False)
