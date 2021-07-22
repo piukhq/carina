@@ -1,0 +1,5 @@
+* @squads/merchant
+.dockerignore @squads/devops
+Dockerfile @squads/devops
+.gitlab-ci.yml @squads/devops
+CODEOWNERS @squads/devops

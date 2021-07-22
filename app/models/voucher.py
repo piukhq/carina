@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.mutable import MutableList
@@ -7,12 +9,32 @@ from app.db.base_class import Base, TimestampMixin
 from app.enums import VoucherAllocationStatuses
 
 
-class VoucherConfig(Base, TimestampMixin):
+class Voucher(Base, TimestampMixin):  # pragma: no cover
+    __tablename__ = "voucher"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    voucher_code = Column(String, nullable=False, index=True)
+    allocated = Column(Boolean, default=False, nullable=False)
+    voucher_config_id = Column(Integer, ForeignKey("voucher_config.id"), nullable=False)
+    voucher_config = relationship("VoucherConfig", back_populates="vouchers")
+    retailer_slug = Column(String(32), index=True, nullable=False)
+
+    allocation = relationship("VoucherAllocation", backref="voucher_config", uselist=False)
+
+    __table_args__ = (UniqueConstraint("voucher_code", "retailer_slug", name="voucher_code_retailer_slug_unq"),)
+    __mapper_args__ = {"eager_defaults": True}
+
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__}({self.retailer_slug}, " f"{self.voucher_code}, {self.allocated})"
+
+
+class VoucherConfig(Base, TimestampMixin):  # pragma: no cover
     __tablename__ = "voucher_config"
 
     voucher_type_slug = Column(String(32), index=True, nullable=False)
     validity_days = Column(Integer, nullable=True)
     retailer_slug = Column(String(32), index=True, nullable=False)
+    vouchers = relationship("Voucher", back_populates="voucher_config")
 
     vouchers = relationship("Voucher", backref="voucher_config")
     allocations = relationship("VoucherAllocation", backref="voucher_config")
@@ -24,12 +46,6 @@ class VoucherConfig(Base, TimestampMixin):
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}({self.retailer_slug}, " f"{self.voucher_type_slug}, {self.validity_days})"
-
-
-class Voucher(Base):
-    __tablename__ = "voucher"
-
-    # placeholder for david's code
 
 
 class VoucherAllocation(Base, TimestampMixin):
@@ -45,8 +61,8 @@ class VoucherAllocation(Base, TimestampMixin):
     voucher_id = Column(UUID(as_uuid=True), ForeignKey("voucher.id", ondelete="CASCADE"), nullable=True)
     voucher_config_id = Column(Integer, ForeignKey("voucher_config.id", ondelete="CASCADE"), nullable=False)
 
-    voucher = relationship("Voucher", back_populates="allocation", lazy="joined")
-    voucher_config = relationship("VoucherConfig", back_populates="allocations", lazy="joined")
+    voucher = relationship("Voucher", back_populates="allocation")
+    voucher_config = relationship("VoucherConfig", back_populates="allocations")
 
     __mapper_args__ = {"eager_defaults": True}
 
