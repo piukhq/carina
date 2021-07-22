@@ -7,6 +7,7 @@ import click
 import httpx
 import rq
 
+from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
 from tenacity import retry
@@ -64,7 +65,7 @@ def _process_allocation(allocation: VoucherAllocation) -> dict:
             "voucher_code": allocation.voucher.voucher_code,
             "issued_date": allocation.issued_date,
             "expiry_date": allocation.expiry_date,
-            "voucher_type_slug": allocation.voucher.voucher_config.voucher_type_slug,
+            "voucher_type_slug": allocation.voucher_config.voucher_type_slug,
             "voucher_id": allocation.voucher_id,
         },
         headers={"Authorization": f"Token {settings.POLARIS_AUTH_TOKEN}"},
@@ -81,9 +82,16 @@ def allocate_voucher(voucher_allocation_id: int) -> None:
 
         def _get_allocation() -> VoucherAllocation:
             return (
-                db_session.query(VoucherAllocation)
-                .options(joinedload(VoucherAllocation.voucher).joinedload(Voucher.voucher_config))
-                .filter_by(id=voucher_allocation_id)
+                db_session.execute(
+                    select(VoucherAllocation)
+                    .with_for_update()
+                    .options(
+                        joinedload(VoucherAllocation.voucher),
+                        joinedload(VoucherAllocation.voucher_config),
+                    )
+                    .filter_by(id=voucher_allocation_id)
+                )
+                .scalars()
                 .one()
             )
 

@@ -42,7 +42,7 @@ async def enqueue_voucher_allocation(voucher_allocation_id: int) -> None:
             account_holder_activation = await async_run_query(_get_allocation, db_session, rollback_on_exc=False)
 
             if account_holder_activation.voucher_id is None:
-                # TODO: placeholder for "no more allocable vouchers" error handling
+                # TODO: placeholder for "no more allocable vouchers" logic
                 pass
 
             await async_run_query(_update_status_and_flush, db_session)

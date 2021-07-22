@@ -1,4 +1,3 @@
-from datetime import datetime, timedelta
 from typing import List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,27 +42,23 @@ async def get_allocable_voucher(db_session: AsyncSession, voucher_config: Vouche
 
 
 async def create_allocation(
-    db_session: AsyncSession, voucher: Optional[Voucher], voucher_config: VoucherConfig, account_url: str
+    db_session: AsyncSession,
+    voucher: Optional[Voucher],
+    issued_date: float,
+    expiry_date: float,
+    voucher_config: VoucherConfig,
+    account_url: str,
 ) -> VoucherAllocation:
-    now = datetime.utcnow()
-    voucher_id = None
-    expiry = None
-    issued = now.timestamp()
-
-    if voucher is not None:
-        voucher_id = voucher.id
-        expiry = (now + timedelta(days=voucher.voucher_config.validity_days)).timestamp()
-
     async def _query() -> VoucherAllocation:
         if voucher is not None:
             voucher.allocated = True
 
         allocation = VoucherAllocation(
-            voucher_id=voucher_id,
+            voucher=voucher,
             voucher_config=voucher_config,
             account_url=account_url,
-            issued_date=issued,
-            expiry_date=expiry,
+            issued_date=issued_date,
+            expiry_date=expiry_date,
         )
         db_session.add(allocation)
         await db_session.commit()

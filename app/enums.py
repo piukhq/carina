@@ -37,3 +37,7 @@ class VoucherAllocationStatuses(Enum):
     IN_PROGRESS = "in_progress"
     FAILED = "failed"
     SUCCESS = "success"
+
+
+class VoucherFetchType(Enum):
+    PRE_ALLOCATED = "pre allocated"
