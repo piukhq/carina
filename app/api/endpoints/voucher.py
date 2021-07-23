@@ -16,7 +16,6 @@ router = APIRouter()
 
 @router.post(
     path="/{retailer_slug}/vouchers/{voucher_type_slug}/allocation",
-    response_model=str,
     status_code=status.HTTP_202_ACCEPTED,
     dependencies=[Depends(user_is_authorised)],
 )

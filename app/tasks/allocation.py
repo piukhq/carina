@@ -20,7 +20,7 @@ from app.core.config import redis, settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
 from app.enums import VoucherAllocationStatuses
-from app.models import Voucher, VoucherAllocation
+from app.models import VoucherAllocation
 
 from . import logger
 
@@ -66,7 +66,7 @@ def _process_allocation(allocation: VoucherAllocation) -> dict:
             "issued_date": allocation.issued_date,
             "expiry_date": allocation.expiry_date,
             "voucher_type_slug": allocation.voucher_config.voucher_type_slug,
-            "voucher_id": allocation.voucher_id,
+            "voucher_id": str(allocation.voucher_id),
         },
         headers={"Authorization": f"Token {settings.POLARIS_AUTH_TOKEN}"},
     )
@@ -84,7 +84,6 @@ def allocate_voucher(voucher_allocation_id: int) -> None:
             return (
                 db_session.execute(
                     select(VoucherAllocation)
-                    .with_for_update()
                     .options(
                         joinedload(VoucherAllocation.voucher),
                         joinedload(VoucherAllocation.voucher_config),

@@ -28,12 +28,7 @@ async def get_voucher_config(db_session: AsyncSession, retailer_slug: str, vouch
 async def get_allocable_voucher(db_session: AsyncSession, voucher_config: VoucherConfig) -> Optional[Voucher]:
     async def _query() -> Voucher:
         return (
-            await db_session.execute(
-                select(Voucher).filter_by(
-                    voucher_config_id=voucher_config.id,
-                    allocated=False,
-                )
-            )
+            (await db_session.execute(select(Voucher).filter_by(voucher_config_id=voucher_config.id, allocated=False)))
             .scalars()
             .first()
         )

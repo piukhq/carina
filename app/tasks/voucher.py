@@ -8,11 +8,12 @@ from app.db.base_class import async_run_query
 from app.db.session import AsyncSessionMaker
 from app.enums import VoucherAllocationStatuses
 from app.models import VoucherAllocation
-from app.tasks.allocation import allocate_voucher
 
 
 async def enqueue_voucher_allocation(voucher_allocation_id: int) -> None:
-    with AsyncSessionMaker() as db_session:
+    from app.tasks.allocation import allocate_voucher
+
+    async with AsyncSessionMaker() as db_session:
 
         async def _get_allocation() -> VoucherAllocation:
             return (
@@ -42,11 +43,16 @@ async def enqueue_voucher_allocation(voucher_allocation_id: int) -> None:
             account_holder_activation = await async_run_query(_get_allocation, db_session, rollback_on_exc=False)
 
             if account_holder_activation.voucher_id is None:
-                # TODO: placeholder for "no more allocable vouchers" logic
-                pass
+                # placeholder "no more allocable vouchers" logic
+
+                async def _set_failed() -> None:
+                    account_holder_activation.status = VoucherAllocationStatuses.FAILED
+                    await db_session.commit()
+
+                await async_run_query(_set_failed, db_session)
+                return
 
             await async_run_query(_update_status_and_flush, db_session)
-
             q.enqueue(
                 allocate_voucher,
                 voucher_allocation_id=voucher_allocation_id,

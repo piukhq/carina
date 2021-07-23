@@ -16,10 +16,10 @@ class Voucher(Base, TimestampMixin):  # pragma: no cover
     voucher_code = Column(String, nullable=False, index=True)
     allocated = Column(Boolean, default=False, nullable=False)
     voucher_config_id = Column(Integer, ForeignKey("voucher_config.id"), nullable=False)
-    voucher_config = relationship("VoucherConfig", back_populates="vouchers")
     retailer_slug = Column(String(32), index=True, nullable=False)
 
-    allocation = relationship("VoucherAllocation", backref="voucher_config", uselist=False)
+    voucher_config = relationship("VoucherConfig", back_populates="vouchers")
+    allocation = relationship("VoucherAllocation", back_populates="voucher", uselist=False)
 
     __table_args__ = (UniqueConstraint("voucher_code", "retailer_slug", name="voucher_code_retailer_slug_unq"),)
     __mapper_args__ = {"eager_defaults": True}
@@ -36,8 +36,8 @@ class VoucherConfig(Base, TimestampMixin):  # pragma: no cover
     retailer_slug = Column(String(32), index=True, nullable=False)
     fetch_type = Column(Enum(VoucherFetchType), nullable=False, default=VoucherFetchType.PRE_ALLOCATED)
 
-    vouchers = relationship("Voucher", backref="voucher_config")
-    allocations = relationship("VoucherAllocation", backref="voucher_config")
+    vouchers = relationship("Voucher", back_populates="voucher_config")
+    allocations = relationship("VoucherAllocation", back_populates="voucher_config")
 
     __mapper_args__ = {"eager_defaults": True}
     __table_args__ = (
