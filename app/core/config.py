@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     TESTING: bool = False
     SQL_DEBUG: bool = False
 
+    @validator("TESTING")
     def is_test(cls, v: bool) -> bool:
         command = sys.argv[0]
         args = sys.argv[1:] if len(sys.argv) > 1 else []

@@ -85,7 +85,7 @@ def handle_voucher_allocation_error(
         allocation = sync_run_query(
             lambda: db_session.query(VoucherAllocation).filter_by(id=job.kwargs["voucher_allocation_id"]).first(),
             db_session,
-            read_only=True,
+            rollback_on_exc=False,
         )
 
         if isinstance(exc_value, (httpx.RequestError, httpx.HTTPStatusError)):  # handle http failures specifically

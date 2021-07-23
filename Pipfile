@@ -35,6 +35,10 @@ ipython = "*"
 pytest = "*"
 pytest-cov = "*"
 xenon = "*"
+httpretty = "*"
+pytest-asyncio = "*"
+sqlalchemy-utils = "*"
+pytest-mock = "*"
 
 [requires]
 python_version = "3.9"
