@@ -39,6 +39,7 @@ httpretty = "*"
 pytest-asyncio = "*"
 sqlalchemy-utils = "*"
 pytest-mock = "*"
+types-redis = "*"
 
 [requires]
 python_version = "3.9"
