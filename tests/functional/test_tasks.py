@@ -4,8 +4,8 @@ from datetime import datetime
 from unittest import mock
 
 import httpretty
-import httpx
 import pytest
+import requests
 
 from sqlalchemy.orm import Session
 
@@ -90,10 +90,10 @@ def test__process_allocation_http_errors(
     ]:
         httpretty.register_uri("POST", voucher_allocation.account_url, body=body, status=status)
 
-        with pytest.raises(httpx.HTTPStatusError) as excinfo:
+        with pytest.raises(requests.RequestException) as excinfo:
             _process_allocation(voucher_allocation)
 
-        assert isinstance(excinfo.value, httpx.HTTPStatusError)
+        assert isinstance(excinfo.value, requests.RequestException)
         assert excinfo.value.response.status_code == status
 
         last_request = httpretty.last_request()
@@ -107,13 +107,13 @@ def test__process_allocation_connection_error(
     voucher_allocation: VoucherAllocation,
 ) -> None:
 
-    mock_send_request_with_metrics.side_effect = httpx.TimeoutException("Request timed out")
+    mock_send_request_with_metrics.side_effect = requests.Timeout("Request timed out")
 
-    with pytest.raises(httpx.RequestError) as excinfo:
+    with pytest.raises(requests.RequestException) as excinfo:
         _process_allocation(voucher_allocation)
 
-    assert isinstance(excinfo.value, httpx.TimeoutException)
-    assert not hasattr(excinfo.value, "response")
+    assert isinstance(excinfo.value, requests.Timeout)
+    assert excinfo.value.response is None
 
 
 @httpretty.activate

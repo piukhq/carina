@@ -4,8 +4,8 @@ from datetime import datetime, timedelta, timezone
 from inspect import Traceback
 from unittest import mock
 
-import httpx
 import pytest
+import requests
 import rq
 
 from app.core.config import settings
@@ -44,15 +44,14 @@ def test_handle_voucher_allocation_error_5xx(
 ) -> None:
     job = mock.MagicMock(spec=rq.job.Job, kwargs={"voucher_allocation_id": allocation.id})
     traceback = mock.MagicMock(spec=Traceback)
-    mock_request = mock.MagicMock(spec=httpx.Request, url=allocation.account_url)
+    mock_request = mock.MagicMock(spec=requests.Request, url=allocation.account_url)
     handle_voucher_allocation_error(
         job,
-        type(httpx.HTTPStatusError),
-        httpx.HTTPStatusError(
-            message="Internal server error",
+        type(requests.RequestException),
+        requests.RequestException(
             request=mock_request,
             response=mock.MagicMock(
-                spec=httpx.Response, request=mock_request, status_code=500, text="Internal server error"
+                spec=requests.Response, request=mock_request, status_code=500, text="Internal server error"
             ),
         ),
         traceback,
@@ -83,13 +82,14 @@ def test_handle_adjust_balance_error_no_response(
 
     job = mock.MagicMock(spec=rq.job.Job, kwargs={"voucher_allocation_id": allocation.id})
     traceback = mock.MagicMock(spec=Traceback)
-    mock_request = mock.MagicMock(spec=httpx.Request, url=allocation.account_url)
+    mock_request = mock.MagicMock(spec=requests.Request, url=allocation.account_url)
     handle_voucher_allocation_error(
         job,
-        type(httpx.TimeoutException),
-        httpx.TimeoutException(
+        type(requests.Timeout),
+        requests.Timeout(
             "Request timed out",
             request=mock_request,
+            response=None,
         ),
         traceback,
     )
@@ -117,15 +117,14 @@ def test_handle_adjust_balance_error_no_further_retries(
 
     job = mock.MagicMock(spec=rq.job.Job, kwargs={"voucher_allocation_id": allocation.id})
     traceback = mock.MagicMock(spec=Traceback)
-    mock_request = mock.MagicMock(spec=httpx.Request, url=allocation.account_url)
+    mock_request = mock.MagicMock(spec=requests.Request, url=allocation.account_url)
     handle_voucher_allocation_error(
         job,
-        type(httpx.HTTPStatusError),
-        httpx.HTTPStatusError(
-            message="Internal server error",
+        type(requests.RequestException),
+        requests.RequestException(
             request=mock_request,
             response=mock.MagicMock(
-                spec=httpx.Response, request=mock_request, status_code=500, text="Internal server error"
+                spec=requests.Response, request=mock_request, status_code=500, text="Internal server error"
             ),
         ),
         traceback,
@@ -144,14 +143,13 @@ def test_handle_adjust_balance_error_unhandleable_response(
 
     job = mock.MagicMock(spec=rq.job.Job, kwargs={"voucher_allocation_id": allocation.id})
     traceback = mock.MagicMock(spec=Traceback)
-    mock_request = mock.MagicMock(spec=httpx.Request, url=allocation.account_url)
+    mock_request = mock.MagicMock(spec=requests.Request, url=allocation.account_url)
     handle_voucher_allocation_error(
         job,
-        type(httpx.HTTPStatusError),
-        httpx.HTTPStatusError(
-            message="Internal server error",
+        type(requests.RequestException),
+        requests.RequestException(
             request=mock_request,
-            response=mock.MagicMock(spec=httpx.Response, request=mock_request, status_code=401, text="Unauthorized"),
+            response=mock.MagicMock(spec=requests.Response, request=mock_request, status_code=401, text="Unauthorized"),
         ),
         traceback,
     )
@@ -188,15 +186,14 @@ def test_handle_adjust_balance_error_account_holder_deleted(
 
     job = mock.MagicMock(spec=rq.job.Job, kwargs={"voucher_allocation_id": allocation.id})
     traceback = mock.MagicMock(spec=Traceback)
-    mock_request = mock.MagicMock(spec=httpx.Request, url=allocation.account_url)
+    mock_request = mock.MagicMock(spec=requests.Request, url=allocation.account_url)
     handle_voucher_allocation_error(
         job,
-        type(httpx.HTTPStatusError),
-        httpx.HTTPStatusError(
-            message="Not Found",
+        type(requests.RequestException),
+        requests.RequestException(
             request=mock_request,
             response=mock.MagicMock(
-                spec=httpx.Response,
+                spec=requests.Response,
                 request=mock_request,
                 status_code=404,
                 text="Not Found",

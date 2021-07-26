@@ -1,10 +1,10 @@
 import logging
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import click
-import httpx
+import requests
 import rq
 
 from sqlalchemy.future import select
@@ -25,12 +25,9 @@ from app.models import VoucherAllocation
 from . import logger
 
 
-def update_metrics_hook(response: httpx.Response) -> None:
+def update_metrics_hook(response: requests.Response, *args: Any, **kwargs: Any) -> None:
     # placeholder for when we add prometheus metrics
     pass
-
-
-timeout = httpx.Timeout(15.0, connect=3.03)
 
 
 @retry(
@@ -39,7 +36,8 @@ timeout = httpx.Timeout(15.0, connect=3.03)
     reraise=True,
     before=before_log(logger, logging.INFO),
     retry_error_callback=lambda retry_state: retry_state.outcome.result(),
-    retry=retry_if_result(lambda resp: 501 <= resp.status_code < 600) | retry_if_exception_type(httpx.RequestError),
+    retry=retry_if_result(lambda resp: 501 <= resp.status_code < 600)
+    | retry_if_exception_type(requests.RequestException),
 )
 def send_request_with_metrics(
     method: str,
@@ -47,10 +45,12 @@ def send_request_with_metrics(
     *,
     headers: Optional[Dict[str, Any]] = None,
     json: Optional[Dict[str, Any]] = None,
-) -> httpx.Response:
+    timeout: Tuple[float, int],
+) -> requests.Response:
 
-    with httpx.Client(event_hooks={"response": [update_metrics_hook]}) as client:
-        return client.request(method, url, headers=headers, json=json, timeout=timeout)
+    return requests.request(
+        method, url, hooks={"response": update_metrics_hook}, headers=headers, json=json, timeout=timeout
+    )
 
 
 def _process_allocation(allocation: VoucherAllocation) -> dict:
@@ -69,6 +69,7 @@ def _process_allocation(allocation: VoucherAllocation) -> dict:
             "voucher_id": str(allocation.voucher_id),
         },
         headers={"Authorization": f"Token {settings.POLARIS_AUTH_TOKEN}"},
+        timeout=(3.03, 10),
     )
     resp.raise_for_status()
     response_audit["response"] = {"status": resp.status_code, "body": resp.text}

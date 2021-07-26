@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
-import httpx
+import requests
 import rq
 import sentry_sdk
 
@@ -36,31 +36,29 @@ def requeue_allocation(allocation: VoucherAllocation) -> datetime:
 
 
 def handle_request_exception(
-    allocation: VoucherAllocation, request_exception: Union[httpx.RequestError, httpx.HTTPStatusError]
+    allocation: VoucherAllocation, request_exception: requests.RequestException
 ) -> Tuple[dict, Optional[VoucherAllocationStatuses], Optional[datetime]]:
     status = None
     next_attempt_time = None
-    response_status = None
 
     terminal = False
     response_audit: Dict[str, Any] = {"error": str(request_exception), "timestamp": datetime.utcnow().isoformat()}
 
-    if isinstance(request_exception, httpx.HTTPStatusError):
-        response_status = request_exception.response.status_code
+    if request_exception.response is not None:
         response_audit["response"] = {
-            "status": response_status,
+            "status": request_exception.response.status_code,
             "body": request_exception.response.text,
         }
 
     logger.warning(f"Voucher allocation attempt {allocation.attempts} failed for voucher: {allocation.voucher_id}")
 
     if allocation.attempts < settings.VOUCHER_ALLOCATION_MAX_RETRIES:
-        if response_status is None or (500 <= response_status < 600):
+        if request_exception.response is None or (500 <= request_exception.response.status_code < 600):
             next_attempt_time = requeue_allocation(allocation)
             logger.info(f"Next attempt time at {next_attempt_time}")
         else:
             terminal = True
-            logger.warning(f"Received unhandlable response code ({response_status}). Stopping")
+            logger.warning(f"Received unhandlable response code ({request_exception.response.status_code}). Stopping")
     else:
         terminal = True
         logger.warning(f"No further retries. Setting status to {VoucherAllocationStatuses.FAILED}.")
@@ -88,7 +86,7 @@ def handle_voucher_allocation_error(
             rollback_on_exc=False,
         )
 
-        if isinstance(exc_value, (httpx.RequestError, httpx.HTTPStatusError)):  # handle http failures specifically
+        if isinstance(exc_value, requests.RequestException):  # handle http failures specifically
             response_audit, status, next_attempt_time = handle_request_exception(allocation, exc_value)
         else:  # otherwise report to sentry and fail the task
             status = VoucherAllocationStatuses.FAILED
