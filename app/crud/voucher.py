@@ -12,12 +12,12 @@ async def get_voucher_config(db_session: AsyncSession, retailer_slug: str, vouch
     async def _query() -> List[VoucherConfig]:
         return (await db_session.execute(select(VoucherConfig).filter_by(retailer_slug=retailer_slug))).scalars().all()
 
-    retailer_vouchers = await async_run_query(_query, db_session)
-    if not retailer_vouchers:
+    retailer_voucher_configs = await async_run_query(_query, db_session)
+    if not retailer_voucher_configs:
         raise HttpErrors.INVALID_RETAILER.value
 
     voucher_config = next(
-        (voucher for voucher in retailer_vouchers if voucher.voucher_type_slug == voucher_type_slug), None
+        (voucher for voucher in retailer_voucher_configs if voucher.voucher_type_slug == voucher_type_slug), None
     )
     if voucher_config is None:
         raise HttpErrors.UNKNOWN_VOUCHER_TYPE.value

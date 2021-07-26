@@ -3,10 +3,10 @@ from fastapi.testclient import TestClient
 from pytest_mock import MockerFixture
 
 from app.core.config import settings
-from app.enums import HttpErrors
 from app.models import VoucherAllocation
 from asgi import app
 from tests.api.conftest import SetupType
+from tests.fixtures import HttpErrors
 
 client = TestClient(app)
 auth_headers = {"Authorization": f"token {settings.CARINA_AUTH_TOKEN}"}
