@@ -4,7 +4,7 @@ from blinker import signal
 from prometheus_client import Counter, Histogram
 
 from app.core.utils import Singleton
-from app.enums.event_signals import EventSignals
+from app.enums import EventSignals
 
 
 class PrometheusManager(metaclass=Singleton):

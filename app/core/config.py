@@ -7,6 +7,9 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 from pydantic import BaseSettings, HttpUrl, PostgresDsn, validator
 from pydantic.validators import str_validator
+from redis import Redis
+
+from app.core.key_vault import KeyVault
 
 if TYPE_CHECKING:
     from pydantic.typing import CallableGenerator
@@ -41,6 +44,7 @@ class Settings(BaseSettings):
     TESTING: bool = False
     SQL_DEBUG: bool = False
 
+    @validator("TESTING")
     def is_test(cls, v: bool) -> bool:
         command = sys.argv[0]
         args = sys.argv[1:] if len(sys.argv) > 1 else []
@@ -69,6 +73,37 @@ class Settings(BaseSettings):
         if v not in ["json", "brief"]:
             raise ValueError(f'"{v}" is not a valid LOG_FORMATTER value, choices are [json, brief]')
         return v
+
+    KEY_VAULT_URI: str = "https://bink-uksouth-dev-com.vault.azure.net/"
+    CARINA_AUTH_TOKEN: Optional[str] = None
+
+    @validator("CARINA_AUTH_TOKEN")
+    def fetch_carina_auth_token(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
+        if isinstance(v, str) and not values["TESTING"]:
+            return v
+
+        if "KEY_VAULT_URI" in values:
+            return KeyVault(
+                values["KEY_VAULT_URI"],
+                values["TESTING"] or values["MIGRATING"],
+            ).get_secret("bpl-voucher-mgmt-auth-token")
+        else:
+            raise KeyError("required var KEY_VAULT_URI is not set.")
+
+    POLARIS_AUTH_TOKEN: Optional[str] = None
+
+    @validator("POLARIS_AUTH_TOKEN")
+    def fetch_polaris_auth_token(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
+        if isinstance(v, str) and not values["TESTING"]:
+            return v
+
+        if "KEY_VAULT_URI" in values:
+            return KeyVault(
+                values["KEY_VAULT_URI"],
+                values["TESTING"] or values["MIGRATING"],
+            ).get_secret("bpl-customer-mgmt-auth-token")
+        else:
+            raise KeyError("required var KEY_VAULT_URI is not set.")
 
     USE_NULL_POOL: bool = False
     POSTGRES_HOST: str = "localhost"
@@ -113,6 +148,11 @@ class Settings(BaseSettings):
             db_uri += "_test"
 
         return db_uri
+
+    REDIS_URL: str
+    VOUCHER_ALLOCATION_TASK_QUEUE: str = "bpl_voucher_allocation"
+    VOUCHER_ALLOCATION_MAX_RETRIES: int = 6
+    VOUCHER_ALLOCATION_BACKOFF_BASE: float = 3
 
     class Config:
         case_sensitive = True
@@ -169,4 +209,12 @@ dictConfig(
             },
         },
     }
+)
+
+
+redis = Redis.from_url(
+    settings.REDIS_URL,
+    socket_connect_timeout=3,
+    socket_keepalive=True,
+    retry_on_timeout=False,
 )
