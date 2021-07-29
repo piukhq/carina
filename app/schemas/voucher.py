@@ -1,5 +1,5 @@
-from pydantic import BaseModel, HttpUrl
+from pydantic import AnyHttpUrl, BaseModel
 
 
 class VoucherAllocationSchema(BaseModel):  # pragma: no cover
-    account_url: HttpUrl
+    account_url: AnyHttpUrl
