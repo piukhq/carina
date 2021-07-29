@@ -11,6 +11,7 @@ variables:
   POSTGRES_HOST_AUTH_METHOD: trust
   LOG_FORMATTER: brief
   SQLALCHEMY_DATABASE_URI: "postgresql+asyncpg://postgres@postgres:5432/carina"
+  REDIS_URL: redis://redis:6379/0
   TESTING: "True"
 
 test:style: &test

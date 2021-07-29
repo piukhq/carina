@@ -1,13 +1,15 @@
-"""voucher and voucher_retailer tables
+"""voucher table
 
 Revision ID: 6ee302570436
 Revises: 94cfb5b593f3
 Create Date: 2021-07-21 11:13:28.742905
 
 """
-from alembic import op
 import sqlalchemy as sa
+
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "6ee302570436"

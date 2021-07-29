@@ -1,10 +1,12 @@
 import uuid
 
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint, text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.orm import relationship
 
 from app.db.base_class import Base, TimestampMixin
+from app.enums import VoucherAllocationStatuses, VoucherFetchType
 
 
 class Voucher(Base, TimestampMixin):  # pragma: no cover
@@ -14,10 +16,12 @@ class Voucher(Base, TimestampMixin):  # pragma: no cover
     voucher_code = Column(String, nullable=False, index=True)
     allocated = Column(Boolean, default=False, nullable=False)
     voucher_config_id = Column(Integer, ForeignKey("voucher_config.id"), nullable=False)
-    voucher_config = relationship("VoucherConfig", back_populates="vouchers")
     retailer_slug = Column(String(32), index=True, nullable=False)
-    __table_args__ = (UniqueConstraint("voucher_code", "retailer_slug", name="voucher_code_retailer_slug_unq"),)
 
+    voucher_config = relationship("VoucherConfig", back_populates="vouchers")
+    allocation = relationship("VoucherAllocation", back_populates="voucher", uselist=False)
+
+    __table_args__ = (UniqueConstraint("voucher_code", "retailer_slug", name="voucher_code_retailer_slug_unq"),)
     __mapper_args__ = {"eager_defaults": True}
 
     def __str__(self) -> str:
@@ -30,7 +34,10 @@ class VoucherConfig(Base, TimestampMixin):  # pragma: no cover
     voucher_type_slug = Column(String(32), index=True, nullable=False)
     validity_days = Column(Integer, nullable=True)
     retailer_slug = Column(String(32), index=True, nullable=False)
+    fetch_type = Column(Enum(VoucherFetchType), nullable=False, default=VoucherFetchType.PRE_ALLOCATED)
+
     vouchers = relationship("Voucher", back_populates="voucher_config")
+    allocations = relationship("VoucherAllocation", back_populates="voucher_config")
 
     __mapper_args__ = {"eager_defaults": True}
     __table_args__ = (
@@ -39,3 +46,25 @@ class VoucherConfig(Base, TimestampMixin):  # pragma: no cover
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}({self.retailer_slug}, " f"{self.voucher_type_slug}, {self.validity_days})"
+
+
+class VoucherAllocation(Base, TimestampMixin):
+    __tablename__ = "voucher_allocation"
+
+    status = Column(Enum(VoucherAllocationStatuses), nullable=False, default=VoucherAllocationStatuses.PENDING)
+    attempts = Column(Integer, default=0, nullable=False)
+    account_url = Column(String, nullable=False)
+    issued_date = Column(Integer, nullable=False)
+    expiry_date = Column(Integer, nullable=True)
+    next_attempt_time = Column(DateTime, nullable=True)
+    response_data = Column(MutableList.as_mutable(JSONB), nullable=False, default=text("'[]'::jsonb"))
+    voucher_id = Column(UUID(as_uuid=True), ForeignKey("voucher.id", ondelete="CASCADE"), nullable=True)
+    voucher_config_id = Column(Integer, ForeignKey("voucher_config.id", ondelete="CASCADE"), nullable=False)
+
+    voucher = relationship("Voucher", back_populates="allocation")
+    voucher_config = relationship("VoucherConfig", back_populates="allocations")
+
+    __mapper_args__ = {"eager_defaults": True}
+
+    def __str__(self) -> str:
+        return f"{self.status.value.upper()} VoucherAllocation (id: {self.id})"  # type: ignore [attr-defined]

@@ -6,7 +6,7 @@ from fastapi.requests import Request
 from fastapi.responses import Response, UJSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
-from app.enums.event_signals import EventSignals
+from app.enums import EventSignals
 
 
 class MetricsSecurityMiddleware(BaseHTTPMiddleware):

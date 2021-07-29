@@ -1,0 +1,1 @@
+from .voucher import VoucherAllocationSchema
