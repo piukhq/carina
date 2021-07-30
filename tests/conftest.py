@@ -30,16 +30,17 @@ def setup_db() -> Generator:
     drop_database(sync_engine.url)
 
 
-@pytest.fixture(scope="module")
-def api_db_session() -> Generator["Session", None, None]:
+@pytest.fixture(scope="session")
+def main_db_session() -> Generator["Session", None, None]:
     with SyncSessionMaker() as db_session:
         yield db_session
 
 
 @pytest.fixture(scope="function")
-def db_session(api_db_session: "Session") -> Generator["Session", None, None]:
-    yield api_db_session
-    api_db_session.rollback()
+def db_session(main_db_session: "Session") -> Generator["Session", None, None]:
+    yield main_db_session
+    main_db_session.rollback()
+    main_db_session.expunge_all()
 
 
 @pytest.fixture(scope="function", autouse=True)
