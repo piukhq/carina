@@ -26,6 +26,7 @@ azure-keyvault = "*"
 azure-storage-blob = "*"
 pendulum = "*"
 apscheduler = "*"
+sqlalchemy-utils = "*"
 
 [dev-packages]
 sqlalchemy-stubs = "*"

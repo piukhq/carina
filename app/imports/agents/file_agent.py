@@ -64,37 +64,46 @@ class BlobFileAgent:
                     byte_content = blob_client.download_blob(lease=lease).readall()
 
                     logger.debug(f"Processing vouchers for blob {blob.name}.")
-                    self.process_csv(db_session, byte_content, voucher_config_id)
+                    self.process_csv(
+                        db_session=db_session,
+                        blob_name=blob.name,
+                        byte_content=byte_content,
+                        voucher_config_id=voucher_config_id,
+                    )
 
                     logger.debug(f"Archiving blob {blob.name}.")
-                    # self.archive(
-                    #     blob.name,
-                    #     byte_content,
-                    #     delete_callback=partial(blob_client.delete_blob, lease=lease),
-                    #     blob_service_client=self.blob_service_client,
-                    #     logger=logger,
-                    # )
+                    self.archive(
+                        blob.name,
+                        byte_content,
+                        delete_callback=partial(blob_client.delete_blob, lease=lease),
+                        blob_service_client=self.blob_service_client,
+                        logger=logger,
+                    )
 
-    def process_csv(self, db_session: "Session", byte_content: ByteString, voucher_config_id: int):
-        content = byte_content.decode()
+    def process_csv(
+        self, db_session: "Session", blob_name: str, byte_content: ByteString, voucher_config_id: int
+    ) -> None:
+        content = byte_content.decode()  # type: ignore
         content_reader = csv.reader(StringIO(content), delimiter=",", quotechar="|")
         for row in content_reader:
             try:
                 voucher_import = VoucherImport(
-                        voucher_code=row[0],
-                        date=row[1],
-                        status=VoucherImportStatuses(row[2]),
-                        voucher_config_id=voucher_config_id,
-                    )
-            except (ValueError, KeyError) as e:
-                pass  # TODO: deal with these
+                    voucher_code=row[0],
+                    date=row[1],
+                    status=VoucherImportStatuses(row[2]),
+                    voucher_config_id=voucher_config_id,
+                )
+            except (IndexError, KeyError, ValueError) as e:
+                logger.error(f"Error creating VoucherImport from CSV file {blob_name} - {e} - CSV row: {row}")
+                continue
 
             try:
-                voucher_model = VoucherImportSchema.from_orm(voucher_import)
+                VoucherImportSchema.from_orm(voucher_import)
             except ValidationError as e:
-                pass  # TODO: deal
-            # else:
-            db_session.add(voucher_import)
+                logger.error(f"Error validating VoucherImport from CSV file {blob_name} - {e} - CSV row: {row}")
+                continue
+            else:
+                db_session.add(voucher_import)
 
         db_session.commit()
 
@@ -140,7 +149,7 @@ class BlobFileAgent:
         logger.debug(f"Beginning {scheduler}.")
         scheduler.run()
 
-    def callback(self):
+    def callback(self) -> None:
         self.do_import()
 
 
@@ -150,7 +159,7 @@ def cli() -> None:  # pragma: no cover
 
 
 @cli.command()
-def blobimport(burst: bool = False) -> None:  # pragma: no cover
+def blobimport() -> None:  # pragma: no cover
     blob_file_agent = BlobFileAgent()
     blob_file_agent.run()
 

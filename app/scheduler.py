@@ -13,11 +13,10 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.util import undefined
 from redis.exceptions import WatchError
 
-from app.core.config import settings
-from app.core.config import redis
+from app.core.config import redis, settings
 
 
-def is_leader(lock_name: str, *, hostname=None):
+def is_leader(lock_name: str, *, hostname: str = None) -> bool:
     lock_key = f"{settings.REDIS_KEY_PREFIX}:schedule-lock:{lock_name}"
     if hostname is None:
         hostname = f"{socket.gethostname()}-{uuid4()}"
@@ -59,7 +58,7 @@ class CronScheduler:
     def __str__(self) -> str:
         return f"{self.__class__.__name__} with schedule '{self.schedule_fn()}'"
 
-    def _get_trigger(self, schedule):
+    def _get_trigger(self, schedule: t.Callable) -> CronTrigger:
         try:
             return CronTrigger.from_crontab(schedule)
         except ValueError:
@@ -71,7 +70,7 @@ class CronScheduler:
             )
             return CronTrigger.from_crontab(self.default_schedule)
 
-    def run(self):
+    def run(self) -> None:
         scheduler = BackgroundScheduler()
         schedule = self.schedule_fn()
         if not schedule:
@@ -94,13 +93,12 @@ class CronScheduler:
             scheduler.shutdown()
             self.log.debug("Done!")
 
-    def tick(self):
+    def tick(self) -> None:
         try:
             if is_leader(self.name):
                 self.callback()
         except Exception:
             if settings.SENTRY_DSN:
-                raise
                 sentry_sdk.capture_exception()
             else:
                 raise
