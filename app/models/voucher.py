@@ -1,12 +1,12 @@
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint, text
+from sqlalchemy import Boolean, Column, Date, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.orm import relationship
 
 from app.db.base_class import Base, TimestampMixin
-from app.enums import VoucherAllocationStatuses, VoucherFetchType
+from app.enums import VoucherAllocationStatuses, VoucherFetchType, VoucherImportStatuses
 
 
 class Voucher(Base, TimestampMixin):  # pragma: no cover
@@ -38,6 +38,7 @@ class VoucherConfig(Base, TimestampMixin):  # pragma: no cover
 
     vouchers = relationship("Voucher", back_populates="voucher_config")
     allocations = relationship("VoucherAllocation", back_populates="voucher_config")
+    voucher_imports = relationship("VoucherImport", back_populates="voucher_config")
 
     __mapper_args__ = {"eager_defaults": True}
     __table_args__ = (
@@ -68,3 +69,19 @@ class VoucherAllocation(Base, TimestampMixin):
 
     def __str__(self) -> str:
         return f"{self.status.value.upper()} VoucherAllocation (id: {self.id})"  # type: ignore [attr-defined]
+
+
+class VoucherImport(Base, TimestampMixin):  # pragma: no cover
+    __tablename__ = "voucher_import"
+
+    voucher_code = Column(String, nullable=False, index=True)
+    date = Column(Date, nullable=False)
+    status = Column(Enum(VoucherImportStatuses), nullable=False)
+    voucher_config_id = Column(Integer, ForeignKey("voucher_config.id"), nullable=False)
+
+    voucher_config = relationship("VoucherConfig", back_populates="voucher_imports")
+
+    __mapper_args__ = {"eager_defaults": True}
+
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__}({self.voucher_code})"

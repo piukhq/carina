@@ -39,5 +39,11 @@ class VoucherAllocationStatuses(Enum):
     SUCCESS = "success"
 
 
+class VoucherImportStatuses(Enum):
+    ISSUED = "issued"
+    CANCELLED = "cancelled"
+    REDEEMED = "redeemed"
+
+
 class VoucherFetchType(Enum):
     PRE_ALLOCATED = "pre_allocated"

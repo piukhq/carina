@@ -23,6 +23,9 @@ redis = "*"
 tenacity = "*"
 azure-identity = "*"
 azure-keyvault = "*"
+azure-storage-blob = "*"
+pendulum = "*"
+apscheduler = "*"
 
 [dev-packages]
 sqlalchemy-stubs = "*"
