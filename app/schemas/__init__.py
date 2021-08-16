@@ -1,1 +1,1 @@
-from .voucher import VoucherAllocationSchema, VoucherImportSchema
+from .voucher import VoucherAllocationSchema, VoucherUpdateSchema

@@ -39,7 +39,7 @@ class VoucherAllocationStatuses(Enum):
     SUCCESS = "success"
 
 
-class VoucherImportStatuses(Enum):
+class VoucherUpdateStatuses(Enum):
     ISSUED = "issued"
     CANCELLED = "cancelled"
     REDEEMED = "redeemed"

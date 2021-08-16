@@ -6,7 +6,7 @@ from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.orm import relationship
 
 from app.db.base_class import Base, TimestampMixin
-from app.enums import VoucherAllocationStatuses, VoucherFetchType, VoucherImportStatuses
+from app.enums import VoucherAllocationStatuses, VoucherFetchType, VoucherUpdateStatuses
 
 
 class Voucher(Base, TimestampMixin):  # pragma: no cover
@@ -38,7 +38,7 @@ class VoucherConfig(Base, TimestampMixin):  # pragma: no cover
 
     vouchers = relationship("Voucher", back_populates="voucher_config")
     allocations = relationship("VoucherAllocation", back_populates="voucher_config")
-    voucher_imports = relationship("VoucherImport", back_populates="voucher_config")
+    voucher_updates = relationship("VoucherUpdate", back_populates="voucher_config")
 
     __mapper_args__ = {"eager_defaults": True}
     __table_args__ = (
@@ -71,15 +71,15 @@ class VoucherAllocation(Base, TimestampMixin):
         return f"{self.status.value.upper()} VoucherAllocation (id: {self.id})"  # type: ignore [attr-defined]
 
 
-class VoucherImport(Base, TimestampMixin):  # pragma: no cover
-    __tablename__ = "voucher_import"
+class VoucherUpdate(Base, TimestampMixin):  # pragma: no cover
+    __tablename__ = "voucher_update"
 
     voucher_code = Column(String, nullable=False, index=True)
     date = Column(Date, nullable=False)
-    status = Column(Enum(VoucherImportStatuses), nullable=False)
+    status = Column(Enum(VoucherUpdateStatuses), nullable=False)
     voucher_config_id = Column(Integer, ForeignKey("voucher_config.id"), nullable=False)
 
-    voucher_config = relationship("VoucherConfig", back_populates="voucher_imports")
+    voucher_config = relationship("VoucherConfig", back_populates="voucher_updates")
 
     __mapper_args__ = {"eager_defaults": True}
 

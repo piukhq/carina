@@ -1,1 +1,1 @@
-from .voucher import Voucher, VoucherAllocation, VoucherConfig, VoucherImport
+from .voucher import Voucher, VoucherAllocation, VoucherConfig, VoucherUpdate

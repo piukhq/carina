@@ -8,6 +8,7 @@ from typing import ByteString, Callable, Optional
 
 import click
 import pendulum
+import sentry_sdk
 
 from azure.core.exceptions import HttpResponseError, ResourceExistsError
 from azure.storage.blob import BlobServiceClient
@@ -16,18 +17,18 @@ from pydantic import ValidationError
 from app.core.config import settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
-from app.enums import VoucherImportStatuses
-from app.models import VoucherConfig, VoucherImport
+from app.enums import VoucherUpdateStatuses
+from app.models import VoucherConfig, VoucherUpdate
 from app.scheduler import CronScheduler
-from app.schemas import VoucherImportSchema
+from app.schemas import VoucherUpdateSchema
 
 if typing.TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-logger = logging.getLogger("file-agent-import")
+logger = logging.getLogger("voucher-import")
 
 
-class BlobFileAgent:
+class VoucherUpdatesAgent:
     container_name = settings.BLOB_IMPORT_CONTAINER
     schedule = settings.BLOB_IMPORT_SCHEDULE
     blob_service_client = BlobServiceClient.from_connection_string(settings.BLOB_STORAGE_DSN)
@@ -50,9 +51,10 @@ class BlobFileAgent:
             )
 
             for voucher_config_row in voucher_config_rows:
-                retailer_slug = dict(voucher_config_row)["retailer_slug"]
-                voucher_config_id = dict(voucher_config_row)["id"]
-                for blob in container.list_blobs(name_starts_with=f"{retailer_slug}/"):
+                voucher_config = dict(voucher_config_row)
+                retailer_slug = voucher_config["retailer_slug"]
+                voucher_config_id = voucher_config["id"]
+                for blob in container.list_blobs(name_starts_with=f"{retailer_slug}/voucher-updates"):
                     blob_client = self.blob_service_client.get_blob_client(self.container_name, blob.name)
 
                     try:
@@ -85,25 +87,31 @@ class BlobFileAgent:
     ) -> None:
         content = byte_content.decode()  # type: ignore
         content_reader = csv.reader(StringIO(content), delimiter=",", quotechar="|")
-        for row in content_reader:
+        for row_num, row in enumerate(content_reader, start=1):
             try:
-                voucher_import = VoucherImport(
+                voucher_update = VoucherUpdate(
                     voucher_code=row[0],
                     date=row[1],
-                    status=VoucherImportStatuses(row[2]),
+                    status=VoucherUpdateStatuses(row[2]),
                     voucher_config_id=voucher_config_id,
                 )
             except (IndexError, KeyError, ValueError) as e:
-                logger.error(f"Error creating VoucherImport from CSV file {blob_name} - {e} - CSV row: {row}")
-                continue
+                if settings.SENTRY_DSN:
+                    # TODO: rename the import table as it's too generic
+                    sentry_sdk.capture_message(
+                        f"Error creating VoucherUpdate from CSV file {blob_name}, row {row_num}: {repr(e)}"
+                    )
+                    continue
+                else:
+                    raise
 
             try:
-                VoucherImportSchema.from_orm(voucher_import)
+                VoucherUpdateSchema.from_orm(voucher_update)
             except ValidationError as e:
-                logger.error(f"Error validating VoucherImport from CSV file {blob_name} - {e} - CSV row: {row}")
+                logger.error(f"Error validating VoucherUpdate from CSV file {blob_name}, row {row_num}: {repr(e)}")
                 continue
             else:
-                db_session.add(voucher_import)
+                db_session.add(voucher_update)
 
         db_session.commit()
 
@@ -159,9 +167,8 @@ def cli() -> None:  # pragma: no cover
 
 
 @cli.command()
-def blobimport() -> None:  # pragma: no cover
-    blob_file_agent = BlobFileAgent()
-    blob_file_agent.run()
+def voucher_updates_agent() -> None:  # pragma: no cover
+    VoucherUpdatesAgent().run()
 
 
 if __name__ == "__main__":  # pragma: no cover
