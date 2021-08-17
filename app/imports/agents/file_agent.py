@@ -97,7 +97,6 @@ class VoucherUpdatesAgent:
                 )
             except (IndexError, KeyError, ValueError) as e:
                 if settings.SENTRY_DSN:
-                    # TODO: rename the import table as it's too generic
                     sentry_sdk.capture_message(
                         f"Error creating VoucherUpdate from CSV file {blob_name}, row {row_num}: {repr(e)}"
                     )
