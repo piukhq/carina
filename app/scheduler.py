@@ -16,7 +16,7 @@ from redis.exceptions import WatchError
 from app.core.config import redis, settings
 
 
-def is_leader(lock_name: str, *, hostname: str = None) -> bool:
+def is_leader(lock_name: str, *, hostname: str = None) -> bool:  # pragma: no cover
     lock_key = f"{settings.REDIS_KEY_PREFIX}:schedule-lock:{lock_name}"
     if hostname is None:
         hostname = f"{socket.gethostname()}-{uuid4()}"
@@ -37,7 +37,7 @@ def is_leader(lock_name: str, *, hostname: str = None) -> bool:
     return is_leader
 
 
-class CronScheduler:
+class CronScheduler:  # pragma: no cover
     default_schedule = "* * * * *"
 
     def __init__(

@@ -33,7 +33,7 @@ class VoucherUpdatesAgent:
     schedule = settings.BLOB_IMPORT_SCHEDULE
     blob_service_client = BlobServiceClient.from_connection_string(settings.BLOB_STORAGE_DSN)
 
-    def do_import(self) -> None:
+    def do_import(self) -> None:  # pragma: no cover
         try:
             self.blob_service_client.create_container(self.container_name)
         except ResourceExistsError:
