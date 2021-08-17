@@ -29,7 +29,7 @@ logger = logging.getLogger("voucher-import")
 
 
 class VoucherUpdatesAgent:
-    def __init__(self):
+    def __init__(self) -> None:
         self.container_name = settings.BLOB_IMPORT_CONTAINER
         self.schedule = settings.BLOB_IMPORT_SCHEDULE
         self.blob_service_client = BlobServiceClient.from_connection_string(settings.BLOB_STORAGE_DSN)
