@@ -58,7 +58,8 @@ def test_archive(mocker: MockerFixture) -> None:
         blob_service_client=blob_service_client,
         logger=mocker.MagicMock,
     )
+    blob = f"{datetime.datetime.now().strftime('%Y/%m/%d')}/{blob_name}"
 
     # THEN
-    blob_service_client.get_blob_client.assert_called_once_with(settings.BLOB_ARCHIVE_CONTAINER, mocker.ANY)
+    blob_service_client.get_blob_client.assert_called_once_with(settings.BLOB_ARCHIVE_CONTAINER, blob)
     blob_service_client.get_blob_client.return_value.upload_blob.assert_called_once_with(byte_content)

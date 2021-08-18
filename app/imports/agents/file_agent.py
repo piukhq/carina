@@ -2,12 +2,12 @@ import csv
 import logging
 import typing
 
+from datetime import datetime
 from functools import partial
 from io import StringIO
 from typing import ByteString, Callable, Optional
 
 import click
-import pendulum
 import sentry_sdk
 
 from azure.core.exceptions import HttpResponseError, ResourceExistsError
@@ -135,7 +135,7 @@ class VoucherUpdatesAgent:
 
         try:
             blob_service_client.get_blob_client(
-                archive_container, f"{pendulum.today().format('YYYY/MM/DD')}/{blob_name}"
+                archive_container, f"{datetime.now().strftime('%Y/%m/%d')}/{blob_name}"
             ).upload_blob(blob_content)
         except ResourceExistsError:
             logger.warning(f"Failed to archive {blob_name} as this blob already exists in the archive.")

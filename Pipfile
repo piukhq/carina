@@ -24,7 +24,6 @@ tenacity = "*"
 azure-identity = "*"
 azure-keyvault = "*"
 azure-storage-blob = "*"
-pendulum = "*"
 apscheduler = "*"
 sqlalchemy-utils = "*"
 
