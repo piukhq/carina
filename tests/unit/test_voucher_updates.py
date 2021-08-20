@@ -7,7 +7,7 @@ from pytest_mock import MockerFixture
 from app.core.config import settings
 from app.enums import VoucherUpdateStatuses
 from app.imports.agents.file_agent import VoucherUpdatesAgent
-from app.models import VoucherUpdate
+from app.models import VoucherConfig, VoucherUpdate
 from tests.api.conftest import SetupType
 
 
@@ -39,6 +39,63 @@ def test_process_csv(setup: SetupType, mocker: MockerFixture) -> None:
     assert voucher_update_rows[0].status == VoucherUpdateStatuses.REDEEMED
     assert isinstance(voucher_update_rows[0].date, datetime.date)
     assert str(voucher_update_rows[0].date) == "2021-07-30"
+
+
+def test_process_csv_voucher_code_not_allocated(setup: SetupType, mocker: MockerFixture) -> None:
+    """If the voucher is not allocated, it should be soft-deleted"""
+    # GIVEN
+    db_session, voucher_config, voucher = setup
+    voucher.allocated = False
+    db_session.commit()
+
+    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    voucher_agent = VoucherUpdatesAgent()
+    blob_name = "/test-retailer/voucher-updates/test.csv"
+    content = f"{voucher.voucher_code},2021-07-30,redeemed\n"
+    byte_content = content.encode("utf-8")
+
+    # WHEN
+    voucher_agent.process_csv(
+        db_session=db_session,
+        retailer_slug=voucher_config.retailer_slug,
+        blob_name=blob_name,
+        byte_content=byte_content,
+        voucher_config_id=voucher_config.id,
+    )
+    voucher_update_rows = db_session.query(VoucherUpdate).filter_by(voucher_config_id=voucher_config.id).all()
+
+    # THEN
+    assert len(voucher_update_rows) == 0
+    assert not voucher.allocated
+    assert voucher.deleted
+
+
+def test_process_csv_voucher_code_does_not_exist(
+    db_session: "Session", voucher_config: VoucherConfig, mocker: MockerFixture
+) -> None:
+    """The voucher does not exist"""
+    # GIVEN
+    from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
+    spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
+    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    mocker.patch("app.imports.agents.file_agent.settings")
+    voucher_agent = VoucherUpdatesAgent()
+    blob_name = "/test-retailer/voucher-updates/test.csv"
+    byte_content = b"IDONOTEXIST,2021-07-30,cancelled\n"
+
+    # WHEN
+    voucher_agent.process_csv(
+        db_session=db_session,
+        retailer_slug=voucher_config.retailer_slug,
+        blob_name=blob_name,
+        byte_content=byte_content,
+        voucher_config_id=voucher_config.id,
+    )
+    voucher_update_rows = db_session.query(VoucherUpdate).filter_by(voucher_config_id=voucher_config.id).all()
+
+    # THEN
+    assert len(voucher_update_rows) == 0
+    assert spy.call_count == 1
 
 
 def test_archive(mocker: MockerFixture) -> None:
