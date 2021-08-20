@@ -18,7 +18,7 @@ from app import crud
 from app.core.config import settings
 from app.db.session import SyncSessionMaker
 from app.enums import VoucherUpdateStatuses
-from app.models import Voucher, VoucherUpdate
+from app.models import VoucherUpdate
 from app.scheduler import CronScheduler
 from app.schemas import VoucherUpdateSchema
 
@@ -101,9 +101,7 @@ class VoucherUpdatesAgent:
                 else:
                     raise
 
-            voucher: Voucher = crud.get_voucher(
-                db_session=db_session, voucher_code=voucher_code, retailer_slug=retailer_slug
-            )
+            voucher = crud.get_voucher(db_session=db_session, voucher_code=voucher_code, retailer_slug=retailer_slug)
             # Check the voucher exists
             if not voucher:
                 if settings.SENTRY_DSN:

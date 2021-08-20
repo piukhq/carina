@@ -1,3 +1,4 @@
+from collections import namedtuple
 from typing import Generator
 
 import pytest
@@ -7,6 +8,9 @@ from sqlalchemy.orm import Session
 
 from app.db.base import Base
 from app.db.session import sync_engine
+from app.models import Voucher, VoucherConfig
+
+SetupType = namedtuple("SetupType", ["db_session", "voucher_config", "voucher"])
 
 
 @pytest.fixture(scope="module")
@@ -48,3 +52,8 @@ def setup_tables() -> Generator:
 
     # Drop all tables after each test
     Base.metadata.drop_all(bind=sync_engine)
+
+
+@pytest.fixture(scope="function")
+def setup(db_session: "Session", voucher_config: VoucherConfig, voucher: Voucher) -> Generator[SetupType, None, None]:
+    yield SetupType(db_session, voucher_config, voucher)

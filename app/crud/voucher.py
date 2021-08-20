@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -71,7 +71,7 @@ async def create_allocation(
 
 
 # Synchronous functions
-def get_voucher(db_session: "Session", **kwargs) -> Optional[Voucher]:
+def get_voucher(db_session: "Session", **kwargs: Any) -> Optional[Voucher]:
     """Get voucher by kwargs params"""
     voucher = sync_run_query(
         lambda: db_session.query(Voucher).filter_by(**kwargs).first(),
@@ -82,7 +82,7 @@ def get_voucher(db_session: "Session", **kwargs) -> Optional[Voucher]:
     return voucher
 
 
-def get_distinct_voucher_configs(db_session: "Session") -> Optional[List[VoucherConfig]]:
+def get_distinct_voucher_configs(db_session: "Session") -> List[VoucherConfig]:
     """Get distinct list of voucher configs, distinct by retailer_slug"""
     voucher_config_rows = sync_run_query(
         lambda: db_session.query(VoucherConfig).distinct(VoucherConfig.retailer_slug),
@@ -93,9 +93,9 @@ def get_distinct_voucher_configs(db_session: "Session") -> Optional[List[Voucher
     return list(voucher_config_rows)
 
 
-def mark_voucher_as_deleted(db_session: "Session", voucher_id: int) -> None:
+def mark_voucher_as_deleted(db_session: "Session", voucher_id: str) -> None:
     sync_run_query(
-        lambda: db_session.execute(update(Voucher).where(Voucher.id == voucher_id).values(deleted=True)),
+        lambda: db_session.execute(update(Voucher).where(Voucher.id == voucher_id).values(deleted=True)),  # type:ignore
         db_session,
         rollback_on_exc=False,
     )
