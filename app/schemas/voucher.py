@@ -17,5 +17,3 @@ class VoucherUpdateSchema(BaseModel):  # pragma: no cover
 
     class Config:
         orm_mode = True
-        use_enum_values = False
-        use_enum_names = True

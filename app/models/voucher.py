@@ -15,6 +15,7 @@ class Voucher(Base, TimestampMixin):  # pragma: no cover
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     voucher_code = Column(String, nullable=False, index=True)
     allocated = Column(Boolean, default=False, nullable=False)
+    deleted = Column(Boolean, default=False, nullable=False)
     voucher_config_id = Column(Integer, ForeignKey("voucher_config.id"), nullable=False)
     retailer_slug = Column(String(32), index=True, nullable=False)
 

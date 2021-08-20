@@ -14,11 +14,11 @@ from azure.core.exceptions import HttpResponseError, ResourceExistsError
 from azure.storage.blob import BlobServiceClient
 from pydantic import ValidationError
 
+from app import crud
 from app.core.config import settings
-from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
 from app.enums import VoucherUpdateStatuses
-from app.models import VoucherConfig, VoucherUpdate
+from app.models import Voucher, VoucherUpdate
 from app.scheduler import CronScheduler
 from app.schemas import VoucherUpdateSchema
 
@@ -43,23 +43,16 @@ class VoucherUpdatesAgent:
         container = self.blob_service_client.get_container_client(self.container_name)
 
         with SyncSessionMaker() as db_session:
-            voucher_config_rows: list = sync_run_query(
-                lambda: db_session.query(VoucherConfig.id, VoucherConfig.retailer_slug).distinct(
-                    VoucherConfig.retailer_slug
-                ),
-                db_session,
-                rollback_on_exc=False,
-            )
+            voucher_config_rows = crud.get_distinct_voucher_configs(db_session)
 
             for voucher_config_row in voucher_config_rows:
-                voucher_config = dict(voucher_config_row)
-                retailer_slug = voucher_config["retailer_slug"]
-                voucher_config_id = voucher_config["id"]
+                voucher_config_id = voucher_config_row.id
+                retailer_slug = voucher_config_row.retailer_slug
                 for blob in container.list_blobs(name_starts_with=f"{retailer_slug}/voucher-updates"):
                     blob_client = self.blob_service_client.get_blob_client(self.container_name, blob.name)
 
                     try:
-                        lease = blob_client.acquire_lease(lease_duration=60)
+                        lease = blob_client.acquire_lease(lease_duration=settings.BLOB_CLIENT_LEASE_SECONDS)
                     except HttpResponseError:
                         logger.debug(f"Skipping blob {blob.name} as we could not acquire a lease.")
                         continue
@@ -69,6 +62,7 @@ class VoucherUpdatesAgent:
                     logger.debug(f"Processing vouchers for blob {blob.name}.")
                     self.process_csv(
                         db_session=db_session,
+                        retailer_slug=retailer_slug,
                         blob_name=blob.name,
                         byte_content=byte_content,
                         voucher_config_id=voucher_config_id,
@@ -84,27 +78,54 @@ class VoucherUpdatesAgent:
                     )
 
     def process_csv(
-        self, db_session: "Session", blob_name: str, byte_content: ByteString, voucher_config_id: int
+        self,
+        db_session: "Session",
+        retailer_slug: str,
+        blob_name: str,
+        byte_content: ByteString,
+        voucher_config_id: int,
     ) -> None:
         content = byte_content.decode()  # type: ignore
         content_reader = csv.reader(StringIO(content), delimiter=",", quotechar="|")
         for row_num, row in enumerate(content_reader, start=1):
             try:
-                voucher_update = VoucherUpdate(
-                    voucher_code=row[0],
-                    date=row[1],
-                    status=VoucherUpdateStatuses(row[2]),
-                    voucher_config_id=voucher_config_id,
-                )
-            except (IndexError, KeyError, ValueError) as e:
+                voucher_code = row[0]
+                status_change_date = row[1]
+                status = VoucherUpdateStatuses(row[2])
+            except IndexError as e:
                 if settings.SENTRY_DSN:
                     sentry_sdk.capture_message(
-                        f"Error creating VoucherUpdate from CSV file {blob_name}, row {row_num}: {repr(e)}"
+                        f"Error parsing VoucherUpdate fields from CSV file {blob_name}, row {row_num}: {repr(e)}"
                     )
                     continue
                 else:
                     raise
 
+            voucher: Voucher = crud.get_voucher(
+                db_session=db_session, voucher_code=voucher_code, retailer_slug=retailer_slug
+            )
+            # Check the voucher exists
+            if not voucher:
+                if settings.SENTRY_DSN:
+                    sentry_sdk.capture_message(f"Voucher Code Not Found while processing {blob_name}, row: {row_num}")
+                continue
+
+            # Check that the voucher code is allocated, soft delete if not
+            if not voucher.allocated:
+                crud.mark_voucher_as_deleted(db_session, voucher.id)
+                if settings.SENTRY_DSN:
+                    sentry_sdk.capture_message(
+                        f"Voucher (id: {voucher.id}) Not Allocated while processing {blob_name}, "
+                        f"row: {row_num}, status change: {status}"
+                    )
+                continue
+
+            voucher_update = VoucherUpdate(
+                voucher_code=voucher_code,
+                date=status_change_date,
+                status=status,
+                voucher_config_id=voucher_config_id,
+            )
             try:
                 VoucherUpdateSchema.from_orm(voucher_update)
             except ValidationError as e:
