@@ -54,8 +54,11 @@ class VoucherUpdatesAgent:
                     try:
                         lease = blob_client.acquire_lease(lease_duration=settings.BLOB_CLIENT_LEASE_SECONDS)
                     except HttpResponseError:
-                        logger.debug(f"Skipping blob {blob.name} as we could not acquire a lease.")
-                        continue
+                        if settings.SENTRY_DSN:
+                            sentry_sdk.capture_message(f"Skipping blob {blob.name} as we could not acquire a lease.")
+                            continue
+                        else:
+                            raise
 
                     byte_content = blob_client.download_blob(lease=lease).readall()
 

@@ -157,8 +157,8 @@ class Settings(BaseSettings):
     BLOB_STORAGE_DSN: str = ""
     BLOB_IMPORT_CONTAINER = "carina-imports"
     BLOB_ARCHIVE_CONTAINER = "carina-archive"
-    BLOB_IMPORT_SCHEDULE = "*/1 * * * *"
-    BLOB_CLIENT_LEASE_SECONDS = 120
+    BLOB_IMPORT_SCHEDULE = "*/5 * * * *"
+    BLOB_CLIENT_LEASE_SECONDS = 60
 
     # The prefix used on every Redis key.
     REDIS_KEY_PREFIX = "imports"
