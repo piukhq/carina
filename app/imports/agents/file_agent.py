@@ -92,7 +92,7 @@ class VoucherUpdatesAgent:
                 voucher_code = row[0]
                 status_change_date = row[1]
                 status = VoucherUpdateStatuses(row[2])
-            except IndexError as e:
+            except (IndexError, ValueError) as e:
                 if settings.SENTRY_DSN:
                     sentry_sdk.capture_message(
                         f"Error parsing VoucherUpdate fields from CSV file {blob_name}, row {row_num}: {repr(e)}"

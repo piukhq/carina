@@ -3,6 +3,7 @@ import datetime
 from functools import partial
 
 from pytest_mock import MockerFixture
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.enums import VoucherUpdateStatuses
@@ -48,7 +49,11 @@ def test_process_csv_voucher_code_not_allocated(setup: SetupType, mocker: Mocker
     voucher.allocated = False
     db_session.commit()
 
+    from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
+
+    capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    mocker.patch("app.imports.agents.file_agent.settings")
     voucher_agent = VoucherUpdatesAgent()
     blob_name = "/test-retailer/voucher-updates/test.csv"
     content = f"{voucher.voucher_code},2021-07-30,redeemed\n"
@@ -68,15 +73,17 @@ def test_process_csv_voucher_code_not_allocated(setup: SetupType, mocker: Mocker
     assert len(voucher_update_rows) == 0
     assert not voucher.allocated
     assert voucher.deleted
+    assert capture_message_spy.call_count == 1
 
 
 def test_process_csv_voucher_code_does_not_exist(
-    db_session: "Session", voucher_config: VoucherConfig, mocker: MockerFixture
+    db_session: Session, voucher_config: VoucherConfig, mocker: MockerFixture
 ) -> None:
     """The voucher does not exist"""
     # GIVEN
     from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
-    spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
+
+    capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
     mocker.patch("app.imports.agents.file_agent.settings")
     voucher_agent = VoucherUpdatesAgent()
@@ -95,7 +102,36 @@ def test_process_csv_voucher_code_does_not_exist(
 
     # THEN
     assert len(voucher_update_rows) == 0
-    assert spy.call_count == 1
+    assert capture_message_spy.call_count == 1
+
+
+def test_process_csv_voucher_code_bad_csv_row_gets_reported(
+    db_session: Session, voucher_config: VoucherConfig, mocker: MockerFixture
+) -> None:
+    """A bad CSV row gets reported to sentry"""
+    # GIVEN
+    from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
+
+    capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
+    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    mocker.patch("app.imports.agents.file_agent.settings")
+    voucher_updates_agent = VoucherUpdatesAgent()
+    blob_name = "/test-retailer/voucher-updates/test.csv"
+    byte_content = b"pmPgdleIAI5wVQR,2021-08-20,not_an_enum_value\n"
+
+    # WHEN
+    voucher_updates_agent.process_csv(
+        db_session=db_session,
+        retailer_slug=voucher_config.retailer_slug,
+        blob_name=blob_name,
+        byte_content=byte_content,
+        voucher_config_id=voucher_config.id,
+    )
+    voucher_update_rows = db_session.query(VoucherUpdate).filter_by(voucher_config_id=voucher_config.id).all()
+
+    # THEN
+    assert len(voucher_update_rows) == 0
+    assert capture_message_spy.call_count == 1
 
 
 def test_archive(mocker: MockerFixture) -> None:
