@@ -13,7 +13,6 @@ class VoucherUpdateSchema(BaseModel):  # pragma: no cover
     voucher_code: str
     date: date
     status: VoucherUpdateStatuses
-    voucher_config_id: int
 
     class Config:
         orm_mode = True

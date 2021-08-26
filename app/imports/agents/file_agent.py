@@ -1,11 +1,11 @@
 import csv
 import logging
-import typing
 
+from collections import defaultdict
 from datetime import datetime
 from functools import partial
 from io import StringIO
-from typing import ByteString, Callable, Optional
+from typing import TYPE_CHECKING, ByteString, Callable, DefaultDict, List, NamedTuple, Optional, Tuple, Union
 
 import click
 import sentry_sdk
@@ -13,19 +13,25 @@ import sentry_sdk
 from azure.core.exceptions import HttpResponseError, ResourceExistsError
 from azure.storage.blob import BlobServiceClient
 from pydantic import ValidationError
+from sqlalchemy import update
+from sqlalchemy.future import select
 
-from app import crud
 from app.core.config import settings
 from app.db.session import SyncSessionMaker
 from app.enums import VoucherUpdateStatuses
-from app.models import VoucherUpdate
+from app.models import Voucher, VoucherUpdate
 from app.scheduler import CronScheduler
 from app.schemas import VoucherUpdateSchema
 
-if typing.TYPE_CHECKING:
+logger = logging.getLogger("voucher-import")
+
+if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-logger = logging.getLogger("voucher-import")
+
+class VoucherUpdateRow(NamedTuple):
+    voucher_update: VoucherUpdate
+    row_num: int
 
 
 class VoucherUpdatesAgent:
@@ -43,99 +49,188 @@ class VoucherUpdatesAgent:
         container = self.blob_service_client.get_container_client(self.container_name)
 
         with SyncSessionMaker() as db_session:
-            voucher_config_rows = crud.get_distinct_voucher_configs(db_session)
+            retailer_slugs = db_session.execute(select(Voucher.retailer_slug).distinct()).scalars().all()
 
-            for voucher_config_row in voucher_config_rows:
-                voucher_config_id = voucher_config_row.id
-                retailer_slug = voucher_config_row.retailer_slug
-                for blob in container.list_blobs(name_starts_with=f"{retailer_slug}/voucher-updates"):
-                    blob_client = self.blob_service_client.get_blob_client(self.container_name, blob.name)
+        for retailer_slug in retailer_slugs:
+            for blob in container.list_blobs(name_starts_with=f"{retailer_slug}/voucher-updates"):
+                blob_client = self.blob_service_client.get_blob_client(self.container_name, blob.name)
 
-                    try:
-                        lease = blob_client.acquire_lease(lease_duration=settings.BLOB_CLIENT_LEASE_SECONDS)
-                    except HttpResponseError:
-                        if settings.SENTRY_DSN:
-                            sentry_sdk.capture_message(f"Skipping blob {blob.name} as we could not acquire a lease.")
-                            continue
-                        else:
-                            raise
+                try:
+                    lease = blob_client.acquire_lease(lease_duration=settings.BLOB_CLIENT_LEASE_SECONDS)
+                except HttpResponseError:
+                    if settings.SENTRY_DSN:
+                        sentry_sdk.capture_message(f"Skipping blob {blob.name} as we could not acquire a lease.")
+                        continue
+                    else:
+                        raise
 
-                    byte_content = blob_client.download_blob(lease=lease).readall()
+                byte_content = blob_client.download_blob(lease=lease).readall()
 
-                    logger.debug(f"Processing vouchers for blob {blob.name}.")
-                    self.process_csv(
-                        db_session=db_session,
-                        retailer_slug=retailer_slug,
-                        blob_name=blob.name,
-                        byte_content=byte_content,
-                        voucher_config_id=voucher_config_id,
-                    )
-
-                    logger.debug(f"Archiving blob {blob.name}.")
-                    self.archive(
-                        blob.name,
-                        byte_content,
-                        delete_callback=partial(blob_client.delete_blob, lease=lease),
-                        blob_service_client=self.blob_service_client,
-                        logger=logger,
-                    )
+                logger.debug(f"Processing vouchers for blob {blob.name}.")
+                voucher_update_rows_by_code = self.process_csv(
+                    retailer_slug=retailer_slug,
+                    blob_name=blob.name,
+                    byte_content=byte_content,
+                )
+                if voucher_update_rows_by_code:
+                    self.process_updates(retailer_slug, voucher_update_rows_by_code, blob.name)
+                logger.debug(f"Archiving blob {blob.name}.")
+                self.archive(
+                    blob.name,
+                    byte_content,
+                    delete_callback=partial(blob_client.delete_blob, lease=lease),
+                    blob_service_client=self.blob_service_client,
+                    logger=logger,
+                )
 
     def process_csv(
+        self,
+        retailer_slug: str,
+        blob_name: str,
+        byte_content: ByteString,
+    ) -> DefaultDict[str, List[VoucherUpdateRow]]:
+        content = byte_content.decode()  # type: ignore
+        content_reader = csv.reader(StringIO(content), delimiter=",", quotechar="|")
+
+        #  This is a defaultdict(list) incase we encounter the voucher code twice in one file
+        voucher_update_rows_by_code: defaultdict = defaultdict(list[VoucherUpdateRow])
+        invalid_rows: List[Tuple[int, Exception]] = []
+        for row_num, row in enumerate(content_reader, start=1):
+            try:
+                data = VoucherUpdateSchema(
+                    voucher_code=row[0].strip(),
+                    date=row[1].strip(),
+                    status=VoucherUpdateStatuses(row[2].strip()),
+                )
+            except (ValidationError, IndexError, ValueError) as e:
+                invalid_rows.append((row_num, e))
+            else:
+                voucher_update_rows_by_code[data.dict()["voucher_code"]].append(
+                    VoucherUpdateRow(VoucherUpdate(retailer_slug=retailer_slug, **data.dict()), row_num=row_num)
+                )
+
+        if invalid_rows:
+            msg = f"Error validating VoucherUpdate from CSV file {blob_name}:\n" + "\n".join(
+                [f"row {row_num}: {repr(e)}" for row_num, e in invalid_rows]
+            )
+            if settings.SENTRY_DSN:
+                sentry_sdk.capture_message(msg)
+            else:
+                logger.warning(msg)
+
+        if not voucher_update_rows_by_code:
+            logger.warning(f"No relevant voucher updates found in blob: {blob_name}")
+        return voucher_update_rows_by_code
+
+    def _report_unknown_codes(
+        self,
+        voucher_codes_in_file: List[str],
+        db_voucher_data_by_voucher_code: dict[str, dict[str, Union[str, bool]]],
+        voucher_update_rows_by_code: DefaultDict[str, List[VoucherUpdateRow]],
+        blob_name: str,
+    ) -> None:
+        unknown_voucher_codes = list(set(voucher_codes_in_file) - set(db_voucher_data_by_voucher_code.keys()))
+        voucher_update_row_datas: List[VoucherUpdateRow]
+        if unknown_voucher_codes:
+            row_nums = []
+            for unknown_voucher_code in unknown_voucher_codes:
+                voucher_update_row_datas = voucher_update_rows_by_code.pop(unknown_voucher_code, [])
+                row_nums.extend([update_row.row_num for update_row in voucher_update_row_datas])
+
+            msg = f"Voucher Codes Not Found while processing {blob_name}, rows: {', '.join(map(str, row_nums))}"
+            if settings.SENTRY_DSN:
+                sentry_sdk.capture_message(msg)
+            else:
+                logger.warning(msg)
+
+    def _process_unallocated_codes(
         self,
         db_session: "Session",
         retailer_slug: str,
         blob_name: str,
-        byte_content: ByteString,
-        voucher_config_id: int,
+        voucher_codes_in_file: List[str],
+        db_voucher_data_by_voucher_code: dict[str, dict[str, Union[str, bool]]],
+        voucher_update_rows_by_code: DefaultDict[str, List[VoucherUpdateRow]],
     ) -> None:
-        content = byte_content.decode()  # type: ignore
-        content_reader = csv.reader(StringIO(content), delimiter=",", quotechar="|")
-        for row_num, row in enumerate(content_reader, start=1):
-            try:
-                voucher_code = row[0]
-                status_change_date = row[1]
-                status = VoucherUpdateStatuses(row[2])
-            except (IndexError, ValueError) as e:
-                if settings.SENTRY_DSN:
-                    sentry_sdk.capture_message(
-                        f"Error parsing VoucherUpdate fields from CSV file {blob_name}, row {row_num}: {repr(e)}"
-                    )
-                    continue
-                else:
-                    raise
+        unallocated_voucher_codes = list(
+            set(voucher_codes_in_file)
+            & {
+                voucher_code
+                for voucher_code, voucher_data in db_voucher_data_by_voucher_code.items()
+                if voucher_data["allocated"] is False
+            }
+        )
 
-            voucher = crud.get_voucher(db_session=db_session, voucher_code=voucher_code, retailer_slug=retailer_slug)
-            # Check the voucher exists
-            if not voucher:
-                if settings.SENTRY_DSN:
-                    sentry_sdk.capture_message(f"Voucher Code Not Found while processing {blob_name}, row: {row_num}")
-                continue
+        # Soft delete unallocated voucher codes
+        if unallocated_voucher_codes:
+            update_rows: List[VoucherUpdateRow] = []
+            for unallocated_voucher_code in unallocated_voucher_codes:
+                rows = voucher_update_rows_by_code.pop(unallocated_voucher_code, [])
+                update_rows.extend(rows)
 
-            # Check that the voucher code is allocated, soft delete if not
-            if not voucher.allocated:
-                crud.mark_voucher_as_deleted(db_session, voucher.id)
-                if settings.SENTRY_DSN:
-                    sentry_sdk.capture_message(
-                        f"Voucher (id: {voucher.id}) Not Allocated while processing {blob_name}, "
-                        f"row: {row_num}, status change: {status}"
-                    )
-                continue
-
-            voucher_update = VoucherUpdate(
-                voucher_code=voucher_code,
-                date=status_change_date,
-                status=status,
-                voucher_config_id=voucher_config_id,
+            db_session.execute(
+                update(Voucher)  # type: ignore
+                .where(Voucher.voucher_code.in_(unallocated_voucher_codes))
+                .where(Voucher.retailer_slug == retailer_slug)
+                .values(deleted=True)
             )
-            try:
-                VoucherUpdateSchema.from_orm(voucher_update)
-            except ValidationError as e:
-                logger.error(f"Error validating VoucherUpdate from CSV file {blob_name}, row {row_num}: {repr(e)}")
-                continue
+            msg = f"Unallocated voucher codes found while processing {blob_name}:\n" + "\n".join(
+                [
+                    f"Voucher id: {db_voucher_data_by_voucher_code[row_data.voucher_update.voucher_code]['id']}"
+                    f" row: {row_data.row_num}, status change: {row_data.voucher_update.status.value}"  # type: ignore
+                    for row_data in update_rows
+                ]
+            )
+            if settings.SENTRY_DSN:
+                sentry_sdk.capture_message(f"{blob_name} contains unallocated Voucher codes:\n\n{msg}")
             else:
-                db_session.add(voucher_update)
+                logger.warning(msg)
 
-        db_session.commit()
+    def process_updates(
+        self,
+        retailer_slug: str,
+        voucher_update_rows_by_code: DefaultDict[str, List[VoucherUpdateRow]],
+        blob_name: str,
+    ) -> None:
+
+        voucher_codes_in_file = list(voucher_update_rows_by_code.keys())
+
+        with SyncSessionMaker() as db_session:
+
+            db_voucher_data_by_voucher_code: dict[str, dict[str, Union[str, bool]]] = {
+                # Provides a dict in the following format:
+                # {'<voucher-code>': {'id': 'f2c44cf7-9d0f-45d0-b199-44a3c8b72db3', 'allocated': True}}
+                voucher_data["voucher_code"]: {"id": str(voucher_data["id"]), "allocated": voucher_data["allocated"]}
+                for voucher_data in db_session.execute(
+                    select(Voucher.id, Voucher.voucher_code, Voucher.allocated)
+                    .with_for_update()
+                    .where(Voucher.voucher_code.in_(voucher_codes_in_file))
+                    .where(Voucher.retailer_slug == retailer_slug)
+                )
+                .mappings()
+                .all()
+            }
+
+            self._process_unallocated_codes(
+                db_session,
+                retailer_slug,
+                blob_name,
+                voucher_codes_in_file,
+                db_voucher_data_by_voucher_code,
+                voucher_update_rows_by_code,
+            )
+
+            self._report_unknown_codes(
+                voucher_codes_in_file, db_voucher_data_by_voucher_code, voucher_update_rows_by_code, blob_name
+            )
+
+            voucher_updates = []
+            for voucher_update_rows in voucher_update_rows_by_code.values():
+                voucher_updates.extend(
+                    [voucher_update_row.voucher_update for voucher_update_row in voucher_update_rows]
+                )
+            db_session.add_all(voucher_updates)
+            db_session.commit()
 
     def archive(
         self,

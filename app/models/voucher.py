@@ -39,7 +39,6 @@ class VoucherConfig(Base, TimestampMixin):  # pragma: no cover
 
     vouchers = relationship("Voucher", back_populates="voucher_config")
     allocations = relationship("VoucherAllocation", back_populates="voucher_config")
-    voucher_updates = relationship("VoucherUpdate", back_populates="voucher_config")
 
     __mapper_args__ = {"eager_defaults": True}
     __table_args__ = (
@@ -76,11 +75,9 @@ class VoucherUpdate(Base, TimestampMixin):  # pragma: no cover
     __tablename__ = "voucher_update"
 
     voucher_code = Column(String, nullable=False, index=True)
+    retailer_slug = Column(String(32), index=True, nullable=False)
     date = Column(Date, nullable=False)
     status = Column(Enum(VoucherUpdateStatuses), nullable=False)
-    voucher_config_id = Column(Integer, ForeignKey("voucher_config.id"), nullable=False)
-
-    voucher_config = relationship("VoucherConfig", back_populates="voucher_updates")
 
     __mapper_args__ = {"eager_defaults": True}
 
