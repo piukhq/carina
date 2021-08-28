@@ -1,11 +1,11 @@
 import csv
 import logging
 
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from datetime import datetime
 from functools import partial
 from io import StringIO
-from typing import TYPE_CHECKING, ByteString, Callable, DefaultDict, List, NamedTuple, Optional, Tuple, Union
+from typing import TYPE_CHECKING, ByteString, Callable, DefaultDict, List, Optional, Tuple, Union
 
 import click
 import sentry_sdk
@@ -29,9 +29,7 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 
-class VoucherUpdateRow(NamedTuple):
-    voucher_update: VoucherUpdate
-    row_num: int
+VoucherUpdateRow = namedtuple("VoucherUpdateRow", ["voucher_update", "row_num"])
 
 
 class VoucherUpdatesAgent:
@@ -73,7 +71,13 @@ class VoucherUpdatesAgent:
                     byte_content=byte_content,
                 )
                 if voucher_update_rows_by_code:
-                    self.process_updates(retailer_slug, voucher_update_rows_by_code, blob.name)
+                    with SyncSessionMaker() as db_session:
+                        self.process_updates(
+                            db_session=db_session,
+                            retailer_slug=retailer_slug,
+                            voucher_update_rows_by_code=voucher_update_rows_by_code,
+                            blob_name=blob.name,
+                        )
                 logger.debug(f"Archiving blob {blob.name}.")
                 self.archive(
                     blob.name,
@@ -92,7 +96,7 @@ class VoucherUpdatesAgent:
         content = byte_content.decode()  # type: ignore
         content_reader = csv.reader(StringIO(content), delimiter=",", quotechar="|")
 
-        #  This is a defaultdict(list) incase we encounter the voucher code twice in one file
+        # This is a defaultdict(list) incase we encounter the voucher code twice in one file
         voucher_update_rows_by_code: defaultdict = defaultdict(list[VoucherUpdateRow])
         invalid_rows: List[Tuple[int, Exception]] = []
         for row_num, row in enumerate(content_reader, start=1):
@@ -177,7 +181,7 @@ class VoucherUpdatesAgent:
             msg = f"Unallocated voucher codes found while processing {blob_name}:\n" + "\n".join(
                 [
                     f"Voucher id: {db_voucher_data_by_voucher_code[row_data.voucher_update.voucher_code]['id']}"
-                    f" row: {row_data.row_num}, status change: {row_data.voucher_update.status.value}"  # type: ignore
+                    f" row: {row_data.row_num}, status change: {row_data.voucher_update.status.value}"
                     for row_data in update_rows
                 ]
             )
@@ -188,6 +192,7 @@ class VoucherUpdatesAgent:
 
     def process_updates(
         self,
+        db_session: "Session",
         retailer_slug: str,
         voucher_update_rows_by_code: DefaultDict[str, List[VoucherUpdateRow]],
         blob_name: str,
@@ -195,42 +200,38 @@ class VoucherUpdatesAgent:
 
         voucher_codes_in_file = list(voucher_update_rows_by_code.keys())
 
-        with SyncSessionMaker() as db_session:
-
-            db_voucher_data_by_voucher_code: dict[str, dict[str, Union[str, bool]]] = {
-                # Provides a dict in the following format:
-                # {'<voucher-code>': {'id': 'f2c44cf7-9d0f-45d0-b199-44a3c8b72db3', 'allocated': True}}
-                voucher_data["voucher_code"]: {"id": str(voucher_data["id"]), "allocated": voucher_data["allocated"]}
-                for voucher_data in db_session.execute(
-                    select(Voucher.id, Voucher.voucher_code, Voucher.allocated)
-                    .with_for_update()
-                    .where(Voucher.voucher_code.in_(voucher_codes_in_file))
-                    .where(Voucher.retailer_slug == retailer_slug)
-                )
-                .mappings()
-                .all()
-            }
-
-            self._process_unallocated_codes(
-                db_session,
-                retailer_slug,
-                blob_name,
-                voucher_codes_in_file,
-                db_voucher_data_by_voucher_code,
-                voucher_update_rows_by_code,
+        db_voucher_data_by_voucher_code: dict[str, dict[str, Union[str, bool]]] = {
+            # Provides a dict in the following format:
+            # {'<voucher-code>': {'id': 'f2c44cf7-9d0f-45d0-b199-44a3c8b72db3', 'allocated': True}}
+            voucher_data["voucher_code"]: {"id": str(voucher_data["id"]), "allocated": voucher_data["allocated"]}
+            for voucher_data in db_session.execute(
+                select(Voucher.id, Voucher.voucher_code, Voucher.allocated)
+                .with_for_update()
+                .where(Voucher.voucher_code.in_(voucher_codes_in_file))
+                .where(Voucher.retailer_slug == retailer_slug)
             )
+            .mappings()
+            .all()
+        }
 
-            self._report_unknown_codes(
-                voucher_codes_in_file, db_voucher_data_by_voucher_code, voucher_update_rows_by_code, blob_name
-            )
+        self._process_unallocated_codes(
+            db_session,
+            retailer_slug,
+            blob_name,
+            voucher_codes_in_file,
+            db_voucher_data_by_voucher_code,
+            voucher_update_rows_by_code,
+        )
 
-            voucher_updates = []
-            for voucher_update_rows in voucher_update_rows_by_code.values():
-                voucher_updates.extend(
-                    [voucher_update_row.voucher_update for voucher_update_row in voucher_update_rows]
-                )
-            db_session.add_all(voucher_updates)
-            db_session.commit()
+        self._report_unknown_codes(
+            voucher_codes_in_file, db_voucher_data_by_voucher_code, voucher_update_rows_by_code, blob_name
+        )
+
+        voucher_updates = []
+        for voucher_update_rows in voucher_update_rows_by_code.values():
+            voucher_updates.extend([voucher_update_row.voucher_update for voucher_update_row in voucher_update_rows])
+        db_session.add_all(voucher_updates)
+        db_session.commit()
 
     def archive(
         self,
