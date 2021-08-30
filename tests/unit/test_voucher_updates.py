@@ -73,8 +73,8 @@ def test_process_csv_voucher_code_fails_non_validating_rows(setup: SetupType, mo
     # THEN
     assert capture_message_spy.call_count == 1  # Errors should all be rolled up in to a single call
     expected_error_msg: str = capture_message_spy.call_args.args[0]
-    assert "time data '20210830' does not match format '%Y-%m-%d'" in expected_error_msg
-    assert "'nosuchstatus' is not a valid VoucherUpdateStatuses" in expected_error_msg
+    assert f"time data '{bad_date}' does not match format '%Y-%m-%d'" in expected_error_msg
+    assert f"'{bad_status}' is not a valid VoucherUpdateStatuses" in expected_error_msg
 
 
 def test_process_csv_voucher_code_fails_malformed_csv_rows(setup: SetupType, mocker: MockerFixture) -> None:

@@ -3,12 +3,11 @@ import socket
 import typing as t
 
 from logging import Logger
-from time import sleep
 from uuid import uuid4
 
 import sentry_sdk
 
-from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.background import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.util import undefined
 from redis.exceptions import WatchError
@@ -71,27 +70,14 @@ class CronScheduler:  # pragma: no cover
             return CronTrigger.from_crontab(self.default_schedule)
 
     def run(self) -> None:
-        scheduler = BackgroundScheduler()
+        scheduler = BlockingScheduler()
         schedule = self.schedule_fn()
         if not schedule:
-            self.log.warn((f"No schedule provided! Reverting to default of '{self.default_schedule}'."))
+            self.log.warning((f"No schedule provided! Reverting to default of '{self.default_schedule}'."))
             schedule = self.default_schedule
 
-        job = scheduler.add_job(self.tick, trigger=self._get_trigger(schedule), coalesce=self.coalesce_jobs)
+        scheduler.add_job(self.tick, trigger=self._get_trigger(schedule), coalesce=self.coalesce_jobs)
         scheduler.start()
-
-        try:
-            while scheduler.running:
-                new_schedule = self.schedule_fn()
-                if new_schedule != schedule:
-                    self.log.debug(f"Schedule has been changed from {schedule} to {new_schedule}! Rescheduling…")
-                    schedule = new_schedule
-                    job.reschedule(self._get_trigger(schedule))
-                sleep(5)
-        except KeyboardInterrupt:
-            self.log.debug("Shutting down…")
-            scheduler.shutdown()
-            self.log.debug("Done!")
 
     def tick(self) -> None:
         try:

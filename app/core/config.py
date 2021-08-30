@@ -161,7 +161,7 @@ class Settings(BaseSettings):
     BLOB_CLIENT_LEASE_SECONDS = 60
 
     # The prefix used on every Redis key.
-    REDIS_KEY_PREFIX = "imports"
+    REDIS_KEY_PREFIX = "carinavouchers"
 
     class Config:
         case_sensitive = True

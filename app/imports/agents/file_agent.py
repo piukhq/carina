@@ -265,7 +265,7 @@ class VoucherUpdatesAgent:
         logger.info(f"Watching {self.container_name} for files via {self.__class__.__name__}.")
 
         scheduler = CronScheduler(
-            name="blob-storage-import",
+            name="carina-voucher-update-scheduler",
             schedule_fn=lambda: self.schedule,
             callback=self.callback,
             coalesce_jobs=True,
