@@ -20,7 +20,9 @@ if TYPE_CHECKING:
 
 def _get_voucher_update_rows(db_session: "Session", voucher_config: VoucherConfig) -> List[VoucherUpdate]:
     voucher_update_rows = (
-        db_session.execute(select(VoucherUpdate).filter_by(retailer_slug=voucher_config.retailer_slug))  # type: ignore
+        db_session.execute(
+            select(VoucherUpdate).where(VoucherUpdate.retailer_slug == voucher_config.retailer_slug)  # type: ignore
+        )
         .scalars()
         .all()
     )
