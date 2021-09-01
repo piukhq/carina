@@ -5,7 +5,7 @@ from functools import partial
 from typing import TYPE_CHECKING, DefaultDict, List
 
 from pytest_mock import MockerFixture
-from sqlalchemy.sql.expression import select
+from sqlalchemy.future import select
 
 from app.core.config import settings
 from app.enums import VoucherUpdateStatuses
@@ -20,13 +20,10 @@ if TYPE_CHECKING:
 
 def _get_voucher_update_rows(db_session: "Session", voucher_config: VoucherConfig) -> List[VoucherUpdate]:
     voucher_update_rows = (
-        db_session.execute(
-            select(VoucherUpdate).where(VoucherUpdate.retailer_slug == voucher_config.retailer_slug)  # type: ignore
-        )
+        db_session.execute(select(VoucherUpdate).where(VoucherUpdate.retailer_slug == voucher_config.retailer_slug))
         .scalars()
         .all()
     )
-
     return voucher_update_rows
 
 
