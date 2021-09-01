@@ -35,7 +35,7 @@ class VoucherConfig(Base, TimestampMixin):  # pragma: no cover
     voucher_type_slug = Column(String(32), index=True, nullable=False)
     validity_days = Column(Integer, nullable=True)
     retailer_slug = Column(String(32), index=True, nullable=False)
-    fetch_type = Column(Enum(VoucherFetchType), nullable=False, default=VoucherFetchType.PRE_ALLOCATED)
+    fetch_type = Column(Enum(VoucherFetchType), nullable=False, default=VoucherFetchType.PRE_LOADED)
 
     vouchers = relationship("Voucher", back_populates="voucher_config")
     allocations = relationship("VoucherAllocation", back_populates="voucher_config")

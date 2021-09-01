@@ -46,4 +46,4 @@ class VoucherUpdateStatuses(Enum):
 
 
 class VoucherFetchType(Enum):
-    PRE_ALLOCATED = "pre_allocated"
+    PRE_LOADED = "pre_loaded"
