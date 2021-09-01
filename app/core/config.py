@@ -168,6 +168,15 @@ class Settings(BaseSettings):
     VOUCHER_ALLOCATION_MAX_RETRIES: int = 6
     VOUCHER_ALLOCATION_BACKOFF_BASE: float = 3
 
+    BLOB_STORAGE_DSN: str = ""
+    BLOB_IMPORT_CONTAINER = "carina-imports"
+    BLOB_ARCHIVE_CONTAINER = "carina-archive"
+    BLOB_IMPORT_SCHEDULE = "*/5 * * * *"
+    BLOB_CLIENT_LEASE_SECONDS = 60
+
+    # The prefix used on every Redis key.
+    REDIS_KEY_PREFIX = "carinavouchers"
+
     class Config:
         case_sensitive = True
         # env var settings priority ie priority 1 will override priority 2:

@@ -30,7 +30,14 @@ async def get_allocable_voucher(db_session: AsyncSession, voucher_config: Vouche
         return (
             (
                 await db_session.execute(
-                    select(Voucher).with_for_update().filter_by(voucher_config_id=voucher_config.id, allocated=False)
+                    select(Voucher)
+                    .with_for_update()
+                    .where(
+                        Voucher.voucher_config_id == voucher_config.id,
+                        Voucher.allocated == False,  # noqa
+                        Voucher.deleted == False,  # noqa
+                    )
+                    .limit(1)
                 )
             )
             .scalars()
