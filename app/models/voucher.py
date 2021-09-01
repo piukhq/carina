@@ -82,4 +82,4 @@ class VoucherUpdate(Base, TimestampMixin):  # pragma: no cover
     __mapper_args__ = {"eager_defaults": True}
 
     def __str__(self) -> str:
-        return f"{self.__class__.__name__}({self.voucher_code})"
+        return f"{self.__class__.__name__}({self.id})"
