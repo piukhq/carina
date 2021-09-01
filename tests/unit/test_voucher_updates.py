@@ -2,16 +2,28 @@ import datetime
 
 from collections import defaultdict
 from functools import partial
-from typing import DefaultDict, List
+from typing import TYPE_CHECKING, DefaultDict, List
 
 from pytest_mock import MockerFixture
+from sqlalchemy.sql.expression import select
 
 from app.core.config import settings
 from app.enums import VoucherUpdateStatuses
 from app.imports.agents.file_agent import VoucherUpdateRow, VoucherUpdatesAgent
-from app.models import VoucherUpdate
+from app.models import VoucherConfig, VoucherUpdate
 from app.schemas import VoucherUpdateSchema
 from tests.api.conftest import SetupType
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
+
+def _get_voucher_update_rows(db_session: "Session", voucher_config: VoucherConfig) -> List[VoucherUpdate]:
+    voucher_update_rows = (
+        db_session.execute(select(VoucherUpdate).filter_by(retailer_slug=voucher_config.retailer_slug)).scalars().all()  # type: ignore
+    )
+
+    return voucher_update_rows
 
 
 def test_process_csv(setup: SetupType, mocker: MockerFixture) -> None:
@@ -133,7 +145,7 @@ def test_process_updates(setup: SetupType, mocker: MockerFixture) -> None:
         voucher_update_rows_by_code=voucher_update_rows_by_code,
         blob_name=blob_name,
     )
-    voucher_update_rows = db_session.query(VoucherUpdate).filter_by(retailer_slug=voucher_config.retailer_slug).all()
+    voucher_update_rows = _get_voucher_update_rows(db_session, voucher_config)
 
     # THEN
     assert len(voucher_update_rows) == 1
@@ -176,7 +188,7 @@ def test_process_updates_voucher_code_not_allocated(setup: SetupType, mocker: Mo
         voucher_update_rows_by_code=voucher_update_rows_by_code,
         blob_name=blob_name,
     )
-    voucher_update_rows = db_session.query(VoucherUpdate).filter_by(retailer_slug=voucher_config.retailer_slug).all()
+    voucher_update_rows = _get_voucher_update_rows(db_session, voucher_config)
 
     # THEN
     assert capture_message_spy.call_count == 1  # Errors should all be rolled up in to a single call
@@ -216,7 +228,7 @@ def test_process_updates_voucher_code_does_not_exist(setup: SetupType, mocker: M
         voucher_update_rows_by_code=voucher_update_rows_by_code,
         blob_name=blob_name,
     )
-    voucher_update_rows = db_session.query(VoucherUpdate).filter_by(retailer_slug=voucher_config.retailer_slug).all()
+    voucher_update_rows = _get_voucher_update_rows(db_session, voucher_config)
 
     # THEN
     assert capture_message_spy.call_count == 1  # Errors should all be rolled up in to a single call
