@@ -13,21 +13,22 @@ from app.models import Voucher, VoucherConfig
 SetupType = namedtuple("SetupType", ["db_session", "voucher_config", "voucher"])
 
 
-@pytest.fixture(scope="module")
-def connection() -> Connection:
-    return sync_engine.connect()
+@pytest.fixture(scope="function")
+def connection() -> Generator:
+    connection = sync_engine.connect()
+
+    yield connection
+
+    connection.close()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def unit_db_session(connection: Connection) -> Generator:
     session = Session(bind=connection)
 
     yield session
 
     session.rollback()
-
-    # Close the connection that began the nested transaction that wraps everything
-    connection.close()
 
 
 @pytest.fixture(scope="function")
