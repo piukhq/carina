@@ -9,7 +9,7 @@ import requests
 import rq
 
 from app.core.config import settings
-from app.enums import VoucherAllocationStatuses
+from app.enums import QueuedRetryStatuses
 from app.models import VoucherAllocation
 from app.tasks.allocation import allocate_voucher
 from app.tasks.error_handlers import handle_voucher_allocation_error
@@ -21,7 +21,7 @@ if typing.TYPE_CHECKING:
 @pytest.fixture()
 def allocation(db_session: "Session", voucher_allocation: VoucherAllocation) -> VoucherAllocation:
     #  For correctness, as we are in the error scenario here
-    voucher_allocation.status = VoucherAllocationStatuses.IN_PROGRESS  # type: ignore
+    voucher_allocation.status = QueuedRetryStatuses.IN_PROGRESS  # type: ignore
     voucher_allocation.attempts = 1
     db_session.commit()
     return voucher_allocation
@@ -67,7 +67,7 @@ def test_handle_voucher_allocation_error_5xx(
         voucher_allocation_id=allocation.id,
         failure_ttl=604800,
     )
-    assert allocation.status == VoucherAllocationStatuses.IN_PROGRESS
+    assert allocation.status == QueuedRetryStatuses.IN_PROGRESS
     assert allocation.attempts == 1
     assert allocation.next_attempt_time == fixed_now + timedelta(seconds=180)
 
@@ -103,7 +103,7 @@ def test_handle_adjust_balance_error_no_response(
         voucher_allocation_id=allocation.id,
         failure_ttl=604800,
     )
-    assert allocation.status == VoucherAllocationStatuses.IN_PROGRESS
+    assert allocation.status == QueuedRetryStatuses.IN_PROGRESS
     assert allocation.attempts == 1
     assert allocation.next_attempt_time == fixed_now + timedelta(seconds=180)
 
@@ -131,7 +131,7 @@ def test_handle_adjust_balance_error_no_further_retries(
     )
     db_session.refresh(allocation)
     mock_queue.assert_not_called()
-    assert allocation.status == VoucherAllocationStatuses.FAILED
+    assert allocation.status == QueuedRetryStatuses.FAILED
     assert allocation.attempts == settings.VOUCHER_ALLOCATION_MAX_RETRIES
     assert allocation.next_attempt_time is None
 
@@ -155,7 +155,7 @@ def test_handle_adjust_balance_error_unhandleable_response(
     )
     db_session.refresh(allocation)
     mock_queue.assert_not_called()
-    assert allocation.status == VoucherAllocationStatuses.FAILED
+    assert allocation.status == QueuedRetryStatuses.FAILED
     assert allocation.next_attempt_time is None
 
 
@@ -175,7 +175,7 @@ def test_handle_adjust_balance_error_unhandled_exception(
     db_session.refresh(allocation)
 
     mock_sentry_capture_exception.assert_called_once()
-    assert allocation.status == VoucherAllocationStatuses.FAILED
+    assert allocation.status == QueuedRetryStatuses.FAILED
     assert allocation.next_attempt_time is None
 
 
@@ -207,5 +207,5 @@ def test_handle_adjust_balance_error_account_holder_deleted(
     )
     db_session.refresh(allocation)
     mock_queue.assert_not_called()
-    assert allocation.status == VoucherAllocationStatuses.FAILED
+    assert allocation.status == QueuedRetryStatuses.FAILED
     assert allocation.next_attempt_time is None

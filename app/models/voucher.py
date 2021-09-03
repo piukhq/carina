@@ -6,7 +6,7 @@ from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.orm import relationship
 
 from app.db.base_class import Base, TimestampMixin
-from app.enums import VoucherAllocationStatuses, VoucherFetchType, VoucherUpdateStatuses
+from app.enums import QueuedRetryStatuses, VoucherFetchType, VoucherUpdateStatuses
 
 
 class Voucher(Base, TimestampMixin):  # pragma: no cover
@@ -52,7 +52,7 @@ class VoucherConfig(Base, TimestampMixin):  # pragma: no cover
 class VoucherAllocation(Base, TimestampMixin):
     __tablename__ = "voucher_allocation"
 
-    status = Column(Enum(VoucherAllocationStatuses), nullable=False, default=VoucherAllocationStatuses.PENDING)
+    status = Column(Enum(QueuedRetryStatuses), nullable=False, default=QueuedRetryStatuses.PENDING)
     attempts = Column(Integer, default=0, nullable=False)
     account_url = Column(String, nullable=False)
     issued_date = Column(Integer, nullable=False)
@@ -78,6 +78,11 @@ class VoucherUpdate(Base, TimestampMixin):  # pragma: no cover
     retailer_slug = Column(String(32), index=True, nullable=False)
     date = Column(Date, nullable=False)
     status = Column(Enum(VoucherUpdateStatuses), nullable=False)
+
+    retry_status = Column(Enum(QueuedRetryStatuses), nullable=False, default=QueuedRetryStatuses.PENDING)
+    attempts = Column(Integer, default=0, nullable=False)
+    next_attempt_time = Column(DateTime, nullable=True)
+    response_data = Column(MutableList.as_mutable(JSONB), nullable=False, default=text("'[]'::jsonb"))
 
     __mapper_args__ = {"eager_defaults": True}
 

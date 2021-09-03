@@ -9,7 +9,7 @@ import requests
 
 from sqlalchemy.orm import Session
 
-from app.enums import VoucherAllocationStatuses
+from app.enums import QueuedRetryStatuses
 from app.models import VoucherAllocation
 from app.tasks.allocation import _process_allocation, allocate_voucher
 from app.tasks.voucher import enqueue_voucher_allocation
@@ -30,7 +30,7 @@ async def test_enqueue_reward_adjustment_task(
     MockQueue.call_args[0] == "bpl_voucher_adjustments"
     mock_queue.enqueue.assert_called_once()
     db_session.refresh(voucher_allocation)
-    assert voucher_allocation.status == VoucherAllocationStatuses.IN_PROGRESS
+    assert voucher_allocation.status == QueuedRetryStatuses.IN_PROGRESS
 
 
 @pytest.mark.asyncio
@@ -49,7 +49,7 @@ async def test_enqueue_reward_adjustment_task_no_voucher(
     MockQueue.call_args[0] == "bpl_voucher_adjustments"
     mock_queue.enqueue.assert_not_called()
     db_session.refresh(voucher_allocation)
-    assert voucher_allocation.status == VoucherAllocationStatuses.FAILED
+    assert voucher_allocation.status == QueuedRetryStatuses.FAILED
 
 
 @httpretty.activate
@@ -118,7 +118,7 @@ def test__process_allocation_connection_error(
 
 @httpretty.activate
 def test_allocate_voucher(db_session: "Session", voucher_allocation: VoucherAllocation) -> None:
-    voucher_allocation.status = VoucherAllocationStatuses.IN_PROGRESS  # type: ignore
+    voucher_allocation.status = QueuedRetryStatuses.IN_PROGRESS  # type: ignore
     db_session.commit()
 
     httpretty.register_uri("POST", voucher_allocation.account_url, body="OK", status=200)
@@ -129,11 +129,11 @@ def test_allocate_voucher(db_session: "Session", voucher_allocation: VoucherAllo
 
     assert voucher_allocation.attempts == 1
     assert voucher_allocation.next_attempt_time is None
-    assert voucher_allocation.status == VoucherAllocationStatuses.SUCCESS
+    assert voucher_allocation.status == QueuedRetryStatuses.SUCCESS
 
 
 def test_allocate_voucher_wrong_status(db_session: "Session", voucher_allocation: VoucherAllocation) -> None:
-    voucher_allocation.status = VoucherAllocationStatuses.FAILED  # type: ignore
+    voucher_allocation.status = QueuedRetryStatuses.FAILED  # type: ignore
     db_session.commit()
 
     with pytest.raises(ValueError):
@@ -143,4 +143,4 @@ def test_allocate_voucher_wrong_status(db_session: "Session", voucher_allocation
 
     assert voucher_allocation.attempts == 0
     assert voucher_allocation.next_attempt_time is None
-    assert voucher_allocation.status == VoucherAllocationStatuses.FAILED
+    assert voucher_allocation.status == QueuedRetryStatuses.FAILED

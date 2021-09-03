@@ -233,6 +233,8 @@ class VoucherUpdatesAgent:
         db_session.add_all(voucher_updates)
         db_session.commit()
 
+        # TODO: add voucher_updates to queue for the retry task
+
     def archive(
         self,
         blob_name: str,
