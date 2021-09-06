@@ -8,6 +8,7 @@ from io import StringIO
 from typing import TYPE_CHECKING, ByteString, Callable, DefaultDict, List, Optional, Tuple, Union
 
 import click
+import rq
 import sentry_sdk
 
 from azure.core.exceptions import HttpResponseError, ResourceExistsError
@@ -16,12 +17,14 @@ from pydantic import ValidationError
 from sqlalchemy import update
 from sqlalchemy.future import select
 
-from app.core.config import settings
+from app.core.config import redis, settings
+from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
-from app.enums import VoucherUpdateStatuses
+from app.enums import QueuedRetryStatuses, VoucherUpdateStatuses
 from app.models import Voucher, VoucherUpdate
 from app.scheduler import CronScheduler
 from app.schemas import VoucherUpdateSchema
+from app.tasks.status_adjustment import status_adjustment
 
 logger = logging.getLogger("voucher-import")
 
@@ -233,7 +236,7 @@ class VoucherUpdatesAgent:
         db_session.add_all(voucher_updates)
         db_session.commit()
 
-        # TODO: add voucher_updates to queue for the retry task
+        self.enqueue_voucher_updates(db_session, voucher_updates)
 
     def archive(
         self,
@@ -279,6 +282,43 @@ class VoucherUpdatesAgent:
 
     def callback(self) -> None:
         self.do_import()
+
+    def enqueue_voucher_updates(self, db_session: "Session", voucher_updates: List[VoucherUpdate]) -> None:
+        def _update_status_and_flush() -> None:
+
+            for voucher_update in voucher_updates:
+                voucher_update.retry_status = QueuedRetryStatuses.IN_PROGRESS  # type: ignore [assignment]
+
+            db_session.flush()
+
+        def _commit() -> None:
+            db_session.commit()
+
+        def _rollback() -> None:
+            db_session.rollback()
+
+        try:
+            q = rq.Queue(settings.VOUCHER_STATUS_UPDATE_TASK_QUEUE, connection=redis)
+            sync_run_query(_update_status_and_flush, db_session)
+            try:
+                q.enqueue_many(
+                    [
+                        rq.Queue.prepare_data(
+                            status_adjustment,
+                            kwargs={"voucher_status_adjustment_id": voucher_update.id},
+                            failure_ttl=60 * 60 * 24 * 7,  # 1 week
+                        )
+                        for voucher_update in voucher_updates
+                    ]
+                )
+            except Exception:
+                sync_run_query(_rollback, db_session)
+                raise
+            else:
+                sync_run_query(_commit, db_session, rollback_on_exc=False)
+
+        except Exception as ex:  # pragma: no cover
+            sentry_sdk.capture_exception(ex)
 
 
 @click.group()

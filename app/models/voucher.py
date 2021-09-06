@@ -79,6 +79,7 @@ class VoucherUpdate(Base, TimestampMixin):  # pragma: no cover
     date = Column(Date, nullable=False)
     status = Column(Enum(VoucherUpdateStatuses), nullable=False)
 
+    voucher_id = Column(UUID(as_uuid=True), nullable=True)
     retry_status = Column(Enum(QueuedRetryStatuses), nullable=False, default=QueuedRetryStatuses.PENDING)
     attempts = Column(Integer, default=0, nullable=False)
     next_attempt_time = Column(DateTime, nullable=True)

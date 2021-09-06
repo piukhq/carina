@@ -1,5 +1,3 @@
-from typing import List
-
 import rq
 import sentry_sdk
 
@@ -9,7 +7,7 @@ from app.core.config import redis, settings
 from app.db.base_class import async_run_query
 from app.db.session import AsyncSessionMaker
 from app.enums import QueuedRetryStatuses
-from app.models import VoucherAllocation, VoucherUpdate
+from app.models import VoucherAllocation
 
 
 async def enqueue_voucher_allocation(voucher_allocation_id: int) -> None:
@@ -64,52 +62,3 @@ async def enqueue_voucher_allocation(voucher_allocation_id: int) -> None:
         except Exception as ex:
             sentry_sdk.capture_exception(ex)
             await async_run_query(_rollback, db_session, rollback_on_exc=False)
-
-
-async def enqueue_voucher_status_adjustments(voucher_status_adjustment_ids: List[int]) -> None:
-    from app.tasks.status_adjustment import status_adjustment
-
-    async with AsyncSessionMaker() as db_session:
-
-        async def _update_status_and_flush() -> None:
-            (
-                await db_session.execute(
-                    update(VoucherUpdate)  # type: ignore
-                    .where(
-                        VoucherUpdate.id.in_(voucher_status_adjustment_ids),
-                        VoucherUpdate.retry_status == QueuedRetryStatuses.PENDING,
-                    )
-                    .values(status=QueuedRetryStatuses.IN_PROGRESS)
-                )
-            )
-
-            await db_session.flush()
-
-        async def _commit() -> None:
-            await db_session.commit()
-
-        async def _rollback() -> None:
-            await db_session.rollback()
-
-        try:
-            q = rq.Queue(settings.VOUCHER_STATUS_UPDATE_TASK_QUEUE, connection=redis)
-            await async_run_query(_update_status_and_flush, db_session)
-            try:
-                q.enqueue_many(
-                    [
-                        rq.Queue.prepare_data(
-                            status_adjustment,
-                            kwargs={"voucher_status_adjustment_id": voucher_status_adjustment_id},
-                            failure_ttl=60 * 60 * 24 * 7,  # 1 week
-                        )
-                        for voucher_status_adjustment_id in voucher_status_adjustment_ids
-                    ]
-                )
-            except Exception:
-                await async_run_query(_rollback, db_session)
-                raise
-            else:
-                await async_run_query(_commit, db_session, rollback_on_exc=False)
-
-        except Exception as ex:  # pragma: no cover
-            sentry_sdk.capture_exception(ex)
