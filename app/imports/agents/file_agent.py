@@ -36,7 +36,11 @@ class VoucherUpdatesAgent:
     def __init__(self) -> None:
         self.container_name = settings.BLOB_IMPORT_CONTAINER
         self.schedule = settings.BLOB_IMPORT_SCHEDULE
-        self.blob_service_client = BlobServiceClient.from_connection_string(settings.BLOB_STORAGE_DSN)
+        blob_client_logger = logging.getLogger("blob-client")
+        blob_client_logger.setLevel(settings.BLOB_IMPORT_LOGGING_LEVEL)
+        self.blob_service_client = BlobServiceClient.from_connection_string(
+            settings.BLOB_STORAGE_DSN, logger=blob_client_logger
+        )
 
     def do_import(self) -> None:  # pragma: no cover
         try:
@@ -261,7 +265,6 @@ class VoucherUpdatesAgent:
         delete_callback()
 
     def run(self) -> None:
-
         logger.info(f"Watching {self.container_name} for files via {self.__class__.__name__}.")
 
         scheduler = CronScheduler(

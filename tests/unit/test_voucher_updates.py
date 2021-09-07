@@ -1,4 +1,5 @@
 import datetime
+import logging
 
 from collections import defaultdict
 from functools import partial
@@ -66,7 +67,8 @@ def test_process_csv_voucher_code_fails_non_validating_rows(setup: SetupType, mo
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
-    mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     voucher_agent = VoucherUpdatesAgent()
     blob_name = "/test-retailer/voucher-updates/test.csv"
     bad_date = "20210830"
@@ -99,7 +101,8 @@ def test_process_csv_voucher_code_fails_malformed_csv_rows(setup: SetupType, moc
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
-    mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     voucher_agent = VoucherUpdatesAgent()
     blob_name = "/test-retailer/voucher-updates/test.csv"
     byte_content = b"TEST87654321,2021-07-30\nTEST12345678,redeemed\n"
@@ -168,7 +171,8 @@ def test_process_updates_voucher_code_not_allocated(setup: SetupType, mocker: Mo
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
-    mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     voucher_agent = VoucherUpdatesAgent()
     mocker.patch.object(voucher_agent, "_report_unknown_codes", autospec=True)
     blob_name = "/test-retailer/voucher-updates/test.csv"
@@ -207,7 +211,8 @@ def test_process_updates_voucher_code_does_not_exist(setup: SetupType, mocker: M
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
-    mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     voucher_agent = VoucherUpdatesAgent()
     mocker.patch.object(voucher_agent, "_process_unallocated_codes", autospec=True)
     blob_name = "/test-retailer/voucher-updates/test.csv"
