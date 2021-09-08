@@ -48,7 +48,12 @@ class BlobFileAgent:
     def __init__(self) -> None:
         self.container_name = settings.BLOB_IMPORT_CONTAINER
         self.schedule = settings.BLOB_IMPORT_SCHEDULE
-        self.blob_service_client = BlobServiceClient.from_connection_string(settings.BLOB_STORAGE_DSN)
+        blob_client_logger = logging.getLogger("blob-client")
+        blob_client_logger.setLevel(settings.BLOB_IMPORT_LOGGING_LEVEL)
+        self.blob_service_client = BlobServiceClient.from_connection_string(
+            settings.BLOB_STORAGE_DSN, logger=blob_client_logger
+        )
+
         try:
             self.blob_service_client.create_container(self.container_name)
         except ResourceExistsError:
