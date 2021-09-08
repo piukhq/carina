@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Generator
+from typing import TYPE_CHECKING, Callable, Generator
 
 import pytest
 
@@ -79,3 +79,20 @@ def voucher(db_session: "Session", voucher_config: VoucherConfig) -> Voucher:
     db_session.add(vc)
     db_session.commit()
     return vc
+
+
+@pytest.fixture()
+def create_vouchers(db_session: "Session", voucher_config: VoucherConfig) -> Callable:
+    def fn(override_datas: list[dict]) -> dict[str, Voucher]:
+        voucher_data = {
+            "deleted": False,
+            "allocated": False,
+            "voucher_config_id": voucher_config.id,
+            "retailer_slug": voucher_config.retailer_slug,
+        }
+        vouchers = [Voucher(**voucher_data | override_data) for override_data in override_datas]
+        db_session.add_all(vouchers)
+        db_session.commit()
+        return {voucher.voucher_code: voucher for voucher in vouchers}
+
+    return fn
