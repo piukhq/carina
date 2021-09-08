@@ -1,12 +1,12 @@
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint, text
+from sqlalchemy import Boolean, Column, Date, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.orm import relationship
 
 from app.db.base_class import Base, TimestampMixin
-from app.enums import VoucherAllocationStatuses, VoucherFetchType
+from app.enums import VoucherAllocationStatuses, VoucherFetchType, VoucherUpdateStatuses
 
 
 class Voucher(Base, TimestampMixin):  # pragma: no cover
@@ -15,11 +15,13 @@ class Voucher(Base, TimestampMixin):  # pragma: no cover
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     voucher_code = Column(String, nullable=False, index=True)
     allocated = Column(Boolean, default=False, nullable=False)
+    deleted = Column(Boolean, default=False, nullable=False)
     voucher_config_id = Column(Integer, ForeignKey("voucher_config.id"), nullable=False)
     retailer_slug = Column(String(32), index=True, nullable=False)
 
     voucher_config = relationship("VoucherConfig", back_populates="vouchers")
     allocation = relationship("VoucherAllocation", back_populates="voucher", uselist=False)
+    updates = relationship("VoucherUpdate", back_populates="voucher")
 
     __table_args__ = (UniqueConstraint("voucher_code", "retailer_slug", name="voucher_code_retailer_slug_unq"),)
     __mapper_args__ = {"eager_defaults": True}
@@ -68,3 +70,18 @@ class VoucherAllocation(Base, TimestampMixin):
 
     def __str__(self) -> str:
         return f"{self.status.value.upper()} VoucherAllocation (id: {self.id})"  # type: ignore [attr-defined]
+
+
+class VoucherUpdate(Base, TimestampMixin):  # pragma: no cover
+    __tablename__ = "voucher_update"
+
+    voucher_id = Column(UUID(as_uuid=True), ForeignKey("voucher.id", ondelete="CASCADE"), nullable=False)
+    date = Column(Date, nullable=False)
+    status = Column(Enum(VoucherUpdateStatuses), nullable=False)
+
+    voucher = relationship("Voucher", back_populates="updates")
+
+    __mapper_args__ = {"eager_defaults": True}
+
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__}({self.id})"
