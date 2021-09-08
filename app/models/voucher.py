@@ -21,6 +21,7 @@ class Voucher(Base, TimestampMixin):  # pragma: no cover
 
     voucher_config = relationship("VoucherConfig", back_populates="vouchers")
     allocation = relationship("VoucherAllocation", back_populates="voucher", uselist=False)
+    updates = relationship("VoucherUpdate", back_populates="voucher")
 
     __table_args__ = (UniqueConstraint("voucher_code", "retailer_slug", name="voucher_code_retailer_slug_unq"),)
     __mapper_args__ = {"eager_defaults": True}
@@ -74,16 +75,15 @@ class VoucherAllocation(Base, TimestampMixin):
 class VoucherUpdate(Base, TimestampMixin):  # pragma: no cover
     __tablename__ = "voucher_update"
 
-    voucher_code = Column(String, nullable=False, index=True)
-    retailer_slug = Column(String(32), index=True, nullable=False)
+    voucher_id = Column(UUID(as_uuid=True), ForeignKey("voucher.id", ondelete="CASCADE"), nullable=False)
     date = Column(Date, nullable=False)
     status = Column(Enum(VoucherUpdateStatuses), nullable=False)
-
-    voucher_id = Column(UUID(as_uuid=True), nullable=True)
     retry_status = Column(Enum(QueuedRetryStatuses), nullable=False, default=QueuedRetryStatuses.PENDING)
     attempts = Column(Integer, default=0, nullable=False)
     next_attempt_time = Column(DateTime, nullable=True)
     response_data = Column(MutableList.as_mutable(JSONB), nullable=False, default=text("'[]'::jsonb"))
+
+    voucher = relationship("Voucher", back_populates="updates")
 
     __mapper_args__ = {"eager_defaults": True}
 
