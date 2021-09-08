@@ -28,7 +28,7 @@ from app.schemas import VoucherUpdateSchema
 
 logger = logging.getLogger("voucher-import")
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy.orm import Session
 
 
@@ -60,7 +60,9 @@ class BlobFileAgent:
             lambda: db_session.execute(select(VoucherConfig.retailer_slug).distinct()).scalars().all(), db_session
         )
 
-    def process_csv(self, retailer_slug: str, blob_name: str, blob_content: str, db_session: "Session") -> None:
+    def process_csv(
+        self, retailer_slug: str, blob_name: str, blob_content: str, db_session: "Session"
+    ) -> None:  # pragma: no cover
         raise NotImplementedError
 
     def move_blob(
