@@ -38,7 +38,6 @@ class LogLevel(str):
 
 class Settings(BaseSettings):
     API_PREFIX: str = "/bpl/vouchers"
-    SECRET_KEY: str = "477855cd14a1d7e541a604ed0692b3c3da99690339219b88"
     SERVER_NAME: str = "test"
     SERVER_HOST: str = "http://localhost:8000"
     TESTING: bool = False
@@ -75,6 +74,21 @@ class Settings(BaseSettings):
         return v
 
     KEY_VAULT_URI: str = "https://bink-uksouth-dev-com.vault.azure.net/"
+    SECRET_KEY: Optional[str] = None
+
+    @validator("SECRET_KEY")
+    def fetch_secret_key(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
+        if isinstance(v, str) and not values["TESTING"]:
+            return v
+
+        if "KEY_VAULT_URI" in values:
+            return KeyVault(
+                values["KEY_VAULT_URI"],
+                values["TESTING"] or values["MIGRATING"],
+            ).get_secret("bpl-carina-secret-key")
+        else:
+            raise KeyError("required var KEY_VAULT_URI is not set.")
+
     CARINA_AUTH_TOKEN: Optional[str] = None
 
     @validator("CARINA_AUTH_TOKEN")
@@ -157,6 +171,7 @@ class Settings(BaseSettings):
     BLOB_STORAGE_DSN: str = ""
     BLOB_IMPORT_CONTAINER = "carina-imports"
     BLOB_ARCHIVE_CONTAINER = "carina-archive"
+    BLOB_ERROR_CONTAINER = "carina-errors"
     BLOB_IMPORT_SCHEDULE = "*/5 * * * *"
     BLOB_CLIENT_LEASE_SECONDS = 60
     BLOB_IMPORT_LOGGING_LEVEL = logging.WARNING
