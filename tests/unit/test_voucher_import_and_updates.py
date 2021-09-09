@@ -1,14 +1,17 @@
 import datetime
+import logging
 
 from collections import defaultdict
 from typing import TYPE_CHECKING, DefaultDict, List
+
+import pytest
 
 from azure.storage.blob import BlobClient, BlobServiceClient, ContainerClient
 from pytest_mock import MockerFixture
 from sqlalchemy.future import select
 
 from app.enums import VoucherUpdateStatuses
-from app.imports.agents.file_agent import VoucherUpdateRow, VoucherUpdatesAgent
+from app.imports.agents.file_agent import BlobProcessingError, VoucherImportAgent, VoucherUpdateRow, VoucherUpdatesAgent
 from app.models import Voucher, VoucherUpdate
 from app.schemas import VoucherUpdateSchema
 from tests.api.conftest import SetupType
@@ -26,7 +29,81 @@ def _get_voucher_update_rows(db_session: "Session", voucher_codes: List[str]) ->
     return voucher_updates
 
 
-def test_update_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> None:
+def _get_voucher_rows(db_session: "Session") -> List[Voucher]:
+    return db_session.execute(select(Voucher)).scalars().all()
+
+
+def test_import_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> None:
+    mocker.patch("app.scheduler.sentry_sdk")
+    db_session, voucher_config, pre_existing_voucher = setup
+    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
+    from app.scheduler import sentry_sdk as scheduler_sentry_sdk
+
+    capture_message_spy = mocker.spy(scheduler_sentry_sdk, "capture_message")
+    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings.SENTRY_DSN = "SENTRY_DSN"
+    mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
+
+    capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
+    voucher_agent = VoucherImportAgent()
+    eligible_voucher_codes = ["voucher1", "voucher2", "voucher3"]
+
+    vouchers = _get_voucher_rows(db_session)
+    assert len(vouchers) == 1
+    assert vouchers[0] == pre_existing_voucher
+
+    voucher_agent.process_csv(
+        retailer_slug=voucher_config.retailer_slug,
+        blob_name="test-retailer/available-vouchers/test-voucher/new-vouchers.csv",
+        blob_content="\n".join(eligible_voucher_codes + [pre_existing_voucher.voucher_code]),
+        db_session=db_session,
+    )
+
+    vouchers = _get_voucher_rows(db_session)
+    assert len(vouchers) == 4
+    assert all(v in [voucher.voucher_code for voucher in vouchers] for v in eligible_voucher_codes)
+    # We should be sentry warned about the existing token
+    assert capture_message_spy.call_count == 1  # Errors should all be rolled up in to a single call
+    assert (
+        "Pre-existing voucher codes found in test-retailer/available-vouchers/test-voucher/new-vouchers.csv:\nrows: 4"
+        == capture_message_spy.call_args.args[0]
+    )
+
+
+def test_import_agent__process_csv_no_voucher_config(setup: SetupType, mocker: MockerFixture) -> None:
+    db_session, voucher_config, _ = setup
+
+    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    voucher_agent = VoucherImportAgent()
+    with pytest.raises(BlobProcessingError) as exc_info:
+        voucher_agent.process_csv(
+            retailer_slug=voucher_config.retailer_slug,
+            blob_name="test-retailer/available-vouchers/incorrect-voucher-type/new-vouchers.csv",
+            blob_content="voucher1\nvoucher2\nvoucher3",
+            db_session=db_session,
+        )
+    assert exc_info.value.args == ("No VoucherConfig found for voucher_type_slug incorrect-voucher-type",)
+
+
+def test_import_agent__process_csv_no_voucher_type_in_path(setup: SetupType, mocker: MockerFixture) -> None:
+    db_session, voucher_config, _ = setup
+
+    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    voucher_agent = VoucherImportAgent()
+    with pytest.raises(BlobProcessingError) as exc_info:
+        voucher_agent.process_csv(
+            retailer_slug=voucher_config.retailer_slug,
+            blob_name="test-retailer/available-vouchers/new-vouchers.csv",
+            blob_content="voucher1\nvoucher2\nvoucher3",
+            db_session=db_session,
+        )
+    assert exc_info.value.args == (
+        "No voucher_type_slug path section found (not enough values to unpack (expected 2, got 1))",
+    )
+
+
+def test_updates_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> None:
     # GIVEN
     db_session, voucher_config, _ = setup
 
@@ -90,7 +167,7 @@ TEST87654322,2021-07-30,redeemed
     )
 
 
-def test_update_agent__process_csv_voucher_code_fails_non_validating_rows(
+def test_updates_agent__process_csv_voucher_code_fails_non_validating_rows(
     setup: SetupType, mocker: MockerFixture
 ) -> None:
     """If non-validating values are encountered, sentry should log a msg"""
@@ -103,7 +180,8 @@ def test_update_agent__process_csv_voucher_code_fails_non_validating_rows(
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
-    mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     voucher_agent = VoucherUpdatesAgent()
     blob_name = "/test-retailer/voucher-updates/test.csv"
     bad_date = "20210830"
@@ -129,7 +207,7 @@ TEST666666,2021-07-30,{bad_status}
     assert f"'{bad_status}' is not a valid VoucherUpdateStatuses" in expected_error_msg
 
 
-def test_update_agent__process_csv_voucher_code_fails_malformed_csv_rows(
+def test_updates_agent__process_csv_voucher_code_fails_malformed_csv_rows(
     setup: SetupType, mocker: MockerFixture
 ) -> None:
     """If a bad CSV row in encountered, sentry should log a msg"""
@@ -140,7 +218,8 @@ def test_update_agent__process_csv_voucher_code_fails_malformed_csv_rows(
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
-    mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     voucher_agent = VoucherUpdatesAgent()
     blob_name = "/test-retailer/voucher-updates/test.csv"
     content = "TEST87654321,2021-07-30\nTEST12345678,redeemed\n"
@@ -159,7 +238,7 @@ def test_update_agent__process_csv_voucher_code_fails_malformed_csv_rows(
     assert "IndexError('list index out of range')" in expected_error_msg
 
 
-def test_update_agent__process_updates(setup: SetupType, mocker: MockerFixture) -> None:
+def test_updates_agent__process_updates(setup: SetupType, mocker: MockerFixture) -> None:
     # GIVEN
     db_session, voucher_config, voucher = setup
     voucher.allocated = True
@@ -196,7 +275,7 @@ def test_update_agent__process_updates(setup: SetupType, mocker: MockerFixture) 
     assert capture_message_spy.call_count == 0  # Should be no errors
 
 
-def test_update_agent__process_updates_voucher_code_not_allocated(setup: SetupType, mocker: MockerFixture) -> None:
+def test_updates_agent__process_updates_voucher_code_not_allocated(setup: SetupType, mocker: MockerFixture) -> None:
     """If the voucher is not allocated, it should be soft-deleted"""
     # GIVEN
     db_session, voucher_config, voucher = setup
@@ -207,7 +286,8 @@ def test_update_agent__process_updates_voucher_code_not_allocated(setup: SetupTy
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
-    mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     voucher_agent = VoucherUpdatesAgent()
     mocker.patch.object(voucher_agent, "_report_unknown_codes", autospec=True)
     blob_name = "/test-retailer/voucher-updates/test.csv"
@@ -235,7 +315,7 @@ def test_update_agent__process_updates_voucher_code_not_allocated(setup: SetupTy
     assert len(voucher_update_rows) == 0
 
 
-def test_update_agent__process_updates_voucher_code_does_not_exist(setup: SetupType, mocker: MockerFixture) -> None:
+def test_updates_agent__process_updates_voucher_code_does_not_exist(setup: SetupType, mocker: MockerFixture) -> None:
     """The voucher does not exist"""
     # GIVEN
     db_session, voucher_config, _ = setup
@@ -244,7 +324,8 @@ def test_update_agent__process_updates_voucher_code_does_not_exist(setup: SetupT
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
-    mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     voucher_agent = VoucherUpdatesAgent()
     mocker.patch.object(voucher_agent, "_process_unallocated_codes", autospec=True)
     blob_name = "/test-retailer/voucher-updates/test.csv"
@@ -301,6 +382,37 @@ def test_process_blobs(setup: SetupType, mocker: MockerFixture) -> None:
 
     mock_process_csv.assert_called_once()
     mock_move_blob.assert_called_once()
+
+
+def test_process_blobs_not_csv(setup: SetupType, mocker: MockerFixture) -> None:
+    db_session, _, _ = setup
+    MockBlobServiceClient = mocker.patch("app.imports.agents.file_agent.BlobServiceClient", autospec=True)
+    mock_blob_service_client = mocker.MagicMock(spec=BlobServiceClient)
+    MockBlobServiceClient.from_connection_string.return_value = mock_blob_service_client
+    from app.imports.agents.file_agent import sentry_sdk
+
+    capture_message_spy = mocker.spy(sentry_sdk, "capture_message")
+
+    voucher_agent = VoucherUpdatesAgent()
+    container_client = mocker.patch.object(voucher_agent, "container_client", spec=ContainerClient)
+    mock_move_blob = mocker.patch.object(voucher_agent, "move_blob")
+    container_client.list_blobs = mocker.MagicMock(
+        return_value=[
+            Blob("test-retailer/voucher-updates/update.docx"),
+        ]
+    )
+    mock_blob_service_client.get_blob_client.return_value = mocker.MagicMock(spec=BlobClient)
+    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings.BLOB_ERROR_CONTAINER = "ERROR-CONTAINER"
+
+    voucher_agent.process_blobs("test-retailer", db_session=db_session)
+    assert capture_message_spy.call_count == 1  # Errors should all be rolled up in to a single call
+    assert (
+        "test-retailer/voucher-updates/update.docx does not have .csv ext. Moving to ERROR-CONTAINER for checking"
+        == capture_message_spy.call_args.args[0]
+    )
+    mock_move_blob.assert_called_once()
+    assert mock_move_blob.call_args[0][0] == "ERROR-CONTAINER"
 
 
 def test_move_blob(mocker: MockerFixture) -> None:

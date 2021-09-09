@@ -13,6 +13,15 @@ from apscheduler.util import undefined
 from redis.exceptions import WatchError
 
 from app.core.config import redis, settings
+from app.version import __version__
+
+if settings.SENTRY_DSN:  # pragma: no cover
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.SENTRY_ENV,
+        release=__version__,
+        traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+    )
 
 
 def is_leader(lock_name: str, *, hostname: str = None) -> bool:  # pragma: no cover

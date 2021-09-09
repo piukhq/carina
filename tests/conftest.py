@@ -1,3 +1,5 @@
+import uuid
+
 from typing import TYPE_CHECKING, Callable, Generator
 
 import pytest
@@ -85,6 +87,7 @@ def voucher(db_session: "Session", voucher_config: VoucherConfig) -> Voucher:
 def create_vouchers(db_session: "Session", voucher_config: VoucherConfig) -> Callable:
     def fn(override_datas: list[dict]) -> dict[str, Voucher]:
         voucher_data = {
+            "voucher_code": str(uuid.uuid4()),
             "deleted": False,
             "allocated": False,
             "voucher_config_id": voucher_config.id,

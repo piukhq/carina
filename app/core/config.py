@@ -179,6 +179,7 @@ class Settings(BaseSettings):
     BLOB_ERROR_CONTAINER = "carina-errors"
     BLOB_IMPORT_SCHEDULE = "*/5 * * * *"
     BLOB_CLIENT_LEASE_SECONDS = 60
+    BLOB_IMPORT_LOGGING_LEVEL = logging.WARNING
 
     # The prefix used on every Redis key.
     REDIS_KEY_PREFIX = "carinavouchers"

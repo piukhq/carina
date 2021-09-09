@@ -50,7 +50,12 @@ class BlobFileAgent:
     def __init__(self) -> None:
         self.container_name = settings.BLOB_IMPORT_CONTAINER
         self.schedule = settings.BLOB_IMPORT_SCHEDULE
-        self.blob_service_client = BlobServiceClient.from_connection_string(settings.BLOB_STORAGE_DSN)
+        blob_client_logger = logging.getLogger("blob-client")
+        blob_client_logger.setLevel(settings.BLOB_IMPORT_LOGGING_LEVEL)
+        self.blob_service_client = BlobServiceClient.from_connection_string(
+            settings.BLOB_STORAGE_DSN, logger=blob_client_logger
+        )
+
         try:
             self.blob_service_client.create_container(self.container_name)
         except ResourceExistsError:
@@ -90,7 +95,7 @@ class BlobFileAgent:
         dst_blob_client.start_copy_from_url(src_blob_client.url)  # Synchronous within the same storage account
         src_blob_client.delete_blob(lease=src_blob_lease)
 
-    def run(self) -> None:
+    def run(self) -> None:  # pragma: no cover
 
         logger.info(f"Watching {self.container_name} for files via {self.__class__.__name__}.")
 
@@ -157,21 +162,22 @@ class VoucherImportAgent(BlobFileAgent):
     scheduler_name = "carina-voucher-import-scheduler"
 
     @lru_cache()
-    def voucher_configs_by_voucher_type_slug(self, retailer_slug: str) -> dict[str, VoucherConfig]:
-        with SyncSessionMaker() as db_session:
-            voucher_configs = sync_run_query(
-                lambda: db_session.execute(select(VoucherConfig).where(VoucherConfig.retailer_slug == retailer_slug))
-                .scalars()
-                .all(),
-                db_session,
-            )
+    def voucher_configs_by_voucher_type_slug(
+        self, retailer_slug: str, db_session: "Session"
+    ) -> dict[str, VoucherConfig]:
+        voucher_configs = sync_run_query(
+            lambda: db_session.execute(select(VoucherConfig).where(VoucherConfig.retailer_slug == retailer_slug))
+            .scalars()
+            .all(),
+            db_session,
+        )
         return {voucher_config.voucher_type_slug: voucher_config for voucher_config in voucher_configs}
 
     def _report_pre_existing_codes(
         self, pre_existing_voucher_codes: list[str], row_nums_by_code: dict[str, list[int]], blob_name: str
     ) -> None:
         msg = f"Pre-existing voucher codes found in {blob_name}:\n" + "\n".join(
-            [f"rows {', '.join(map(str, row_nums_by_code[code]))}" for code in pre_existing_voucher_codes]
+            [f"rows: {', '.join(map(str, row_nums_by_code[code]))}" for code in pre_existing_voucher_codes]
         )
         logger.warning(msg)
         if settings.SENTRY_DSN:
@@ -185,7 +191,7 @@ class VoucherImportAgent(BlobFileAgent):
             raise BlobProcessingError(f"No voucher_type_slug path section found ({ex})")
 
         try:
-            voucher_config = self.voucher_configs_by_voucher_type_slug(retailer_slug)[voucher_type_slug]
+            voucher_config = self.voucher_configs_by_voucher_type_slug(retailer_slug, db_session)[voucher_type_slug]
         except KeyError:
             raise BlobProcessingError(f"No VoucherConfig found for voucher_type_slug {voucher_type_slug}")
 
