@@ -394,6 +394,7 @@ def test_process_blobs_not_csv(setup: SetupType, mocker: MockerFixture) -> None:
     capture_message_spy = mocker.spy(sentry_sdk, "capture_message")
 
     voucher_agent = VoucherUpdatesAgent()
+    mock_process_csv = mocker.patch.object(voucher_agent, "process_csv")
     container_client = mocker.patch.object(voucher_agent, "container_client", spec=ContainerClient)
     mock_move_blob = mocker.patch.object(voucher_agent, "move_blob")
     container_client.list_blobs = mocker.MagicMock(
@@ -413,6 +414,7 @@ def test_process_blobs_not_csv(setup: SetupType, mocker: MockerFixture) -> None:
     )
     mock_move_blob.assert_called_once()
     assert mock_move_blob.call_args[0][0] == "ERROR-CONTAINER"
+    mock_process_csv.assert_not_called()
 
 
 def test_move_blob(mocker: MockerFixture) -> None:
