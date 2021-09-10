@@ -1,6 +1,4 @@
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
-from uuid import UUID
 
 import click
 import rq
@@ -13,16 +11,12 @@ from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
 from app.enums import QueuedRetryStatuses
 from app.models import VoucherUpdate
-from app.models.voucher import Voucher
 
 from . import logger, send_request_with_metrics
 
-if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
-
 
 def _process_status_adjustment(adjustment: VoucherUpdate) -> dict:
-    logger.info(f"Processing status adjustment for voucher code: {adjustment.voucher_code}")
+    logger.info(f"Processing status adjustment for voucher code: {adjustment.voucher.voucher_code}")
     timestamp = datetime.utcnow()
     response_audit: dict = {"timestamp": timestamp.isoformat()}
 
@@ -30,7 +24,7 @@ def _process_status_adjustment(adjustment: VoucherUpdate) -> dict:
         "PATCH",
         "{base_url}/bpl/loyalty/{retailer_slug}/vouchers/{voucher_id}/status".format(
             base_url=settings.POLARIS_URL,
-            retailer_slug=adjustment.retailer_slug,
+            retailer_slug=adjustment.voucher.retailer_slug,
             voucher_id=adjustment.voucher_id,
         ),
         json={
@@ -42,38 +36,9 @@ def _process_status_adjustment(adjustment: VoucherUpdate) -> dict:
     )
     resp.raise_for_status()
     response_audit["response"] = {"status": resp.status_code, "body": resp.text}
-    logger.info(f"Status adjustment succeeded for voucher code: {adjustment.voucher_code}")
+    logger.info(f"Status adjustment succeeded for voucher code: {adjustment.voucher.voucher_code}")
 
     return response_audit
-
-
-def _fetch_voucher_id(db_session: "Session", adjustment: VoucherUpdate) -> None:
-    def _get_voucher_id() -> Optional[UUID]:
-        return (
-            db_session.execute(
-                select(Voucher.id).where(
-                    Voucher.voucher_code == adjustment.voucher_code,
-                    Voucher.retailer_slug == adjustment.retailer_slug,
-                )
-            )
-            .scalars()
-            .first()
-        )
-
-    voucher_id = sync_run_query(_get_voucher_id, db_session)
-    if voucher_id is None:
-        raise ValueError(
-            "Cannot find a Voucher for voucher_code: {voucher_code} and retailer_slug: {retailer_slug}".format(
-                voucher_code=adjustment.voucher_code,
-                retailer_slug=adjustment.retailer_slug,
-            )
-        )
-
-    def _register_voucher_id() -> None:
-        adjustment.voucher_id = voucher_id
-        db_session.commit()
-
-    sync_run_query(_register_voucher_id, db_session)
 
 
 def status_adjustment(voucher_status_adjustment_id: int) -> None:
@@ -89,9 +54,6 @@ def status_adjustment(voucher_status_adjustment_id: int) -> None:
         adjustment = sync_run_query(_get_status_adjustment, db_session)
         if adjustment.retry_status != QueuedRetryStatuses.IN_PROGRESS:
             raise ValueError(f"Incorrect state: {adjustment.retry_status}")
-
-        if adjustment.voucher_id is None:
-            _fetch_voucher_id(db_session, adjustment)
 
         def _increase_attempts() -> None:
             adjustment.attempts += 1

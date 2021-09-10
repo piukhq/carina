@@ -43,7 +43,7 @@ def requeue_status_adjustment(adjustment: VoucherUpdate) -> datetime:
     job = q.enqueue_at(  # requires rq worker --with-scheduler
         next_attempt_time,
         status_adjustment,
-        voucher_allocation_id=adjustment.id,
+        voucher_status_adjustment_id=adjustment.id,
         failure_ttl=60 * 60 * 24 * 7,  # 1 week
     )
 
