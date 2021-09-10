@@ -1,7 +1,7 @@
 """voucher update queue
 
 Revision ID: f21afdef225b
-Revises: a757c187a9aa
+Revises: f9f0851df16c
 Create Date: 2021-09-03 17:50:09.956338
 
 """
@@ -13,7 +13,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "f21afdef225b"
-down_revision = "a757c187a9aa"
+down_revision = "f9f0851df16c"
 branch_labels = None
 depends_on = None
 
@@ -28,7 +28,6 @@ def upgrade() -> None:
         " USING status::text::queuedretrystatuses"
     )
     old_type.drop(op.get_bind(), checkfirst=False)
-    op.add_column("voucher_update", sa.Column("voucher_id", postgresql.UUID(as_uuid=True), nullable=True))
     op.add_column("voucher_update", sa.Column("retry_status", new_type, nullable=True, default="PENDING"))
     op.execute("UPDATE voucher_update SET retry_status = 'FAILED' WHERE retry_status IS NULL")
     op.alter_column("voucher_update", "retry_status", nullable=False)
@@ -54,7 +53,6 @@ def downgrade() -> None:
         "ALTER TABLE voucher_allocation ALTER COLUMN status TYPE voucherallocationstatuses"
         " USING status::text::voucherallocationstatuses"
     )
-    op.drop_column("voucher_update", "voucher_id")
     op.drop_column("voucher_update", "response_data")
     op.drop_column("voucher_update", "next_attempt_time")
     op.drop_column("voucher_update", "attempts")
