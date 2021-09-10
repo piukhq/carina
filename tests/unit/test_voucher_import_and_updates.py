@@ -14,6 +14,7 @@ from app.enums import VoucherUpdateStatuses
 from app.imports.agents.file_agent import BlobProcessingError, VoucherImportAgent, VoucherUpdateRow, VoucherUpdatesAgent
 from app.models import Voucher, VoucherUpdate
 from app.schemas import VoucherUpdateSchema
+from app.tasks.status_adjustment import status_adjustment
 from tests.api.conftest import SetupType
 
 if TYPE_CHECKING:
@@ -244,6 +245,8 @@ def test_updates_agent__process_updates(setup: SetupType, mocker: MockerFixture)
     voucher.allocated = True
     db_session.commit()
 
+    mock_enqueue = mocker.patch.object(VoucherUpdatesAgent, "enqueue_voucher_updates", autospec=True)
+
     from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
@@ -273,6 +276,7 @@ def test_updates_agent__process_updates(setup: SetupType, mocker: MockerFixture)
     assert isinstance(voucher_update_rows[0].date, datetime.date)
     assert str(voucher_update_rows[0].date) == "2021-07-30"
     assert capture_message_spy.call_count == 0  # Should be no errors
+    assert mock_enqueue.called
 
 
 def test_updates_agent__process_updates_voucher_code_not_allocated(setup: SetupType, mocker: MockerFixture) -> None:
@@ -445,3 +449,25 @@ def test_move_blob(mocker: MockerFixture) -> None:
     blob_service_client.get_blob_client.assert_called_once_with("DESTINATION-CONTAINER", blob)
     mock_dst_blob_client.start_copy_from_url.assert_called_once_with("https://a-blob-url")
     mock_src_blob_client.delete_blob.assert_called_once()
+
+
+def test_enqueue_voucher_updates(setup: SetupType, mocker: MockerFixture) -> None:
+    db_session, _, voucher = setup
+
+    mock_queue = mocker.patch("rq.Queue")
+    voucher_update = VoucherUpdate(
+        voucher=voucher,
+        date=datetime.datetime.utcnow().date(),
+        status=VoucherUpdateStatuses.REDEEMED,
+    )
+    db_session.add(voucher_update)
+    db_session.commit()
+
+    VoucherUpdatesAgent.enqueue_voucher_updates(db_session, [voucher_update])
+    mock_queue.return_value.enqueue_many.assert_called_once()
+    mock_queue.prepare_data.assert_called_once()
+    mock_queue.prepare_data.assert_called_with(
+        status_adjustment,
+        kwargs={"voucher_status_adjustment_id": voucher_update.id},
+        failure_ttl=60 * 60 * 24 * 7,
+    )

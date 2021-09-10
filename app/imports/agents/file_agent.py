@@ -400,7 +400,8 @@ class VoucherUpdatesAgent(BlobFileAgent):
         sync_run_query(add_voucher_updates, db_session)
         self.enqueue_voucher_updates(db_session, voucher_updates)
 
-    def enqueue_voucher_updates(self, db_session: "Session", voucher_updates: List[VoucherUpdate]) -> None:
+    @staticmethod
+    def enqueue_voucher_updates(db_session: "Session", voucher_updates: List[VoucherUpdate]) -> None:
         def _update_status_and_flush() -> None:
 
             for voucher_update in voucher_updates:
