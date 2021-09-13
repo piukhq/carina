@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, DefaultDict, List
 from azure.storage.blob import BlobClient, BlobServiceClient, ContainerClient
 from pytest_mock import MockerFixture
 from sqlalchemy.future import select
+from testfixtures import LogCapture
 
 from app.enums import VoucherUpdateStatuses
 from app.imports.agents.file_agent import VoucherUpdateRow, VoucherUpdatesAgent
@@ -290,6 +291,7 @@ def test_process_blobs(setup: SetupType, mocker: MockerFixture) -> None:
     db_session, _, _ = setup
     MockBlobServiceClient = mocker.patch("app.imports.agents.file_agent.BlobServiceClient", autospec=True)
     mock_blob_service_client = mocker.MagicMock(spec=BlobServiceClient)
+
     MockBlobServiceClient.from_connection_string.return_value = mock_blob_service_client
     voucher_agent = VoucherUpdatesAgent()
     container_client = mocker.patch.object(voucher_agent, "container_client", spec=ContainerClient)
@@ -305,6 +307,34 @@ def test_process_blobs(setup: SetupType, mocker: MockerFixture) -> None:
     voucher_agent.process_blobs("test-retailer", db_session=db_session)
 
     mock_process_csv.assert_called_once()
+    mock_move_blob.assert_called_once()
+
+
+def test_process_blobs_unicodedecodeerror(capture: LogCapture, setup: SetupType, mocker: MockerFixture) -> None:
+    db_session, _, _ = setup
+    MockBlobServiceClient = mocker.patch("app.imports.agents.file_agent.BlobServiceClient", autospec=True)
+    mock_blob_service_client = mocker.MagicMock(spec=BlobServiceClient)
+
+    MockBlobServiceClient.from_connection_string.return_value = mock_blob_service_client
+    voucher_agent = VoucherUpdatesAgent()
+    container_client = mocker.patch.object(voucher_agent, "container_client", spec=ContainerClient)
+    mock_process_csv = mocker.patch.object(voucher_agent, "process_csv")
+    mock_move_blob = mocker.patch.object(voucher_agent, "move_blob")
+    blob_filename = "test-retailer/voucher-updates/update.csv"
+    container_client.list_blobs = mocker.MagicMock(
+        return_value=[
+            Blob(blob_filename),
+        ]
+    )
+    mock_blob_service_client.get_blob_client.return_value.download_blob.return_value.readall.return_value = (
+        b"\xca,2021,09,13,cancelled"
+    )
+
+    voucher_agent.process_blobs("test-retailer", db_session=db_session)
+
+    assert not mock_process_csv.called
+    message = f"Problem decoding blob {blob_filename} (files should be utf-8 encoded)"
+    assert any(message in record.msg for record in capture.records)
     mock_move_blob.assert_called_once()
 
 
