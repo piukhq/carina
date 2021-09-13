@@ -5,6 +5,7 @@ import pytest
 
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
+from testfixtures import LogCapture
 
 from app.db.base import Base
 from app.db.session import sync_engine
@@ -58,3 +59,9 @@ def setup_tables() -> Generator:
 @pytest.fixture(scope="function")
 def setup(db_session: "Session", voucher_config: VoucherConfig, voucher: Voucher) -> Generator[SetupType, None, None]:
     yield SetupType(db_session, voucher_config, voucher)
+
+
+@pytest.fixture(scope="function")
+def capture() -> Generator:
+    with LogCapture() as capture:
+        yield capture

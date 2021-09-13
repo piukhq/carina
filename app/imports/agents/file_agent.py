@@ -145,11 +145,18 @@ class BlobFileAgent:
                 self.process_csv(
                     retailer_slug=retailer_slug,
                     blob_name=blob.name,
-                    blob_content=byte_content.decode(),
+                    blob_content=byte_content.decode("utf-8", "strict"),
                     db_session=db_session,
                 )
             except BlobProcessingError as ex:
                 logger.error(f"Problem processing blob {blob.name} - {ex}. Moving to {settings.BLOB_ERROR_CONTAINER}")
+                self.move_blob(settings.BLOB_ERROR_CONTAINER, blob_client, lease)
+                sync_run_query(lambda: db_session.rollback(), db_session)
+            except UnicodeDecodeError as ex:
+                logger.error(
+                    f"Problem decoding blob {blob.name} (files should be utf-8 encoded) - {ex}. "
+                    f"Moving to {settings.BLOB_ERROR_CONTAINER}"
+                )
                 self.move_blob(settings.BLOB_ERROR_CONTAINER, blob_client, lease)
                 sync_run_query(lambda: db_session.rollback(), db_session)
             else:
