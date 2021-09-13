@@ -6,7 +6,7 @@ from sqlalchemy.future import select
 from app.core.config import redis, settings
 from app.db.base_class import async_run_query
 from app.db.session import AsyncSessionMaker
-from app.enums import VoucherAllocationStatuses
+from app.enums import QueuedRetryStatuses
 from app.models import VoucherAllocation
 
 
@@ -21,7 +21,7 @@ async def enqueue_voucher_allocation(voucher_allocation_id: int) -> None:
                     await db_session.execute(
                         select(VoucherAllocation)
                         .with_for_update()
-                        .filter_by(id=voucher_allocation_id, status=VoucherAllocationStatuses.PENDING)
+                        .filter_by(id=voucher_allocation_id, status=QueuedRetryStatuses.PENDING)
                     )
                 )
                 .scalars()
@@ -29,7 +29,7 @@ async def enqueue_voucher_allocation(voucher_allocation_id: int) -> None:
             )
 
         async def _update_status_and_flush() -> None:
-            voucher_allocation.status = VoucherAllocationStatuses.IN_PROGRESS
+            voucher_allocation.status = QueuedRetryStatuses.IN_PROGRESS
             await db_session.flush()
 
         async def _commit() -> None:
@@ -46,7 +46,7 @@ async def enqueue_voucher_allocation(voucher_allocation_id: int) -> None:
                 # placeholder "no more allocable vouchers" logic
 
                 async def _set_failed() -> None:
-                    voucher_allocation.status = VoucherAllocationStatuses.FAILED
+                    voucher_allocation.status = QueuedRetryStatuses.FAILED
                     await db_session.commit()
 
                 await async_run_query(_set_failed, db_session)

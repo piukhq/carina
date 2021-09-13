@@ -1,56 +1,19 @@
-import logging
-
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple
 
 import click
-import requests
 import rq
 
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
-from tenacity import retry
-from tenacity.before import before_log
-from tenacity.retry import retry_if_exception_type, retry_if_result
-from tenacity.stop import stop_after_attempt
-from tenacity.wait import wait_fixed
 
 from app.core.config import redis, settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
-from app.enums import VoucherAllocationStatuses
+from app.enums import QueuedRetryStatuses
 from app.models import VoucherAllocation
 
-from . import logger
-
-
-def update_metrics_hook(response: requests.Response, *args: Any, **kwargs: Any) -> None:
-    # placeholder for when we add prometheus metrics
-    pass
-
-
-@retry(
-    stop=stop_after_attempt(2),
-    wait=wait_fixed(1),
-    reraise=True,
-    before=before_log(logger, logging.INFO),
-    retry_error_callback=lambda retry_state: retry_state.outcome.result(),
-    retry=retry_if_result(lambda resp: 501 <= resp.status_code < 600)
-    | retry_if_exception_type(requests.RequestException),
-)
-def send_request_with_metrics(
-    method: str,
-    url: str,
-    *,
-    headers: Optional[Dict[str, Any]] = None,
-    json: Optional[Dict[str, Any]] = None,
-    timeout: Tuple[float, int],
-) -> requests.Response:
-
-    return requests.request(
-        method, url, hooks={"response": update_metrics_hook}, headers=headers, json=json, timeout=timeout
-    )
+from . import logger, send_request_with_metrics
 
 
 def _process_allocation(allocation: VoucherAllocation) -> dict:
@@ -96,7 +59,7 @@ def allocate_voucher(voucher_allocation_id: int) -> None:
             )
 
         allocation = sync_run_query(_get_allocation, db_session)
-        if allocation.status != VoucherAllocationStatuses.IN_PROGRESS:
+        if allocation.status != QueuedRetryStatuses.IN_PROGRESS:
             raise ValueError(f"Incorrect state: {allocation.status}")
 
         def _increase_attempts() -> None:
@@ -109,7 +72,7 @@ def allocate_voucher(voucher_allocation_id: int) -> None:
         def _update_allocation() -> None:
             allocation.response_data.append(response_audit)
             flag_modified(allocation, "response_data")
-            allocation.status = VoucherAllocationStatuses.SUCCESS
+            allocation.status = QueuedRetryStatuses.SUCCESS
             allocation.next_attempt_time = None
             db_session.commit()
 
