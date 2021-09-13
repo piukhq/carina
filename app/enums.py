@@ -32,7 +32,7 @@ class HttpErrors(Enum):
     )
 
 
-class VoucherAllocationStatuses(Enum):
+class QueuedRetryStatuses(Enum):
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     FAILED = "failed"
