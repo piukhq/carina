@@ -56,7 +56,7 @@ def _process_allocation(allocation: VoucherAllocation) -> dict:
     return response_audit
 
 
-def _process_and_allocate_voucher(db_session: "Session", allocation: VoucherAllocation):
+def _process_and_allocate_voucher(db_session: "Session", allocation: VoucherAllocation) -> None:
     def _increase_attempts() -> None:
         allocation.attempts += 1
         db_session.commit()
@@ -67,7 +67,7 @@ def _process_and_allocate_voucher(db_session: "Session", allocation: VoucherAllo
     def _update_allocation() -> None:
         allocation.response_data.append(response_audit)
         flag_modified(allocation, "response_data")
-        allocation.status = QueuedRetryStatuses.SUCCESS
+        allocation.status = QueuedRetryStatuses.SUCCESS  # type: ignore
         allocation.next_attempt_time = None
         db_session.commit()
 

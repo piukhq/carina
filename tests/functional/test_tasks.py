@@ -9,6 +9,7 @@ import requests
 
 from pytest_mock import MockerFixture
 from sqlalchemy.orm import Session
+from testfixtures import LogCapture
 
 from app.core.config import settings
 from app.enums import QueuedRetryStatuses
@@ -164,6 +165,7 @@ def test_voucher_allocation_no_voucher_and_allocation_is_requeued(
     db_session: "Session",
     voucher_allocation_no_voucher: VoucherAllocation,
     voucher_config: VoucherConfig,
+    capture: LogCapture,
     mocker: MockerFixture,
 ) -> None:
     """test that no allocable voucher results in the allocation being requeued"""
@@ -173,8 +175,6 @@ def test_voucher_allocation_no_voucher_and_allocation_is_requeued(
     sentry_spy = mocker.spy(mock_sentry_sdk, "capture_message")
     voucher_allocation_no_voucher.status = QueuedRetryStatuses.IN_PROGRESS  # type: ignore
     db_session.commit()
-
-    # TODO: mock the queue so we don't really queue anything, spy on _requeue_allocation(), make sure we don't go too deep.
 
     httpretty.register_uri("POST", voucher_allocation_no_voucher.account_url, body="OK", status=200)
 
@@ -186,9 +186,9 @@ def test_voucher_allocation_no_voucher_and_allocation_is_requeued(
     assert voucher_allocation_no_voucher.attempts == 1
     assert voucher_allocation_no_voucher.next_attempt_time is not None
     assert voucher_allocation_no_voucher.status == QueuedRetryStatuses.WAITING
-
-    # logger.info(f"Requeued task for execution at {next_attempt_time.isoformat()}: {job}")
-    # logger.info(f"Next attempt time at {next_attempt_time}")
+    expected_msgs = ["Requeued task for execution at", "Next attempt time at"]
+    for expected_msg in expected_msgs:
+        assert any(expected_msg in record.msg for record in capture.records)
 
 
 @httpretty.activate
