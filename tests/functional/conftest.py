@@ -5,12 +5,12 @@ import pytest
 
 from app.core.config import settings
 from app.enums import VoucherUpdateStatuses
-from app.models import Voucher, VoucherAllocation, VoucherUpdate
+from app.models import Voucher, VoucherAllocation, VoucherConfig, VoucherUpdate
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-# conftest for API tests: tables will be dropped after each test to ensure a clean state
+# conftest for functional tests: tables will be dropped after each test to ensure a clean state
 
 
 @pytest.fixture(scope="function")
@@ -22,6 +22,21 @@ def voucher_allocation(db_session: "Session", voucher: Voucher) -> VoucherAlloca
         account_url="http://test.url/",
         issued_date=now.timestamp(),
         expiry_date=(now + timedelta(days=voucher.voucher_config.validity_days)).timestamp(),  # type: ignore [arg-type]
+    )
+    db_session.add(allocation)
+    db_session.commit()
+    return allocation
+
+
+@pytest.fixture(scope="function")
+def voucher_allocation_no_voucher(db_session: "Session", voucher_config: VoucherConfig) -> VoucherAllocation:
+    now = datetime.utcnow()
+    allocation = VoucherAllocation(
+        voucher=None,
+        voucher_config=voucher_config,
+        account_url="http://test.url/",
+        issued_date=now.timestamp(),
+        expiry_date=(now + timedelta(days=voucher_config.validity_days)).timestamp(),  # type: ignore [arg-type]
     )
     db_session.add(allocation)
     db_session.commit()

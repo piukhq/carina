@@ -7,10 +7,12 @@ import httpretty
 import pytest
 import requests
 
+from pytest_mock import MockerFixture
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.enums import QueuedRetryStatuses
-from app.models import VoucherAllocation
+from app.models import Voucher, VoucherAllocation, VoucherConfig
 from app.models.voucher import VoucherUpdate
 from app.tasks.allocation import _process_allocation, allocate_voucher
 from app.tasks.status_adjustment import _process_status_adjustment, status_adjustment
@@ -21,37 +23,21 @@ fake_now = datetime.utcnow()
 
 @pytest.mark.asyncio
 @mock.patch("rq.Queue")
-async def test_enqueue_reward_adjustment_task(
-    MockQueue: mock.MagicMock, db_session: "Session", voucher_allocation: VoucherAllocation
+async def test_enqueue_voucher_allocation_task(
+    MockQueue: mock.MagicMock,
+    db_session: "Session",
+    voucher_allocation: VoucherAllocation,
+    voucher_config: VoucherConfig,
 ) -> None:
 
     mock_queue = MockQueue.return_value
 
-    await enqueue_voucher_allocation(voucher_allocation.id)
+    await enqueue_voucher_allocation(voucher_allocation.id, voucher_config)
 
-    MockQueue.call_args[0] == "bpl_voucher_adjustments"
+    assert MockQueue.call_args[0] == (settings.VOUCHER_ALLOCATION_TASK_QUEUE,)
     mock_queue.enqueue.assert_called_once()
     db_session.refresh(voucher_allocation)
     assert voucher_allocation.status == QueuedRetryStatuses.IN_PROGRESS
-
-
-@pytest.mark.asyncio
-@mock.patch("rq.Queue")
-async def test_enqueue_reward_adjustment_task_no_voucher(
-    MockQueue: mock.MagicMock, db_session: "Session", voucher_allocation: VoucherAllocation
-) -> None:
-
-    voucher_allocation.voucher_id = None
-    db_session.commit()
-
-    mock_queue = MockQueue.return_value
-
-    await enqueue_voucher_allocation(voucher_allocation.id)
-
-    MockQueue.call_args[0] == "bpl_voucher_adjustments"
-    mock_queue.enqueue.assert_not_called()
-    db_session.refresh(voucher_allocation)
-    assert voucher_allocation.status == QueuedRetryStatuses.FAILED
 
 
 @httpretty.activate
@@ -118,13 +104,15 @@ def test__process_allocation_connection_error(
 
 
 @httpretty.activate
-def test_allocate_voucher(db_session: "Session", voucher_allocation: VoucherAllocation) -> None:
+def test_voucher_allocation(
+    db_session: "Session", voucher_allocation: VoucherAllocation, voucher_config: VoucherConfig
+) -> None:
     voucher_allocation.status = QueuedRetryStatuses.IN_PROGRESS  # type: ignore
     db_session.commit()
 
     httpretty.register_uri("POST", voucher_allocation.account_url, body="OK", status=200)
 
-    allocate_voucher(voucher_allocation.id)
+    allocate_voucher(voucher_allocation.id, voucher_config)
 
     db_session.refresh(voucher_allocation)
 
@@ -133,18 +121,74 @@ def test_allocate_voucher(db_session: "Session", voucher_allocation: VoucherAllo
     assert voucher_allocation.status == QueuedRetryStatuses.SUCCESS
 
 
-def test_allocate_voucher_wrong_status(db_session: "Session", voucher_allocation: VoucherAllocation) -> None:
+def test_voucher_allocation_wrong_status(
+    db_session: "Session", voucher_allocation: VoucherAllocation, voucher_config: VoucherConfig
+) -> None:
     voucher_allocation.status = QueuedRetryStatuses.FAILED  # type: ignore
     db_session.commit()
 
     with pytest.raises(ValueError):
-        allocate_voucher(voucher_allocation.id)
+        allocate_voucher(voucher_allocation.id, voucher_config)
 
     db_session.refresh(voucher_allocation)
 
     assert voucher_allocation.attempts == 0
     assert voucher_allocation.next_attempt_time is None
     assert voucher_allocation.status == QueuedRetryStatuses.FAILED
+
+
+@httpretty.activate
+def test_voucher_allocation_no_voucher_but_one_available(
+    db_session: "Session",
+    voucher_allocation_no_voucher: VoucherAllocation,
+    voucher: Voucher,
+    voucher_config: VoucherConfig,
+) -> None:
+    """test that an allocable voucher (the pytest 'voucher' fixture) is allocated, resulting in success"""
+    voucher_allocation_no_voucher.status = QueuedRetryStatuses.IN_PROGRESS  # type: ignore
+    db_session.commit()
+
+    httpretty.register_uri("POST", voucher_allocation_no_voucher.account_url, body="OK", status=200)
+
+    allocate_voucher(voucher_allocation_no_voucher.id, voucher_config)
+
+    db_session.refresh(voucher_allocation_no_voucher)
+
+    assert voucher_allocation_no_voucher.attempts == 1
+    assert voucher_allocation_no_voucher.next_attempt_time is None
+    assert voucher_allocation_no_voucher.status == QueuedRetryStatuses.SUCCESS
+
+
+@httpretty.activate
+def test_voucher_allocation_no_voucher_and_allocation_is_requeued(
+    db_session: "Session",
+    voucher_allocation_no_voucher: VoucherAllocation,
+    voucher_config: VoucherConfig,
+    mocker: MockerFixture,
+) -> None:
+    """test that no allocable voucher results in the allocation being requeued"""
+    mock_queue = mocker.patch("app.tasks.allocation.rq.Queue")
+    from app.tasks.allocation import sentry_sdk as mock_sentry_sdk
+
+    sentry_spy = mocker.spy(mock_sentry_sdk, "capture_message")
+    voucher_allocation_no_voucher.status = QueuedRetryStatuses.IN_PROGRESS  # type: ignore
+    db_session.commit()
+
+    # TODO: mock the queue so we don't really queue anything, spy on _requeue_allocation(), make sure we don't go too deep.
+
+    httpretty.register_uri("POST", voucher_allocation_no_voucher.account_url, body="OK", status=200)
+
+    allocate_voucher(voucher_allocation_no_voucher.id, voucher_config)
+
+    db_session.refresh(voucher_allocation_no_voucher)
+    mock_queue.return_value.enqueue_at.assert_called()
+    sentry_spy.assert_called_once()
+    assert voucher_allocation_no_voucher.attempts == 1
+    assert voucher_allocation_no_voucher.next_attempt_time is not None
+    assert voucher_allocation_no_voucher.status == QueuedRetryStatuses.WAITING
+
+    # logger.info(f"Requeued task for execution at {next_attempt_time.isoformat()}: {job}")
+    # logger.info(f"Next attempt time at {next_attempt_time}")
 
 
 @httpretty.activate
