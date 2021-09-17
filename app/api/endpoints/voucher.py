@@ -27,7 +27,7 @@ async def allocation(
 ) -> Any:
     voucher_config = await crud.get_voucher_config(db_session, retailer_slug, voucher_type_slug)
     voucher, issued, expiry = await get_allocable_voucher(db_session, voucher_config)
-    voucher_allocation = await crud.create_allocation(  # TODO: becomes crud.update_allocation ?
+    voucher_allocation = await crud.create_allocation(
         db_session, voucher, issued, expiry, voucher_config, payload.account_url
     )
 
