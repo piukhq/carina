@@ -90,7 +90,7 @@ class BlobFileAgent:
             destination_container,
             dst_blob_name
             if dst_blob_name is not None
-            else f"{datetime.now().strftime('%Y/%m/%d/%H%M')}/{src_blob_client.blob_name}",
+            else f"{datetime.utcnow().strftime('%Y/%m/%d/%H%M')}/{src_blob_client.blob_name}",
         )
         dst_blob_client.start_copy_from_url(src_blob_client.url)  # Synchronous within the same storage account
         src_blob_client.delete_blob(lease=src_blob_lease)
@@ -331,7 +331,7 @@ class VoucherUpdatesAgent(BlobFileAgent):
                 rows = voucher_update_rows_by_code.pop(unallocated_voucher_code, [])
                 update_rows.extend(rows)
 
-            db_session.execute(  # this is retried via the _process_updates top level method
+            db_session.execute(
                 update(Voucher)  # type: ignore
                 .where(Voucher.voucher_code.in_(unallocated_voucher_codes), Voucher.retailer_slug == retailer_slug)
                 .values(deleted=True)
