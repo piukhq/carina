@@ -74,13 +74,14 @@ def _process_and_allocate_voucher(db_session: "Session", allocation: VoucherAllo
     sync_run_query(_update_allocation, db_session)
 
 
-def _requeue_allocation(allocation: VoucherAllocation, backoff_seconds: int) -> datetime:
+def _requeue_allocation(allocation: VoucherAllocation, voucher_config: VoucherConfig, backoff_seconds: int) -> datetime:
     q = rq.Queue(settings.VOUCHER_ALLOCATION_TASK_QUEUE, connection=redis)
     next_attempt_time = datetime.utcnow().replace(tzinfo=timezone.utc) + timedelta(seconds=backoff_seconds)
     job = q.enqueue_at(  # requires rq worker --with-scheduler
         next_attempt_time,
         allocate_voucher,
         voucher_allocation_id=allocation.id,
+        voucher_config=voucher_config,
         failure_ttl=60 * 60 * 24 * 7,  # 1 week
     )
 
@@ -154,7 +155,9 @@ def allocate_voucher(voucher_allocation_id: int, voucher_config: VoucherConfig) 
                     sync_run_query(_set_waiting, db_session)
 
                 next_attempt_time = _requeue_allocation(
-                    allocation=allocation, backoff_seconds=settings.VOUCHER_ALLOCATION_REQUEUE_BACKOFF_SECONDS
+                    allocation=allocation,
+                    voucher_config=voucher_config,
+                    backoff_seconds=settings.VOUCHER_ALLOCATION_REQUEUE_BACKOFF_SECONDS,
                 )
                 logger.info(f"Next attempt time at {next_attempt_time}")
 
