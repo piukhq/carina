@@ -168,6 +168,7 @@ class Settings(BaseSettings):
     VOUCHER_ALLOCATION_TASK_QUEUE: str = "bpl_voucher_allocation"
     VOUCHER_ALLOCATION_MAX_RETRIES: int = 6
     VOUCHER_ALLOCATION_BACKOFF_BASE: float = 3
+    VOUCHER_ALLOCATION_REQUEUE_BACKOFF_SECONDS: int = 60 * 60 * 12  # 12 hours
 
     VOUCHER_STATUS_UPDATE_TASK_QUEUE: str = "bpl_voucher_status_update"
     VOUCHER_STATUS_UPDATE_MAX_RETRIES: int = 6

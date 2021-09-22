@@ -37,6 +37,7 @@ class QueuedRetryStatuses(Enum):
     IN_PROGRESS = "in_progress"
     FAILED = "failed"
     SUCCESS = "success"
+    WAITING = "waiting"
 
 
 class VoucherUpdateStatuses(Enum):

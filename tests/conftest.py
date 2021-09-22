@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Callable, Generator
 import pytest
 
 from sqlalchemy_utils import create_database, database_exists, drop_database
+from testfixtures import LogCapture
 
 from app.db.base import Base
 from app.db.session import SyncSessionMaker, sync_engine
@@ -99,3 +100,9 @@ def create_vouchers(db_session: "Session", voucher_config: VoucherConfig) -> Cal
         return {voucher.voucher_code: voucher for voucher in vouchers}
 
     return fn
+
+
+@pytest.fixture(scope="function")
+def capture() -> Generator:
+    with LogCapture() as capture:
+        yield capture
