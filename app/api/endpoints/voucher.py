@@ -31,5 +31,5 @@ async def allocation(
         db_session, voucher, issued, expiry, voucher_config, payload.account_url
     )
 
-    asyncio.create_task(enqueue_voucher_allocation(voucher_allocation.id, voucher_config))
+    asyncio.create_task(enqueue_voucher_allocation(voucher_allocation.id))
     return {}

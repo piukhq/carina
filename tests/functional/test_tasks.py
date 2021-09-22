@@ -33,7 +33,7 @@ async def test_enqueue_voucher_allocation_task(
 
     mock_queue = MockQueue.return_value
 
-    await enqueue_voucher_allocation(voucher_allocation.id, voucher_config)
+    await enqueue_voucher_allocation(voucher_allocation.id)
 
     assert MockQueue.call_args[0] == (settings.VOUCHER_ALLOCATION_TASK_QUEUE,)
     mock_queue.enqueue.assert_called_once()
@@ -113,7 +113,7 @@ def test_voucher_allocation(
 
     httpretty.register_uri("POST", voucher_allocation.account_url, body="OK", status=200)
 
-    allocate_voucher(voucher_allocation.id, voucher_config)
+    allocate_voucher(voucher_allocation.id)
 
     db_session.refresh(voucher_allocation)
 
@@ -129,7 +129,7 @@ def test_voucher_allocation_wrong_status(
     db_session.commit()
 
     with pytest.raises(ValueError):
-        allocate_voucher(voucher_allocation.id, voucher_config)
+        allocate_voucher(voucher_allocation.id)
 
     db_session.refresh(voucher_allocation)
 
@@ -143,18 +143,20 @@ def test_voucher_allocation_no_voucher_but_one_available(
     db_session: "Session",
     voucher_allocation_no_voucher: VoucherAllocation,
     voucher: Voucher,
-    voucher_config: VoucherConfig,
+    mocker: MockerFixture,
 ) -> None:
     """test that an allocable voucher (the pytest 'voucher' fixture) is allocated, resulting in success"""
+    mock_queue = mocker.patch("app.tasks.allocation.rq.Queue")
     voucher_allocation_no_voucher.status = QueuedRetryStatuses.IN_PROGRESS  # type: ignore
     db_session.commit()
 
     httpretty.register_uri("POST", voucher_allocation_no_voucher.account_url, body="OK", status=200)
 
-    allocate_voucher(voucher_allocation_no_voucher.id, voucher_config)
+    allocate_voucher(voucher_allocation_no_voucher.id)
 
     db_session.refresh(voucher_allocation_no_voucher)
 
+    assert not mock_queue.return_value.enqueue_at.called
     assert voucher_allocation_no_voucher.attempts == 1
     assert voucher_allocation_no_voucher.next_attempt_time is None
     assert voucher_allocation_no_voucher.status == QueuedRetryStatuses.SUCCESS
@@ -164,7 +166,6 @@ def test_voucher_allocation_no_voucher_but_one_available(
 def test_voucher_allocation_no_voucher_and_allocation_is_requeued(
     db_session: "Session",
     voucher_allocation_no_voucher: VoucherAllocation,
-    voucher_config: VoucherConfig,
     capture: LogCapture,
     mocker: MockerFixture,
 ) -> None:
@@ -178,7 +179,7 @@ def test_voucher_allocation_no_voucher_and_allocation_is_requeued(
 
     httpretty.register_uri("POST", voucher_allocation_no_voucher.account_url, body="OK", status=200)
 
-    allocate_voucher(voucher_allocation_no_voucher.id, voucher_config)
+    allocate_voucher(voucher_allocation_no_voucher.id)
 
     db_session.refresh(voucher_allocation_no_voucher)
     mock_queue.return_value.enqueue_at.assert_called()

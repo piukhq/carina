@@ -13,7 +13,7 @@ from app.core.config import redis, settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
 from app.enums import QueuedRetryStatuses
-from app.models import Voucher, VoucherAllocation, VoucherConfig
+from app.models import Voucher, VoucherAllocation
 from app.version import __version__
 
 from . import logger, send_request_with_metrics
@@ -74,14 +74,13 @@ def _process_and_allocate_voucher(db_session: "Session", allocation: VoucherAllo
     sync_run_query(_update_allocation, db_session)
 
 
-def _requeue_allocation(allocation: VoucherAllocation, voucher_config: VoucherConfig, backoff_seconds: int) -> datetime:
+def _requeue_allocation(allocation: VoucherAllocation, backoff_seconds: int) -> datetime:
     q = rq.Queue(settings.VOUCHER_ALLOCATION_TASK_QUEUE, connection=redis)
     next_attempt_time = datetime.utcnow().replace(tzinfo=timezone.utc) + timedelta(seconds=backoff_seconds)
     job = q.enqueue_at(  # requires rq worker --with-scheduler
         next_attempt_time,
         allocate_voucher,
         voucher_allocation_id=allocation.id,
-        voucher_config=voucher_config,
         failure_ttl=60 * 60 * 24 * 7,  # 1 week
     )
 
@@ -89,7 +88,7 @@ def _requeue_allocation(allocation: VoucherAllocation, voucher_config: VoucherCo
     return next_attempt_time
 
 
-def allocate_voucher(voucher_allocation_id: int, voucher_config: VoucherConfig) -> None:
+def allocate_voucher(voucher_allocation_id: int) -> None:
     with SyncSessionMaker() as db_session:
 
         def _get_allocation() -> VoucherAllocation:
@@ -106,13 +105,17 @@ def allocate_voucher(voucher_allocation_id: int, voucher_config: VoucherConfig) 
                 .one()
             )
 
+        allocation = sync_run_query(_get_allocation, db_session)
+        if allocation.status not in ([QueuedRetryStatuses.IN_PROGRESS, QueuedRetryStatuses.WAITING]):
+            raise ValueError(f"Incorrect state: {allocation.status}")
+
         def _get_allocable_voucher() -> Optional[Voucher]:
             allocable_voucher = (
                 db_session.execute(
                     select(Voucher)
                     .with_for_update()
                     .where(
-                        Voucher.voucher_config_id == voucher_config.id,
+                        Voucher.voucher_config_id == allocation.voucher_config_id,
                         Voucher.allocated == False,  # noqa
                         Voucher.deleted == False,  # noqa
                     )
@@ -123,10 +126,6 @@ def allocate_voucher(voucher_allocation_id: int, voucher_config: VoucherConfig) 
             )
 
             return allocable_voucher
-
-        allocation = sync_run_query(_get_allocation, db_session)
-        if allocation.status not in ([QueuedRetryStatuses.IN_PROGRESS, QueuedRetryStatuses.WAITING]):
-            raise ValueError(f"Incorrect state: {allocation.status}")
 
         # Process the allocation if it has a voucher, else try to get a voucher - requeue that if necessary
         if allocation.voucher_id:
@@ -155,9 +154,7 @@ def allocate_voucher(voucher_allocation_id: int, voucher_config: VoucherConfig) 
                     sync_run_query(_set_waiting, db_session)
 
                 next_attempt_time = _requeue_allocation(
-                    allocation=allocation,
-                    voucher_config=voucher_config,
-                    backoff_seconds=settings.VOUCHER_ALLOCATION_REQUEUE_BACKOFF_SECONDS,
+                    allocation=allocation, backoff_seconds=settings.VOUCHER_ALLOCATION_REQUEUE_BACKOFF_SECONDS
                 )
                 logger.info(f"Next attempt time at {next_attempt_time}")
 

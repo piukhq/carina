@@ -7,10 +7,10 @@ from app.core.config import redis, settings
 from app.db.base_class import async_run_query
 from app.db.session import AsyncSessionMaker
 from app.enums import QueuedRetryStatuses
-from app.models import VoucherAllocation, VoucherConfig
+from app.models import VoucherAllocation
 
 
-async def enqueue_voucher_allocation(voucher_allocation_id: int, voucher_config: VoucherConfig) -> None:
+async def enqueue_voucher_allocation(voucher_allocation_id: int) -> None:
     from app.tasks.allocation import allocate_voucher
 
     async with AsyncSessionMaker() as db_session:
@@ -45,7 +45,6 @@ async def enqueue_voucher_allocation(voucher_allocation_id: int, voucher_config:
             q.enqueue(
                 allocate_voucher,
                 voucher_allocation_id=voucher_allocation_id,
-                voucher_config=voucher_config,
                 failure_ttl=60 * 60 * 24 * 7,  # 1 week
             )
             await async_run_query(_commit, db_session, rollback_on_exc=False)
