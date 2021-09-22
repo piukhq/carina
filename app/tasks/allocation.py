@@ -140,11 +140,12 @@ def allocate_voucher(voucher_allocation_id: int) -> None:
 
                 sync_run_query(_set_allocable_voucher, db_session)
                 _process_and_allocate_voucher(db_session, allocation)
-            else:
+            else:  # requeue the allocation attempt
                 if allocation.status != QueuedRetryStatuses.WAITING:
-                    # Only do a Sentry alert when the status is changing to WAITING
+                    # Only do a Sentry alert for the first allocation failure (when status is changing to WAITING)
                     sentry_sdk.capture_message(
-                        f"No allocable voucher found, setting allocation status to {QueuedRetryStatuses.WAITING}"
+                        f"No Voucher Codes Available for retailer: {allocation.voucher_config.retailer_slug}, "
+                        f"voucher type slug: {allocation.voucher_config.voucher_type_slug}"
                     )
 
                     def _set_waiting() -> None:
