@@ -190,6 +190,12 @@ class VoucherImportAgent(BlobFileAgent):
         if settings.SENTRY_DSN:
             sentry_sdk.capture_message(msg)
 
+    def _report_invalid_rows(self, invalid_rows: list[int], blob_name: str) -> None:
+        if invalid_rows:
+            sentry_sdk.capture_message(
+                f"Invalid rows found in {blob_name}:\nrows: {', '.join(map(str, sorted(invalid_rows)))}"
+            )
+
     def process_csv(self, retailer_slug: str, blob_name: str, blob_content: str, db_session: "Session") -> None:
         _base_path, sub_path = blob_name.split(self.blob_path_template.substitute(retailer_slug=retailer_slug))
         try:
@@ -222,6 +228,8 @@ class VoucherImportAgent(BlobFileAgent):
             .all(),
             db_session,
         )
+
+        self._report_invalid_rows(invalid_rows, blob_name)
 
         pre_existing_voucher_codes = list(set(db_voucher_codes) & set(row_nums_by_code.keys()))
         if pre_existing_voucher_codes:
