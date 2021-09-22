@@ -55,10 +55,14 @@ def test_import_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> N
     assert len(vouchers) == 1
     assert vouchers[0] == pre_existing_voucher
 
+    blob_content = "\n".join(eligible_voucher_codes + [pre_existing_voucher.voucher_code])
+    blob_content += "\nthis,is,a,bad,line"  # this should be reported to sentry (line 5)
+    blob_content += "\nanother,bad,line"  # this should be reported to sentry (line 6)
+
     voucher_agent.process_csv(
         retailer_slug=voucher_config.retailer_slug,
         blob_name="test-retailer/available-vouchers/test-voucher/new-vouchers.csv",
-        blob_content="\n".join(eligible_voucher_codes + [pre_existing_voucher.voucher_code]),
+        blob_content=blob_content,
         db_session=db_session,
     )
 
@@ -66,10 +70,14 @@ def test_import_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> N
     assert len(vouchers) == 4
     assert all(v in [voucher.voucher_code for voucher in vouchers] for v in eligible_voucher_codes)
     # We should be sentry warned about the existing token
-    assert capture_message_spy.call_count == 1  # Errors should all be rolled up in to a single call
+    assert capture_message_spy.call_count == 2  # Errors should all be rolled up in to one call per error category
+    assert (
+        "Invalid rows found in test-retailer/available-vouchers/test-voucher/new-vouchers.csv:\nrows: 5, 6"
+        == capture_message_spy.call_args_list[0][0][0]
+    )
     assert (
         "Pre-existing voucher codes found in test-retailer/available-vouchers/test-voucher/new-vouchers.csv:\nrows: 4"
-        == capture_message_spy.call_args.args[0]
+        == capture_message_spy.call_args_list[1][0][0]
     )
 
 
