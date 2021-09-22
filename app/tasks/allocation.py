@@ -1,7 +1,9 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING, Optional
 
 import click
 import rq
+import sentry_sdk
 
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
@@ -11,9 +13,22 @@ from app.core.config import redis, settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
 from app.enums import QueuedRetryStatuses
-from app.models import VoucherAllocation
+from app.models import Voucher, VoucherAllocation
+from app.version import __version__
 
 from . import logger, send_request_with_metrics
+
+if TYPE_CHECKING:  # pragma: no cover
+    from sqlalchemy.orm import Session
+
+
+if settings.SENTRY_DSN:  # pragma: no cover
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.SENTRY_ENV,
+        release=__version__,
+        traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+    )
 
 
 def _process_allocation(allocation: VoucherAllocation) -> dict:
@@ -41,6 +56,38 @@ def _process_allocation(allocation: VoucherAllocation) -> dict:
     return response_audit
 
 
+def _process_and_allocate_voucher(db_session: "Session", allocation: VoucherAllocation) -> None:
+    def _increase_attempts() -> None:
+        allocation.attempts += 1
+        db_session.commit()
+
+    sync_run_query(_increase_attempts, db_session)
+    response_audit = _process_allocation(allocation)
+
+    def _update_allocation() -> None:
+        allocation.response_data.append(response_audit)
+        flag_modified(allocation, "response_data")
+        allocation.status = QueuedRetryStatuses.SUCCESS  # type: ignore
+        allocation.next_attempt_time = None
+        db_session.commit()
+
+    sync_run_query(_update_allocation, db_session)
+
+
+def _requeue_allocation(allocation: VoucherAllocation, backoff_seconds: int) -> datetime:
+    q = rq.Queue(settings.VOUCHER_ALLOCATION_TASK_QUEUE, connection=redis)
+    next_attempt_time = datetime.utcnow().replace(tzinfo=timezone.utc) + timedelta(seconds=backoff_seconds)
+    job = q.enqueue_at(  # requires rq worker --with-scheduler
+        next_attempt_time,
+        allocate_voucher,
+        voucher_allocation_id=allocation.id,
+        failure_ttl=60 * 60 * 24 * 7,  # 1 week
+    )
+
+    logger.info(f"Requeued task for execution at {next_attempt_time.isoformat()}: {job}")
+    return next_attempt_time
+
+
 def allocate_voucher(voucher_allocation_id: int) -> None:
     with SyncSessionMaker() as db_session:
 
@@ -59,24 +106,64 @@ def allocate_voucher(voucher_allocation_id: int) -> None:
             )
 
         allocation = sync_run_query(_get_allocation, db_session)
-        if allocation.status != QueuedRetryStatuses.IN_PROGRESS:
+        if allocation.status not in ([QueuedRetryStatuses.IN_PROGRESS, QueuedRetryStatuses.WAITING]):
             raise ValueError(f"Incorrect state: {allocation.status}")
 
-        def _increase_attempts() -> None:
-            allocation.attempts += 1
-            db_session.commit()
+        def _get_allocable_voucher() -> Optional[Voucher]:
+            allocable_voucher = (
+                db_session.execute(
+                    select(Voucher)
+                    .with_for_update()
+                    .where(
+                        Voucher.voucher_config_id == allocation.voucher_config_id,
+                        Voucher.allocated == False,  # noqa
+                        Voucher.deleted == False,  # noqa
+                    )
+                    .limit(1)
+                )
+                .scalars()
+                .first()
+            )
 
-        sync_run_query(_increase_attempts, db_session)
-        response_audit = _process_allocation(allocation)
+            return allocable_voucher
 
-        def _update_allocation() -> None:
-            allocation.response_data.append(response_audit)
-            flag_modified(allocation, "response_data")
-            allocation.status = QueuedRetryStatuses.SUCCESS
-            allocation.next_attempt_time = None
-            db_session.commit()
+        # Process the allocation if it has a voucher, else try to get a voucher - requeue that if necessary
+        if allocation.voucher_id:
+            _process_and_allocate_voucher(db_session, allocation)
+        else:
+            allocable_voucher = sync_run_query(_get_allocable_voucher, db_session)
+            if allocable_voucher:
 
-        sync_run_query(_update_allocation, db_session)
+                def _set_allocable_voucher() -> None:
+                    allocation.voucher = allocable_voucher
+                    db_session.commit()
+
+                sync_run_query(_set_allocable_voucher, db_session)
+                _process_and_allocate_voucher(db_session, allocation)
+            else:
+                if allocation.status != QueuedRetryStatuses.WAITING:
+                    # Only do a Sentry alert when the status is changing to WAITING
+                    sentry_sdk.capture_message(
+                        f"No allocable voucher found, setting allocation status to {QueuedRetryStatuses.WAITING}"
+                    )
+
+                    def _set_waiting() -> None:
+                        allocation.status = QueuedRetryStatuses.WAITING
+                        db_session.commit()
+
+                    sync_run_query(_set_waiting, db_session)
+
+                next_attempt_time = _requeue_allocation(
+                    allocation=allocation, backoff_seconds=settings.VOUCHER_ALLOCATION_REQUEUE_BACKOFF_SECONDS
+                )
+                logger.info(f"Next attempt time at {next_attempt_time}")
+
+                def _update_allocation() -> None:
+                    allocation.attempts += 1
+                    allocation.next_attempt_time = next_attempt_time
+                    db_session.commit()
+
+                sync_run_query(_update_allocation, db_session)
 
 
 @click.group()

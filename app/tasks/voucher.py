@@ -41,17 +41,6 @@ async def enqueue_voucher_allocation(voucher_allocation_id: int) -> None:
         try:
             q = rq.Queue(settings.VOUCHER_ALLOCATION_TASK_QUEUE, connection=redis)
             voucher_allocation = await async_run_query(_get_allocation, db_session, rollback_on_exc=False)
-
-            if voucher_allocation.voucher_id is None:
-                # placeholder "no more allocable vouchers" logic
-
-                async def _set_failed() -> None:
-                    voucher_allocation.status = QueuedRetryStatuses.FAILED
-                    await db_session.commit()
-
-                await async_run_query(_set_failed, db_session)
-                return
-
             await async_run_query(_update_status_and_flush, db_session)
             q.enqueue(
                 allocate_voucher,
