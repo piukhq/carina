@@ -481,7 +481,7 @@ def test_move_blob(mocker: MockerFixture) -> None:
         mock_src_blob_client,
         src_blob_lease_client,
     )
-    blob = f"{datetime.datetime.now().strftime('%Y/%m/%d/%H%M')}/{blob_name}"
+    blob = f"{datetime.datetime.utcnow().strftime('%Y/%m/%d/%H%M')}/{blob_name}"
 
     # THEN
     blob_service_client.get_blob_client.assert_called_once_with("DESTINATION-CONTAINER", blob)
