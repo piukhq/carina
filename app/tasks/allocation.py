@@ -14,21 +14,11 @@ from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
 from app.enums import QueuedRetryStatuses
 from app.models import Voucher, VoucherAllocation
-from app.version import __version__
 
 from . import logger, send_request_with_metrics
 
 if TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy.orm import Session
-
-
-if settings.SENTRY_DSN:  # pragma: no cover
-    sentry_sdk.init(
-        dsn=settings.SENTRY_DSN,
-        environment=settings.SENTRY_ENV,
-        release=__version__,
-        traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
-    )
 
 
 def _process_allocation(allocation: VoucherAllocation) -> dict:
