@@ -10,6 +10,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import declarative_base, declarative_mixin  # type: ignore[attr-defined]
 
 from app.core.config import settings
+from app.version import __version__
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +26,14 @@ class ModelBase:
 Base = declarative_base(cls=ModelBase)
 
 utc_timestamp_sql = text("TIMEZONE('utc', CURRENT_TIMESTAMP)")
+
+if settings.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.SENTRY_ENV,
+        traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+        release=__version__,
+    )
 
 
 @declarative_mixin
