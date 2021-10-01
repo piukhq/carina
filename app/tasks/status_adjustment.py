@@ -3,16 +3,20 @@ from datetime import datetime
 import click
 import rq
 
+from sqlalchemy.future import select
+from sqlalchemy.orm.attributes import flag_modified
+
 from app.core.config import redis, settings
+from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
 from app.enums import QueuedRetryStatuses
-from app.retry_task_utils.synchronous import get_retry_task_and_params, update_task
+from app.models import VoucherUpdate
 
 from . import logger, send_request_with_metrics
 
 
-def _process_status_adjustment(task_params: dict) -> dict:
-    logger.info(f"Processing status adjustment for voucher code: {task_params['voucher_code']}")
+def _process_status_adjustment(adjustment: VoucherUpdate) -> dict:
+    logger.info(f"Processing status adjustment for voucher code: {adjustment.voucher.voucher_code}")
     timestamp = datetime.utcnow()
     response_audit: dict = {"timestamp": timestamp.isoformat()}
 
@@ -20,39 +24,52 @@ def _process_status_adjustment(task_params: dict) -> dict:
         "PATCH",
         "{base_url}/bpl/loyalty/{retailer_slug}/vouchers/{voucher_id}/status".format(
             base_url=settings.POLARIS_URL,
-            retailer_slug=task_params["retailer_slug"],
-            voucher_id=task_params["voucher_id"],
+            retailer_slug=adjustment.voucher.retailer_slug,
+            voucher_id=adjustment.voucher_id,
         ),
         json={
-            "status": task_params["status"],
-            "date": task_params["date"],
+            "status": adjustment.status.value,  # type: ignore [attr-defined]
+            "date": datetime.fromisoformat(adjustment.date.isoformat()).timestamp(),
         },
         headers={"Authorization": f"Token {settings.POLARIS_AUTH_TOKEN}"},
         timeout=(3.03, 10),
     )
     resp.raise_for_status()
     response_audit["response"] = {"status": resp.status_code, "body": resp.text}
-    logger.info(f"Status adjustment succeeded for voucher code: {task_params['voucher_code']}")
+    logger.info(f"Status adjustment succeeded for voucher code: {adjustment.voucher.voucher_code}")
 
     return response_audit
 
 
-def status_adjustment(retry_task_id: int) -> None:
+def status_adjustment(voucher_status_adjustment_id: int) -> None:
     with SyncSessionMaker() as db_session:
 
-        retry_task, task_params = get_retry_task_and_params(db_session, retry_task_id)
-        update_task(db_session, retry_task, increase_attempts=True)
+        def _get_status_adjustment() -> VoucherUpdate:
+            return (
+                db_session.execute(select(VoucherUpdate).where(VoucherUpdate.id == voucher_status_adjustment_id))
+                .scalars()
+                .one()
+            )
 
-        response_audit = _process_status_adjustment(task_params)
+        adjustment = sync_run_query(_get_status_adjustment, db_session)
+        if adjustment.retry_status != QueuedRetryStatuses.IN_PROGRESS:
+            raise ValueError(f"Incorrect state: {adjustment.retry_status}")
 
-        update_task(
-            db_session,
-            retry_task,
-            response_audit=response_audit,
-            status=QueuedRetryStatuses.SUCCESS,
-            increase_attempts=True,
-            clear_next_attempt_time=True,
-        )
+        def _increase_attempts() -> None:
+            adjustment.attempts += 1
+            db_session.commit()
+
+        sync_run_query(_increase_attempts, db_session)
+        response_audit = _process_status_adjustment(adjustment)
+
+        def _update_status_update() -> None:
+            adjustment.response_data.append(response_audit)
+            flag_modified(adjustment, "response_data")
+            adjustment.retry_status = QueuedRetryStatuses.SUCCESS
+            adjustment.next_attempt_time = None
+            db_session.commit()
+
+        sync_run_query(_update_status_update, db_session)
 
 
 @click.group()

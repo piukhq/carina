@@ -17,7 +17,7 @@ from app.models import Voucher, VoucherAllocation, VoucherConfig
 from app.models.voucher import VoucherUpdate
 from app.tasks.allocation import _process_allocation, allocate_voucher
 from app.tasks.status_adjustment import _process_status_adjustment, status_adjustment
-from app.tasks.voucher import enqueue_voucher_allocation_retry_task
+from app.tasks.voucher import enqueue_voucher_allocation
 
 fake_now = datetime.utcnow()
 
@@ -33,7 +33,7 @@ async def test_enqueue_voucher_allocation_task(
 
     mock_queue = MockQueue.return_value
 
-    await enqueue_voucher_allocation_retry_task(voucher_allocation.id)
+    await enqueue_voucher_allocation(voucher_allocation.id)
 
     assert MockQueue.call_args[0] == (settings.VOUCHER_ALLOCATION_TASK_QUEUE,)
     mock_queue.enqueue.assert_called_once()
