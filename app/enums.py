@@ -1,3 +1,4 @@
+from datetime import date, datetime
 from enum import Enum
 
 from fastapi import HTTPException, status
@@ -48,3 +49,11 @@ class VoucherUpdateStatuses(Enum):
 
 class VoucherFetchType(Enum):
     PRE_LOADED = "pre_loaded"
+
+
+class TaskParamsKeyTypes(Enum):
+    STRING = str
+    INTEGER = int
+    FLOAT = float
+    DATE = date.fromisoformat
+    DATETIME = datetime.fromisoformat

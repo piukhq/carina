@@ -2,10 +2,11 @@ from typing import List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy.orm import joinedload
 
 from app.db.base_class import async_run_query
 from app.enums import HttpErrors
-from app.models import Voucher, VoucherAllocation, VoucherConfig
+from app.models import RetryTask, TaskType, TaskTypeKeyValue, Voucher, VoucherAllocation, VoucherConfig
 
 
 async def get_voucher_config(db_session: AsyncSession, retailer_slug: str, voucher_type_slug: str) -> VoucherConfig:
@@ -47,27 +48,73 @@ async def get_allocable_voucher(db_session: AsyncSession, voucher_config: Vouche
     return await async_run_query(_query, db_session)
 
 
-async def create_allocation(
+async def create_voucher_allocation_retry_task(
     db_session: AsyncSession,
     voucher: Optional[Voucher],
     issued_date: float,
     expiry_date: float,
     voucher_config: VoucherConfig,
     account_url: str,
-) -> VoucherAllocation:
-    async def _query() -> VoucherAllocation:
+) -> RetryTask:
+    async def _query() -> RetryTask:
+
+        task_type: TaskType = (
+            (
+                await db_session.execute(
+                    select(TaskType)
+                    .options(joinedload(TaskType.task_type_keys))
+                    .where(TaskType.name == "voucher_allocation")
+                )
+            )
+            .scalars()
+            .first()
+        )
+        keys = {key.name: key.task_type_key_id for key in task_type.task_type_keys}
+        retry_task = RetryTask(task_type_id=task_type.task_type_id)
+        db_session.add(retry_task)
+        await db_session.flush()
+
+        values = [
+            TaskTypeKeyValue(
+                retry_task_id=retry_task.retry_task_id, task_type_key_id=keys["account_url"], value=account_url
+            ),
+            TaskTypeKeyValue(
+                retry_task_id=retry_task.retry_task_id, task_type_key_id=keys["issued_date"], value=str(issued_date)
+            ),
+            TaskTypeKeyValue(
+                retry_task_id=retry_task.retry_task_id, task_type_key_id=keys["expiry_date"], value=str(expiry_date)
+            ),
+            TaskTypeKeyValue(
+                retry_task_id=retry_task.retry_task_id,
+                task_type_key_id=keys["voucher_config_id"],
+                value=str(voucher_config.id),
+            ),
+            TaskTypeKeyValue(
+                retry_task_id=retry_task.retry_task_id,
+                task_type_key_id=keys["voucher_type_slug"],
+                value=voucher_config.voucher_type_slug,
+            ),
+        ]
+
         if voucher is not None:
             voucher.allocated = True
+            values.extend(
+                [
+                    TaskTypeKeyValue(
+                        retry_task_id=retry_task.retry_task_id,
+                        task_type_key_id=keys["voucher_id"],
+                        value=str(voucher.id),
+                    ),
+                    TaskTypeKeyValue(
+                        retry_task_id=retry_task.retry_task_id,
+                        task_type_key_id=keys["voucher_code"],
+                        value=voucher.voucher_code,
+                    ),
+                ]
+            )
 
-        allocation = VoucherAllocation(
-            voucher=voucher,
-            voucher_config=voucher_config,
-            account_url=account_url,
-            issued_date=issued_date,
-            expiry_date=expiry_date,
-        )
-        db_session.add(allocation)
+        db_session.add_all(values)
         await db_session.commit()
-        return allocation
+        return retry_task
 
     return await async_run_query(_query, db_session)
