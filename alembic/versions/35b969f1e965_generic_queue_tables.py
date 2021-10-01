@@ -42,7 +42,7 @@ def populate_voucher_allocation_task_type_and_keys(task_type: sa.Table, task_typ
         {"name": "expiry_date", "type": "FLOAT", "task_type_id": task_type_id},
         {"name": "voucher_config_id", "type": "INTEGER", "task_type_id": task_type_id},
         {"name": "voucher_type_slug", "type": "STRING", "task_type_id": task_type_id},
-        {"name": "voucher_id", "type": "INTEGER", "task_type_id": task_type_id},
+        {"name": "voucher_id", "type": "STRING", "task_type_id": task_type_id},
         {"name": "voucher_code", "type": "STRING", "task_type_id": task_type_id},
     ]
     op.bulk_insert(task_type_key, key_data_list)
