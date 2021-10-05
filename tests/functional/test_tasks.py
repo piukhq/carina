@@ -81,177 +81,176 @@ def test__process_issuance_connection_error(
 
 
 @httpretty.activate
-def test_voucher_issuance(db_session: "Session", retry_task: RetryTask) -> None:
-    retry_task.retry_status = QueuedRetryStatuses.IN_PROGRESS
+def test_voucher_issuance(db_session: "Session", issuance_retry_task: RetryTask) -> None:
+    issuance_retry_task.retry_status = QueuedRetryStatuses.IN_PROGRESS
     db_session.commit()
 
-    httpretty.register_uri("POST", retry_task.get_params["account_url"], body="OK", status=200)
+    httpretty.register_uri("POST", issuance_retry_task.get_params["account_url"], body="OK", status=200)
 
-    issue_voucher(retry_task.retry_task_id)
+    issue_voucher(issuance_retry_task.retry_task_id)
 
-    db_session.refresh(retry_task)
+    db_session.refresh(issuance_retry_task)
 
-    assert retry_task.attempts == 1
-    assert retry_task.next_attempt_time is None
-    assert retry_task.retry_status == QueuedRetryStatuses.SUCCESS
-
-
-# def test_voucher_issuance_wrong_status(
-#     db_session: "Session", voucher_allocation: VoucherAllocation, voucher_config: VoucherConfig
-# ) -> None:
-#     voucher_allocation.status = QueuedRetryStatuses.FAILED  # type: ignore
-#     db_session.commit()
-
-#     with pytest.raises(ValueError):
-#         issue_voucher(voucher_allocation.id)
-
-#     db_session.refresh(voucher_allocation)
-
-#     assert voucher_allocation.attempts == 0
-#     assert voucher_allocation.next_attempt_time is None
-#     assert voucher_allocation.status == QueuedRetryStatuses.FAILED
+    assert issuance_retry_task.attempts == 1
+    assert issuance_retry_task.next_attempt_time is None
+    assert issuance_retry_task.retry_status == QueuedRetryStatuses.SUCCESS
 
 
-# @httpretty.activate
-# def test_voucher_issuance_no_voucher_but_one_available(
-#     db_session: "Session",
-#     voucher_allocation_no_voucher: VoucherAllocation,
-#     voucher: Voucher,
-#     mocker: MockerFixture,
-# ) -> None:
-#     """test that an allocable voucher (the pytest 'voucher' fixture) is allocated, resulting in success"""
-#     mock_queue = mocker.patch("app.tasks.allocation.rq.Queue")
-#     voucher_allocation_no_voucher.status = QueuedRetryStatuses.IN_PROGRESS  # type: ignore
-#     db_session.commit()
+def test_voucher_issuance_wrong_status(db_session: "Session", issuance_retry_task: RetryTask) -> None:
+    issuance_retry_task.retry_status = QueuedRetryStatuses.FAILED
+    db_session.commit()
 
-#     httpretty.register_uri("POST", voucher_allocation_no_voucher.account_url, body="OK", status=200)
+    with pytest.raises(ValueError):
+        issue_voucher(issuance_retry_task.retry_task_id)
 
-#     issue_voucher(voucher_allocation_no_voucher.id)
+    db_session.refresh(issuance_retry_task)
 
-#     db_session.refresh(voucher_allocation_no_voucher)
-
-#     assert not mock_queue.return_value.enqueue_at.called
-#     assert voucher_allocation_no_voucher.attempts == 1
-#     assert voucher_allocation_no_voucher.next_attempt_time is None
-#     assert voucher_allocation_no_voucher.status == QueuedRetryStatuses.SUCCESS
+    assert issuance_retry_task.attempts == 0
+    assert issuance_retry_task.next_attempt_time is None
+    assert issuance_retry_task.retry_status == QueuedRetryStatuses.FAILED
 
 
-# @httpretty.activate
-# def test_voucher_issuance_no_voucher_and_allocation_is_requeued(
-#     db_session: "Session",
-#     voucher_allocation_no_voucher: VoucherAllocation,
-#     capture: LogCapture,
-#     mocker: MockerFixture,
-# ) -> None:
-#     """test that no allocable voucher results in the allocation being requeued"""
-#     mock_queue = mocker.patch("app.tasks.allocation.rq.Queue")
-#     from app.tasks.allocation import sentry_sdk as mock_sentry_sdk
+@httpretty.activate
+def test_voucher_issuance_no_voucher_but_one_available(
+    db_session: "Session", issuance_retry_task_no_voucher: RetryTask, mocker: MockerFixture, voucher: Voucher
+) -> None:
+    """test that an allocable voucher (the pytest 'voucher' fixture) is allocated, resulting in success"""
+    mock_queue = mocker.patch("app.tasks.allocation.enqueue_task")
+    issuance_retry_task_no_voucher.retry_status = QueuedRetryStatuses.IN_PROGRESS
+    db_session.commit()
 
-#     sentry_spy = mocker.spy(mock_sentry_sdk, "capture_message")
-#     voucher_allocation_no_voucher.status = QueuedRetryStatuses.IN_PROGRESS  # type: ignore
-#     db_session.commit()
+    httpretty.register_uri("POST", issuance_retry_task_no_voucher.get_params["account_url"], body="OK", status=200)
 
-#     httpretty.register_uri("POST", voucher_allocation_no_voucher.account_url, body="OK", status=200)
+    issue_voucher(issuance_retry_task_no_voucher.retry_task_id)
 
-#     issue_voucher(voucher_allocation_no_voucher.id)
+    db_session.refresh(issuance_retry_task_no_voucher)
 
-#     db_session.refresh(voucher_allocation_no_voucher)
-#     mock_queue.return_value.enqueue_at.assert_called()
-#     sentry_spy.assert_called_once()
-#     assert voucher_allocation_no_voucher.attempts == 1
-#     assert voucher_allocation_no_voucher.next_attempt_time is not None
-#     assert voucher_allocation_no_voucher.status == QueuedRetryStatuses.WAITING
-#     expected_msgs = ["Requeued task for execution at", "Next attempt time at"]
-#     for expected_msg in expected_msgs:
-#         assert any(expected_msg in record.msg for record in capture.records)
+    assert not mock_queue.return_value.enqueue_at.called
+    assert issuance_retry_task_no_voucher.attempts == 1
+    assert issuance_retry_task_no_voucher.next_attempt_time is None
+    assert issuance_retry_task_no_voucher.retry_status == QueuedRetryStatuses.SUCCESS
 
 
-# @httpretty.activate
-# @mock.patch("app.tasks.status_adjustment.datetime")
-# def test__process_status_adjustment_ok(
-#     mock_datetime: mock.Mock, voucher_update: VoucherUpdate, adjustment_expected_payload: dict, adjustment_url: str
-# ) -> None:
+@httpretty.activate
+def test_voucher_issuance_no_voucher_and_allocation_is_requeued(
+    db_session: "Session",
+    issuance_retry_task_no_voucher: RetryTask,
+    capture: LogCapture,
+    mocker: MockerFixture,
+) -> None:
+    """test that no allocable voucher results in the allocation being requeued"""
+    mock_queue = mocker.patch("app.tasks.allocation.enqueue_task")
+    mock_queue.return_value = fake_now
+    from app.tasks.allocation import sentry_sdk as mock_sentry_sdk
 
-#     mock_datetime.utcnow.return_value = fake_now
-#     mock_datetime.fromisoformat = datetime.fromisoformat
+    sentry_spy = mocker.spy(mock_sentry_sdk, "capture_message")
+    issuance_retry_task_no_voucher.retry_status = QueuedRetryStatuses.IN_PROGRESS
+    db_session.commit()
 
-#     httpretty.register_uri("PATCH", adjustment_url, body="OK", status=200)
+    httpretty.register_uri("POST", issuance_retry_task_no_voucher.get_params["account_url"], body="OK", status=200)
 
-#     response_audit = _process_status_adjustment(voucher_update)
+    issue_voucher(issuance_retry_task_no_voucher.retry_task_id)
 
-#     last_request = httpretty.last_request()
-#     assert last_request.method == "PATCH"
-#     assert json.loads(last_request.body) == adjustment_expected_payload
-#     assert response_audit == {
-#         "timestamp": fake_now.isoformat(),
-#         "response": {
-#             "status": 200,
-#             "body": "OK",
-#         },
-#     }
-
-
-# @httpretty.activate
-# def test__process_status_adjustment_http_errors(
-#     voucher_update: VoucherUpdate, adjustment_expected_payload: dict, adjustment_url: str
-# ) -> None:
-
-#     for status, body in [
-#         (401, "Unauthorized"),
-#         (500, "Internal Server Error"),
-#     ]:
-#         httpretty.register_uri("PATCH", adjustment_url, body=body, status=status)
-
-#         with pytest.raises(requests.RequestException) as excinfo:
-#             _process_status_adjustment(voucher_update)
-
-#         assert isinstance(excinfo.value, requests.RequestException)
-#         assert excinfo.value.response.status_code == status
-
-#         last_request = httpretty.last_request()
-#         assert last_request.method == "PATCH"
-#         assert json.loads(last_request.body) == adjustment_expected_payload
+    db_session.refresh(issuance_retry_task_no_voucher)
+    mock_queue.assert_called()
+    sentry_spy.assert_called_once()
+    assert issuance_retry_task_no_voucher.attempts == 1
+    assert issuance_retry_task_no_voucher.next_attempt_time is not None
+    assert issuance_retry_task_no_voucher.retry_status == QueuedRetryStatuses.WAITING
+    assert any("Next attempt time at" in record.msg for record in capture.records)
 
 
-# @mock.patch("app.tasks.status_adjustment.send_request_with_metrics")
-# def test__process_status_adjustment_connection_error(
-#     mock_send_request_with_metrics: mock.MagicMock, voucher_update: VoucherUpdate
-# ) -> None:
+@httpretty.activate
+@mock.patch("app.tasks.status_adjustment.datetime")
+def test__process_status_adjustment_ok(
+    mock_datetime: mock.Mock,
+    voucher_status_adjustment_retry_task: RetryTask,
+    adjustment_expected_payload: dict,
+    adjustment_url: str,
+) -> None:
 
-#     mock_send_request_with_metrics.side_effect = requests.Timeout("Request timed out")
+    mock_datetime.utcnow.return_value = fake_now
+    mock_datetime.fromisoformat = datetime.fromisoformat
 
-#     with pytest.raises(requests.RequestException) as excinfo:
-#         _process_status_adjustment(voucher_update)
+    httpretty.register_uri("PATCH", adjustment_url, body="OK", status=200)
 
-#     assert isinstance(excinfo.value, requests.Timeout)
-#     assert excinfo.value.response is None
+    response_audit = _process_status_adjustment(voucher_status_adjustment_retry_task.get_params)
 
-
-# @httpretty.activate
-# def test_status_adjustment(db_session: "Session", voucher_update: VoucherUpdate, adjustment_url: str) -> None:
-#     voucher_update.retry_status = QueuedRetryStatuses.IN_PROGRESS  # type: ignore
-#     db_session.commit()
-
-#     httpretty.register_uri("PATCH", adjustment_url, body="OK", status=200)
-
-#     status_adjustment(voucher_update.id)
-
-#     db_session.refresh(voucher_update)
-
-#     assert voucher_update.attempts == 1
-#     assert voucher_update.next_attempt_time is None
-#     assert voucher_update.retry_status == QueuedRetryStatuses.SUCCESS
+    last_request = httpretty.last_request()
+    assert last_request.method == "PATCH"
+    assert json.loads(last_request.body) == adjustment_expected_payload
+    assert response_audit == {
+        "timestamp": fake_now.isoformat(),
+        "response": {
+            "status": 200,
+            "body": "OK",
+        },
+    }
 
 
-# def test_status_adjustment_wrong_status(db_session: "Session", voucher_update: VoucherUpdate) -> None:
-#     voucher_update.retry_status = QueuedRetryStatuses.FAILED  # type: ignore
-#     db_session.commit()
+@httpretty.activate
+def test__process_status_adjustment_http_errors(
+    voucher_status_adjustment_retry_task: RetryTask, adjustment_expected_payload: dict, adjustment_url: str
+) -> None:
 
-#     with pytest.raises(ValueError):
-#         status_adjustment(voucher_update.id)
+    for status, body in [
+        (401, "Unauthorized"),
+        (500, "Internal Server Error"),
+    ]:
+        httpretty.register_uri("PATCH", adjustment_url, body=body, status=status)
 
-#     db_session.refresh(voucher_update)
+        with pytest.raises(requests.RequestException) as excinfo:
+            _process_status_adjustment(voucher_status_adjustment_retry_task.get_params)
 
-#     assert voucher_update.attempts == 0
-#     assert voucher_update.next_attempt_time is None
-#     assert voucher_update.retry_status == QueuedRetryStatuses.FAILED
+        assert isinstance(excinfo.value, requests.RequestException)
+        assert excinfo.value.response.status_code == status
+
+        last_request = httpretty.last_request()
+        assert last_request.method == "PATCH"
+        assert json.loads(last_request.body) == adjustment_expected_payload
+
+
+@mock.patch("app.tasks.status_adjustment.send_request_with_metrics")
+def test__process_status_adjustment_connection_error(
+    mock_send_request_with_metrics: mock.MagicMock, voucher_status_adjustment_retry_task: RetryTask
+) -> None:
+
+    mock_send_request_with_metrics.side_effect = requests.Timeout("Request timed out")
+
+    with pytest.raises(requests.RequestException) as excinfo:
+        _process_status_adjustment(voucher_status_adjustment_retry_task.get_params)
+
+    assert isinstance(excinfo.value, requests.Timeout)
+    assert excinfo.value.response is None
+
+
+@httpretty.activate
+def test_status_adjustment(
+    db_session: "Session", voucher_status_adjustment_retry_task: RetryTask, adjustment_url: str
+) -> None:
+    voucher_status_adjustment_retry_task.retry_status = QueuedRetryStatuses.IN_PROGRESS
+    db_session.commit()
+
+    httpretty.register_uri("PATCH", adjustment_url, body="OK", status=200)
+
+    status_adjustment(voucher_status_adjustment_retry_task.retry_task_id)
+
+    db_session.refresh(voucher_status_adjustment_retry_task)
+
+    assert voucher_status_adjustment_retry_task.attempts == 1
+    assert voucher_status_adjustment_retry_task.next_attempt_time is None
+    assert voucher_status_adjustment_retry_task.retry_status == QueuedRetryStatuses.SUCCESS
+
+
+def test_status_adjustment_wrong_status(db_session: "Session", voucher_status_adjustment_retry_task: RetryTask) -> None:
+    voucher_status_adjustment_retry_task.retry_status = QueuedRetryStatuses.FAILED
+    db_session.commit()
+
+    with pytest.raises(ValueError):
+        status_adjustment(voucher_status_adjustment_retry_task.retry_task_id)
+
+    db_session.refresh(voucher_status_adjustment_retry_task)
+
+    assert voucher_status_adjustment_retry_task.attempts == 0
+    assert voucher_status_adjustment_retry_task.next_attempt_time is None
+    assert voucher_status_adjustment_retry_task.retry_status == QueuedRetryStatuses.FAILED

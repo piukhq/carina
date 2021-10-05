@@ -51,7 +51,6 @@ def status_adjustment(retry_task_id: int) -> None:
             retry_task,
             response_audit=response_audit,
             status=QueuedRetryStatuses.SUCCESS,
-            increase_attempts=True,
             clear_next_attempt_time=True,
         )
 

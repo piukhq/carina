@@ -21,6 +21,10 @@ if TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy.orm import Session
 
 
+VOUCHER_ID = "voucher_id"
+VOUCHER_CODE = "voucher_code"
+
+
 def _process_issuance(task_params: dict) -> dict:
     logger.info(f"Processing allocation for voucher: {task_params['voucher_id']}")
     timestamp = datetime.utcnow()
@@ -88,28 +92,17 @@ def issue_voucher(retry_task_id: int) -> None:
 
             allocable_voucher: Voucher = sync_run_query(_get_allocable_voucher, db_session)
             if allocable_voucher:
-                for key in retry_task.task_type.task_type_keys:
-                    if key.name == "voucher_id":
-                        voucher_id_key = key
-                    elif key.name == "voucher_code":
-                        voucher_code_key = key
-
-                task_params["voucher_id"] = allocable_voucher.id
-                task_params["voucher_code"] = allocable_voucher.voucher_code
+                key_ids = retry_task.task_type.key_ids_by_name
+                task_params[VOUCHER_ID] = str(allocable_voucher.id)
+                task_params[VOUCHER_CODE] = allocable_voucher.voucher_code
 
                 def _add_voucher_to_task_values() -> None:
-                    db_session.add(
-                        TaskTypeKeyValue(
-                            retry_task_id=retry_task.retry_task_id,
-                            task_type_key_id=voucher_id_key.id,
-                            value=str(allocable_voucher.id),
-                        )
-                    )
-                    db_session.add(
-                        TaskTypeKeyValue(
-                            retry_task_id=retry_task.retry_task_id,
-                            task_type_key_id=voucher_code_key.id,
-                            value=allocable_voucher.voucher_code,
+                    db_session.add_all(
+                        retry_task.get_task_type_key_values(
+                            [
+                                (key_ids[VOUCHER_ID], task_params[VOUCHER_ID]),
+                                (key_ids[VOUCHER_CODE], task_params[VOUCHER_CODE]),
+                            ]
                         )
                     )
 

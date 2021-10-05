@@ -1,12 +1,11 @@
 import uuid
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint, text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.ext.mutable import MutableList
+from sqlalchemy import Boolean, Column, Date, Enum, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.db.base_class import Base, TimestampMixin
-from app.enums import QueuedRetryStatuses, VoucherFetchType, VoucherTypeStatuses, VoucherUpdateStatuses
+from app.enums import VoucherFetchType, VoucherTypeStatuses, VoucherUpdateStatuses
 
 
 class Voucher(Base, TimestampMixin):  # pragma: no cover
