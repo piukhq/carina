@@ -30,7 +30,7 @@ async def allocation(
 ) -> Any:
     voucher_config = await crud.get_voucher_config(db_session, retailer_slug, voucher_type_slug)
     voucher, issued, expiry = await get_allocable_voucher(db_session, voucher_config)
-    retry_task = await crud.create_voucher_allocation_retry_task(
+    retry_task = await crud.create_voucher_issuance_retry_task(
         db_session, voucher, issued, expiry, voucher_config, payload.account_url
     )
 

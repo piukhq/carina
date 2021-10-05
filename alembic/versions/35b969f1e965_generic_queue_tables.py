@@ -34,7 +34,7 @@ def populate_task_type_and_keys() -> None:
 
 
 def populate_voucher_allocation_task_type_and_keys(task_type: sa.Table, task_type_key: sa.Table) -> None:
-    inserted_obj = conn.execute(sa.insert(task_type).values(name="voucher_allocation"))
+    inserted_obj = conn.execute(sa.insert(task_type).values(name="voucher_issuance"))
     task_type_id = inserted_obj.inserted_primary_key[0]
     key_data_list = [
         {"name": "account_url", "type": "STRING", "task_type_id": task_type_id},

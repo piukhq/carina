@@ -8,6 +8,7 @@ import pytest
 
 from azure.storage.blob import BlobClient, BlobServiceClient, ContainerClient
 from pytest_mock import MockerFixture
+from retry_task_lib.db.models import RetryTask, TaskType, TaskTypeKeyValue
 from sqlalchemy.future import select
 from testfixtures import LogCapture
 
@@ -489,7 +490,9 @@ def test_move_blob(mocker: MockerFixture) -> None:
     mock_src_blob_client.delete_blob.assert_called_once()
 
 
-def test_enqueue_voucher_updates(setup: SetupType, mocker: MockerFixture) -> None:
+def test_enqueue_voucher_updates(
+    setup: SetupType, mocker: MockerFixture, voucher_status_adjustment_task_type: TaskType
+) -> None:
     db_session, _, voucher = setup
 
     mock_queue = mocker.patch("rq.Queue")
@@ -504,8 +507,21 @@ def test_enqueue_voucher_updates(setup: SetupType, mocker: MockerFixture) -> Non
     VoucherUpdatesAgent.enqueue_voucher_updates(db_session, [voucher_update])
     mock_queue.return_value.enqueue_many.assert_called_once()
     mock_queue.prepare_data.assert_called_once()
+
+    retry_task = (
+        db_session.execute(
+            select(RetryTask).where(
+                RetryTask.task_type_id == voucher_status_adjustment_task_type.task_type_id,
+                RetryTask.retry_task_id == TaskTypeKeyValue.retry_task_id,
+                TaskTypeKeyValue.value == str(voucher_update.voucher.id),
+            )
+        )
+        .scalars()
+        .first()
+    )
+
     mock_queue.prepare_data.assert_called_with(
         status_adjustment,
-        kwargs={"voucher_status_adjustment_id": voucher_update.id},
+        kwargs={"retry_task_id": retry_task.retry_task_id},
         failure_ttl=60 * 60 * 24 * 7,
     )

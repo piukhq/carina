@@ -27,6 +27,7 @@ azure-storage-blob = "*"
 apscheduler = "*"
 sqlalchemy-utils = "*"
 testfixtures = "*"
+retry-task-lib = {editable = true, path = "/Users/francescomilani/side_projects/retry-task-lib"}
 
 [dev-packages]
 sqlalchemy-stubs = "*"

@@ -16,14 +16,16 @@ import sentry_sdk
 from azure.core.exceptions import HttpResponseError, ResourceExistsError
 from azure.storage.blob import BlobClient, BlobLeaseClient, BlobServiceClient
 from pydantic import ValidationError
+from retry_task_lib.db.models import RetryTask, TaskType
+from retry_task_lib.enums import QueuedRetryStatuses
 from sqlalchemy import update
 from sqlalchemy.future import select
 
 from app.core.config import redis, settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
-from app.enums import QueuedRetryStatuses, VoucherUpdateStatuses
-from app.models import RetryTask, TaskType, TaskTypeKeyValue, Voucher, VoucherConfig, VoucherUpdate
+from app.enums import VoucherUpdateStatuses
+from app.models import Voucher, VoucherConfig, VoucherUpdate
 from app.scheduler import CronScheduler
 from app.schemas import VoucherUpdateSchema
 from app.tasks.status_adjustment import status_adjustment
@@ -422,39 +424,23 @@ class VoucherUpdatesAgent(BlobFileAgent):
             task_type: TaskType = (
                 db_session.execute(select(TaskType).where(TaskType.name == "voucher_status_adjustment")).scalars().one()
             )
-            keys = {key.name: key.task_type_key_id for key in task_type.task_type_keys}
+            keys = task_type.key_ids_by_name
 
             retry_tasks = [
                 RetryTask(task_type_id=task_type.task_type_id, retry_status=QueuedRetryStatuses.IN_PROGRESS)
                 for _ in range(len(voucher_updates))
             ]
-            db_session.bulk_save_objects(retry_tasks)
+            db_session.add_all(retry_tasks)
             db_session.flush()
 
             for i, voucher_update in enumerate(voucher_updates):
                 values = [
-                    TaskTypeKeyValue(
-                        retry_task_id=retry_tasks[i].retry_task_id,
-                        task_type_key_id=keys["voucher_id"],
-                        value=str(voucher_update.voucher_id),
-                    ),
-                    TaskTypeKeyValue(
-                        retry_task_id=retry_tasks[i].retry_task_id,
-                        task_type_key_id=keys["retailer_slug"],
-                        value=str(voucher_update.voucher.retailer_slug),
-                    ),
-                    TaskTypeKeyValue(
-                        retry_task_id=retry_tasks[i].retry_task_id,
-                        task_type_key_id=keys["date"],
-                        value=datetime.fromisoformat(voucher_update.date.isoformat()).timestamp(),
-                    ),
-                    TaskTypeKeyValue(
-                        retry_task_id=retry_tasks[i].retry_task_id,
-                        task_type_key_id=keys["status"],
-                        value=voucher_update.status.name,  # type: ignore [attr-defined]
-                    ),
+                    (keys["voucher_id"], str(voucher_update.voucher_id)),
+                    (keys["retailer_slug"], str(voucher_update.voucher.retailer_slug)),
+                    (keys["date"], datetime.fromisoformat(voucher_update.date.isoformat()).timestamp()),
+                    (keys["status"], voucher_update.status.name),  # type: ignore [attr-defined]
                 ]
-                db_session.bulk_save_objects(values)
+                db_session.bulk_save_objects(retry_tasks[i].get_task_type_key_values(values))
 
             db_session.flush()
             return retry_tasks

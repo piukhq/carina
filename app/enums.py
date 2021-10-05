@@ -1,4 +1,3 @@
-from datetime import date, datetime
 from enum import Enum
 
 from fastapi import HTTPException, status
@@ -33,14 +32,6 @@ class HttpErrors(Enum):
     )
 
 
-class QueuedRetryStatuses(Enum):
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
-    FAILED = "failed"
-    SUCCESS = "success"
-    WAITING = "waiting"
-
-
 class VoucherTypeStatuses(str, Enum):
     ACTIVE = "active"
     CANCELLED = "cancelled"
@@ -55,11 +46,3 @@ class VoucherUpdateStatuses(Enum):
 
 class VoucherFetchType(Enum):
     PRE_LOADED = "pre_loaded"
-
-
-class TaskParamsKeyTypes(Enum):
-    STRING = str
-    INTEGER = int
-    FLOAT = float
-    DATE = date.fromisoformat
-    DATETIME = datetime.fromisoformat

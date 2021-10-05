@@ -1,22 +1,52 @@
+from typing import TYPE_CHECKING, List, Tuple
+
 from fastapi import status
 from fastapi.testclient import TestClient
 from pytest_mock import MockerFixture
+from retry_task_lib.db.models import RetryTask, TaskType, TaskTypeKeyValue
+from sqlalchemy.future import select
 
 from app.core.config import settings
 from app.enums import VoucherTypeStatuses
-from app.models import VoucherAllocation
 from asgi import app
 from tests.api.conftest import SetupType
 from tests.fixtures import HttpErrors
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
 
 client = TestClient(app)
 auth_headers = {"Authorization": f"token {settings.CARINA_AUTH_TOKEN}"}
 payload = {"account_url": "http://test.url/"}
 
 
-def test_post_voucher_allocation_happy_path(setup: SetupType, mocker: MockerFixture) -> None:
+def _get_retry_task_and_values(
+    db_session: "Session", task_type_id: int, voucher_config_id: int
+) -> Tuple[RetryTask, List[str]]:
+    values: List[str] = []
+    retry_task: RetryTask = (
+        db_session.execute(
+            select(RetryTask).where(
+                RetryTask.task_type_id == task_type_id,
+                RetryTask.retry_task_id == TaskTypeKeyValue.retry_task_id,
+                TaskTypeKeyValue.value == str(voucher_config_id),
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if retry_task:
+        values = [value.value for value in retry_task.task_type_key_values]
+
+    return retry_task, values
+
+
+def test_post_voucher_allocation_happy_path(
+    setup: SetupType, mocker: MockerFixture, voucher_issuance_task_type: TaskType
+) -> None:
     db_session, voucher_config, voucher = setup
-    mocker.patch("app.tasks.voucher.rq.Queue")
+    mocker.patch("app.tasks.voucher.enqueue_retry_task")
 
     resp = client.post(
         f"/bpl/vouchers/{voucher_config.retailer_slug}/vouchers/{voucher_config.voucher_type_slug}/allocation",
@@ -27,15 +57,18 @@ def test_post_voucher_allocation_happy_path(setup: SetupType, mocker: MockerFixt
     assert resp.status_code == status.HTTP_202_ACCEPTED
     assert resp.json() == {}
 
-    voucher_allocation = db_session.query(VoucherAllocation).filter_by(voucher_id=voucher.id).first()
+    retry_task, task_params_values = _get_retry_task_and_values(
+        db_session, voucher_issuance_task_type.task_type_id, voucher_config.id
+    )
 
-    assert voucher_allocation is not None
-    assert voucher_allocation.voucher_config == voucher_config
-    assert voucher_allocation.account_url == payload["account_url"]
+    assert retry_task is not None
+    assert payload["account_url"] in task_params_values
+    assert str(voucher_config.id) in task_params_values
+    assert str(voucher.id) in task_params_values
 
 
-def test_post_voucher_allocation_wrong_retailer(setup: SetupType, mocker: MockerFixture) -> None:
-    db_session, voucher_config, voucher = setup
+def test_post_voucher_allocation_wrong_retailer(setup: SetupType, voucher_issuance_task_type: TaskType) -> None:
+    db_session, voucher_config, _ = setup
 
     resp = client.post(
         f"/bpl/vouchers/WRONG-RETAILER/vouchers/{voucher_config.voucher_type_slug}/allocation",
@@ -46,12 +79,12 @@ def test_post_voucher_allocation_wrong_retailer(setup: SetupType, mocker: Mocker
     assert resp.status_code == HttpErrors.INVALID_RETAILER.value.status_code
     assert resp.json() == HttpErrors.INVALID_RETAILER.value.detail
 
-    voucher_allocation = db_session.query(VoucherAllocation).filter_by(voucher_id=voucher.id).first()
-    assert voucher_allocation is None
+    retry_task, _ = _get_retry_task_and_values(db_session, voucher_issuance_task_type.task_type_id, voucher_config.id)
+    assert retry_task is None
 
 
-def test_post_voucher_allocation_wrong_voucher_type(setup: SetupType, mocker: MockerFixture) -> None:
-    db_session, voucher_config, voucher = setup
+def test_post_voucher_allocation_wrong_voucher_type(setup: SetupType, voucher_issuance_task_type: TaskType) -> None:
+    db_session, voucher_config, _ = setup
 
     resp = client.post(
         f"/bpl/vouchers/{voucher_config.retailer_slug}/vouchers/WRONG-TYPE/allocation",
@@ -62,16 +95,18 @@ def test_post_voucher_allocation_wrong_voucher_type(setup: SetupType, mocker: Mo
     assert resp.status_code == HttpErrors.UNKNOWN_VOUCHER_TYPE.value.status_code
     assert resp.json() == HttpErrors.UNKNOWN_VOUCHER_TYPE.value.detail
 
-    voucher_allocation = db_session.query(VoucherAllocation).filter_by(voucher_id=voucher.id).first()
-    assert voucher_allocation is None
+    retry_task, _ = _get_retry_task_and_values(db_session, voucher_issuance_task_type.task_type_id, voucher_config.id)
+    assert retry_task is None
 
 
-def test_post_voucher_allocation_no_more_vouchers(setup: SetupType, mocker: MockerFixture) -> None:
+def test_post_voucher_allocation_no_more_vouchers(
+    setup: SetupType, mocker: MockerFixture, voucher_issuance_task_type: TaskType
+) -> None:
     db_session, voucher_config, voucher = setup
     voucher.allocated = True
     db_session.commit()
 
-    mocker.patch("app.tasks.voucher.rq.Queue")
+    mocker.patch("app.tasks.voucher.enqueue_retry_task")
 
     resp = client.post(
         f"/bpl/vouchers/{voucher_config.retailer_slug}/vouchers/{voucher_config.voucher_type_slug}/allocation",
@@ -82,11 +117,13 @@ def test_post_voucher_allocation_no_more_vouchers(setup: SetupType, mocker: Mock
     assert resp.status_code == status.HTTP_202_ACCEPTED
     assert resp.json() == {}
 
-    voucher_allocation = db_session.query(VoucherAllocation).filter_by(voucher_config_id=voucher_config.id).first()
+    retry_task, task_params_values = _get_retry_task_and_values(
+        db_session, voucher_issuance_task_type.task_type_id, voucher_config.id
+    )
 
-    assert voucher_allocation is not None
-    assert voucher_allocation.voucher_id is None
-    assert voucher_allocation.account_url == payload["account_url"]
+    assert retry_task is not None
+    assert payload["account_url"] in task_params_values
+    assert str(voucher_config.id) in task_params_values
 
 
 def test_voucher_type_status_ok(setup: SetupType) -> None:

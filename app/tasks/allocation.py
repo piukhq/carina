@@ -5,15 +5,15 @@ import click
 import rq
 import sentry_sdk
 
+from retry_task_lib.db.models import RetryTask, TaskTypeKeyValue
+from retry_task_lib.enums import QueuedRetryStatuses
+from retry_task_lib.utils.synchronous import enqueue_task, get_retry_task, update_task
 from sqlalchemy.future import select
 
 from app.core.config import redis, settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
-from app.enums import QueuedRetryStatuses
-from app.models import TaskTypeKeyValue, Voucher, VoucherAllocation
-from app.models.tasks import RetryTask
-from app.retry_task_utils.synchronous import enqueue_task, get_retry_task_and_params, update_task
+from app.models import Voucher
 
 from . import logger, send_request_with_metrics
 
@@ -21,34 +21,34 @@ if TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy.orm import Session
 
 
-def _process_allocation(task_poarams: dict) -> dict:
-    logger.info(f"Processing allocation for voucher: {task_poarams['voucher_id']}")
+def _process_issuance(task_params: dict) -> dict:
+    logger.info(f"Processing allocation for voucher: {task_params['voucher_id']}")
     timestamp = datetime.utcnow()
     response_audit: dict = {"timestamp": timestamp.isoformat()}
 
     resp = send_request_with_metrics(
         "POST",
-        task_poarams["account_url"],
+        task_params["account_url"],
         json={
-            "voucher_code": task_poarams["voucher_code"],
-            "issued_date": task_poarams["issued_date"],
-            "expiry_date": task_poarams["expiry_date"],
-            "voucher_type_slug": task_poarams["voucher_type_slug"],
-            "voucher_id": task_poarams["voucher_id"],
+            "voucher_code": task_params["voucher_code"],
+            "issued_date": task_params["issued_date"],
+            "expiry_date": task_params["expiry_date"],
+            "voucher_type_slug": task_params["voucher_type_slug"],
+            "voucher_id": task_params["voucher_id"],
         },
         headers={"Authorization": f"Token {settings.POLARIS_AUTH_TOKEN}"},
         timeout=(3.03, 10),
     )
     resp.raise_for_status()
     response_audit["response"] = {"status": resp.status_code, "body": resp.text}
-    logger.info(f"Allocation succeeded for voucher: {task_poarams['voucher_id']}")
+    logger.info(f"Allocation succeeded for voucher: {task_params['voucher_id']}")
 
     return response_audit
 
 
-def _process_and_allocate_voucher(db_session: "Session", retry_task: RetryTask, task_params: dict) -> None:
+def _process_and_issue_voucher(db_session: "Session", retry_task: RetryTask, task_params: dict) -> None:
     update_task(db_session, retry_task, increase_attempts=True)
-    response_audit = _process_allocation(task_params)
+    response_audit = _process_issuance(task_params)
     update_task(
         db_session,
         retry_task,
@@ -58,13 +58,14 @@ def _process_and_allocate_voucher(db_session: "Session", retry_task: RetryTask, 
     )
 
 
-def allocate_voucher(retry_task_id: int) -> None:
+def issue_voucher(retry_task_id: int) -> None:
     with SyncSessionMaker() as db_session:
-        retry_task, task_params = get_retry_task_and_params(db_session, retry_task_id)
+        retry_task = get_retry_task(db_session, retry_task_id)
+        task_params = retry_task.get_params
 
         # Process the allocation if it has a voucher, else try to get a voucher - requeue that if necessary
         if "voucher_id" in task_params:
-            _process_and_allocate_voucher(db_session, retry_task, task_params)
+            _process_and_issue_voucher(db_session, retry_task, task_params)
         else:
 
             def _get_allocable_voucher() -> Optional[Voucher]:
@@ -115,7 +116,7 @@ def allocate_voucher(retry_task_id: int) -> None:
                     db_session.commit()
 
                 sync_run_query(_add_voucher_to_task_values, db_session)
-                _process_and_allocate_voucher(db_session, retry_task, task_params)
+                _process_and_issue_voucher(db_session, retry_task, task_params)
             else:  # requeue the allocation attempt
                 if retry_task.retry_status != QueuedRetryStatuses.WAITING:
                     # Only do a Sentry alert for the first allocation failure (when status is changing to WAITING)
@@ -136,7 +137,8 @@ def allocate_voucher(retry_task_id: int) -> None:
 
                 next_attempt_time = enqueue_task(
                     queue=settings.VOUCHER_ALLOCATION_TASK_QUEUE,
-                    action=allocate_voucher,
+                    connection=redis,
+                    action=issue_voucher,
                     retry_task=retry_task,
                     backoff_seconds=settings.VOUCHER_ALLOCATION_REQUEUE_BACKOFF_SECONDS,
                 )
@@ -151,7 +153,7 @@ def cli() -> None:  # pragma: no cover
 
 @cli.command()
 def worker(burst: bool = False) -> None:  # pragma: no cover
-    from app.tasks.error_handlers import handle_voucher_allocation_error
+    from app.tasks.error_handlers import handle_voucher_issuance_error
 
     # placeholder for when we implement prometheus metrics
     # registry = prometheus_client.CollectorRegistry()
@@ -163,7 +165,7 @@ def worker(burst: bool = False) -> None:  # pragma: no cover
         queues=[q],
         connection=redis,
         log_job_description=True,
-        exception_handlers=[handle_voucher_allocation_error],
+        exception_handlers=[handle_voucher_issuance_error],
     )
     worker.work(burst=burst, with_scheduler=True)
 

@@ -3,10 +3,11 @@ from datetime import datetime
 import click
 import rq
 
+from retry_task_lib.enums import QueuedRetryStatuses
+from retry_task_lib.utils.synchronous import get_retry_task, update_task
+
 from app.core.config import redis, settings
 from app.db.session import SyncSessionMaker
-from app.enums import QueuedRetryStatuses
-from app.retry_task_utils.synchronous import get_retry_task_and_params, update_task
 
 from . import logger, send_request_with_metrics
 
@@ -40,10 +41,10 @@ def _process_status_adjustment(task_params: dict) -> dict:
 def status_adjustment(retry_task_id: int) -> None:
     with SyncSessionMaker() as db_session:
 
-        retry_task, task_params = get_retry_task_and_params(db_session, retry_task_id)
+        retry_task = get_retry_task(db_session, retry_task_id)
         update_task(db_session, retry_task, increase_attempts=True)
 
-        response_audit = _process_status_adjustment(task_params)
+        response_audit = _process_status_adjustment(retry_task.get_params)
 
         update_task(
             db_session,

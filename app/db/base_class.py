@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 import sentry_sdk
 
+from retry_task_lib.db.models import load_models_to_metadata
 from sqlalchemy import Column, DateTime, Integer, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import declarative_base, declarative_mixin  # type: ignore[attr-defined]
@@ -20,6 +21,7 @@ logger = logging.getLogger("db-base-class")
 
 
 Base = declarative_base()
+load_models_to_metadata(Base.metadata)
 
 
 utc_timestamp_sql = text("TIMEZONE('utc', CURRENT_TIMESTAMP)")

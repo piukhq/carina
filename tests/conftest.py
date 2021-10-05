@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Callable, Generator
 
 import pytest
 
+from retry_task_lib.db.models import TaskType, TaskTypeKey
 from sqlalchemy_utils import create_database, database_exists, drop_database
 from testfixtures import LogCapture
 
@@ -108,3 +109,50 @@ def create_vouchers(db_session: "Session", voucher_config: VoucherConfig) -> Cal
 def capture() -> Generator:
     with LogCapture() as capture:
         yield capture
+
+
+@pytest.fixture(scope="function")
+def voucher_issuance_task_type(db_session: "Session") -> TaskType:
+    task = TaskType(name="voucher_issuance")
+    db_session.add(task)
+    db_session.flush()
+
+    db_session.add_all(
+        [
+            TaskTypeKey(task_type_id=task.task_type_id, name=key_name, type=key_type)
+            for key_name, key_type in (
+                ("account_url", "STRING"),
+                ("issued_date", "FLOAT"),
+                ("expiry_date", "FLOAT"),
+                ("voucher_config_id", "INTEGER"),
+                ("voucher_type_slug", "STRING"),
+                ("voucher_id", "STRING"),
+                ("voucher_code", "STRING"),
+            )
+        ]
+    )
+
+    db_session.commit()
+    return task
+
+
+@pytest.fixture(scope="function")
+def voucher_status_adjustment_task_type(db_session: "Session") -> TaskType:
+    task = TaskType(name="voucher_status_adjustment")
+    db_session.add(task)
+    db_session.flush()
+
+    db_session.add_all(
+        [
+            TaskTypeKey(task_type_id=task.task_type_id, name=key_name, type=key_type)
+            for key_name, key_type in (
+                ("voucher_id", "STRING"),
+                ("retailer_slug", "STRING"),
+                ("date", "FLOAT"),
+                ("status", "STRING"),
+            )
+        ]
+    )
+
+    db_session.commit()
+    return task
