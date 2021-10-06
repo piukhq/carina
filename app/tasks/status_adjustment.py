@@ -4,7 +4,7 @@ import click
 import rq
 
 from retry_task_lib.enums import QueuedRetryStatuses
-from retry_task_lib.utils.synchronous import get_retry_task, update_task
+from retry_task_lib.utils.synchronous import get_retry_task
 
 from app.core.config import redis, settings
 from app.db.session import SyncSessionMaker
@@ -42,16 +42,12 @@ def status_adjustment(retry_task_id: int) -> None:
     with SyncSessionMaker() as db_session:
 
         retry_task = get_retry_task(db_session, retry_task_id)
-        update_task(db_session, retry_task, increase_attempts=True)
+        retry_task.update_task(db_session, increase_attempts=True)
 
         response_audit = _process_status_adjustment(retry_task.get_params)
 
-        update_task(
-            db_session,
-            retry_task,
-            response_audit=response_audit,
-            status=QueuedRetryStatuses.SUCCESS,
-            clear_next_attempt_time=True,
+        retry_task.update_task(
+            db_session, response_audit=response_audit, status=QueuedRetryStatuses.SUCCESS, clear_next_attempt_time=True
         )
 
 

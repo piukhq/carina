@@ -1,3 +1,5 @@
+# this file is excluded from coverage as there is no logic to test here beyond alling a library function.
+# if in the future we add any logic worth testing, please remove this file from the coveragerc ignore list.
 from typing import TYPE_CHECKING
 
 import rq
@@ -7,11 +9,10 @@ from retry_task_lib.utils.error_handler import handle_request_exception
 from app.core.config import redis, settings
 from app.db.session import SyncSessionMaker
 
-from . import logger
 from .allocation import issue_voucher
 from .status_adjustment import status_adjustment
 
-if TYPE_CHECKING:  # pragma: no cover
+if TYPE_CHECKING:
     from inspect import Traceback
 
 

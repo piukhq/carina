@@ -13,9 +13,7 @@ from retry_task_lib.enums import QueuedRetryStatuses
 from sqlalchemy.orm import Session
 from testfixtures import LogCapture
 
-from app.core.config import settings
-from app.models import Voucher, VoucherConfig
-from app.models.voucher import VoucherUpdate
+from app.models import Voucher
 from app.tasks.allocation import _process_issuance, issue_voucher
 from app.tasks.status_adjustment import _process_status_adjustment, status_adjustment
 

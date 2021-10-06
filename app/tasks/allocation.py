@@ -5,9 +5,9 @@ import click
 import rq
 import sentry_sdk
 
-from retry_task_lib.db.models import RetryTask, TaskTypeKeyValue
+from retry_task_lib.db.models import RetryTask
 from retry_task_lib.enums import QueuedRetryStatuses
-from retry_task_lib.utils.synchronous import enqueue_task, get_retry_task, update_task
+from retry_task_lib.utils.synchronous import enqueue_task, get_retry_task
 from sqlalchemy.future import select
 
 from app.core.config import redis, settings
@@ -51,14 +51,10 @@ def _process_issuance(task_params: dict) -> dict:
 
 
 def _process_and_issue_voucher(db_session: "Session", retry_task: RetryTask, task_params: dict) -> None:
-    update_task(db_session, retry_task, increase_attempts=True)
+    retry_task.update_task(db_session, increase_attempts=True)
     response_audit = _process_issuance(task_params)
-    update_task(
-        db_session,
-        retry_task,
-        response_audit=response_audit,
-        status=QueuedRetryStatuses.SUCCESS,
-        clear_next_attempt_time=True,
+    retry_task.update_task(
+        db_session, response_audit=response_audit, status=QueuedRetryStatuses.SUCCESS, clear_next_attempt_time=True
     )
 
 
@@ -136,7 +132,7 @@ def issue_voucher(retry_task_id: int) -> None:
                     backoff_seconds=settings.VOUCHER_ALLOCATION_REQUEUE_BACKOFF_SECONDS,
                 )
                 logger.info(f"Next attempt time at {next_attempt_time}")
-                update_task(db_session, retry_task, next_attempt_time=next_attempt_time, increase_attempts=True)
+                retry_task.update_task(db_session, next_attempt_time=next_attempt_time, increase_attempts=True)
 
 
 @click.group()
