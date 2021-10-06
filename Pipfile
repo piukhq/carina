@@ -1,4 +1,9 @@
 [[source]]
+name = "gitlab-libraries"
+url = "https://bink-libs:y6nzdKbo9J6MkEmwvB-i@git.bink.com/api/v4/groups/86/-/packages/pypi/simple"
+verify_ssl = true
+
+[[source]]
 url = "https://pypi.org/simple"
 verify_ssl = true
 name = "pypi"
@@ -27,7 +32,7 @@ azure-storage-blob = "*"
 apscheduler = "*"
 sqlalchemy-utils = "*"
 testfixtures = "*"
-retry-task-lib = {editable = true, path = "/Users/francescomilani/side_projects/retry-task-lib"}
+retry-task-lib = "*"
 
 [dev-packages]
 sqlalchemy-stubs = "*"
