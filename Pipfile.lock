@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "4860f70818c3ee5fd266b1968197bbc4a1051ded4b84d1e757a4c95c996ad2e4"
+            "sha256": "06a41e7b725772e65b63f73daf8394862141c3eee311fbfca96a4d3b62a57474"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -9,13 +9,13 @@
         },
         "sources": [
             {
-                "name": "gitlab-libraries",
-                "url": "https://bink-libs:y6nzdKbo9J6MkEmwvB-i@git.bink.com/api/v4/groups/86/-/packages/pypi/simple",
+                "name": "pypi",
+                "url": "https://pypi.org/simple",
                 "verify_ssl": true
             },
             {
-                "name": "pypi",
-                "url": "https://pypi.org/simple",
+                "name": "gitlab-libraries",
+                "url": "https://bink-libs:y6nzdKbo9J6MkEmwvB-i@git.bink.com/api/v4/groups/86/-/packages/pypi/simple",
                 "verify_ssl": true
             }
         ]
@@ -26,7 +26,7 @@
                 "sha256:9d33f3ff1488c4bfab1e1a6dfebbf085e8a8e1a3e047a43ad29ad1f67f012a1d",
                 "sha256:e3cab9e59778b3b6726bb2da9ced451c6622d558199fd3ef914f3b1e8f4ef704"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==1.7.4"
         },
         "apscheduler": {
@@ -34,7 +34,7 @@
                 "sha256:793b2d37c52ece53e34626619e6142e99b20b59a12155f39e1e6932e324f079d",
                 "sha256:82d6d21b2f0343510d07bb35618333a794653439a265635555b12935647b460a"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==3.8.0"
         },
         "asgiref": {
@@ -61,7 +61,7 @@
                 "sha256:e36c6806883786b19551bb70a4882561f31135dc8105a59662e0376cf5b2cbc5",
                 "sha256:eed43abc6ccf1dc02e0d0efc06ce46a411362f3358847c6b0ec9a43426f91ece"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==0.24.0"
         },
         "azure-common": {
@@ -83,7 +83,7 @@
                 "sha256:69035c81f280fac5fa9c55f87be3a359b264853727486e3568818bb43988080e",
                 "sha256:6f4f8c1ba2887cf3e1663be324fde278fce52d781123ad95c07d2c9d9cdeef5a"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==1.6.1"
         },
         "azure-keyvault": {
@@ -91,7 +91,7 @@
                 "sha256:5fa0438f7f6e2e79543f2724957acf77c3c187e558f4d030a4f9b7493b9f946d",
                 "sha256:69002a546921a8290eb54d9a3805cfc515c321bc1d4c0bfcfb463620245eca40"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==4.1.0"
         },
         "azure-keyvault-certificates": {
@@ -117,17 +117,17 @@
         },
         "azure-storage-blob": {
             "hashes": [
-                "sha256:859195b4850dcfe77ffafbe53500abb74b001e52e77fe6d9492fa73639a22127",
-                "sha256:cff66a115c73c90e496c8c8b3026898a3ce64100840276e9245434e28a864225"
+                "sha256:e74c2c49fd04b80225f5b9734f1dbd417d89f280abfedccced3ac21509e1659d",
+                "sha256:eb37b50ddfb6e558b29f6c8c03b0666514e55d6170bf4624e7261a3af93c6401"
             ],
-            "index": "gitlab-libraries",
-            "version": "==12.9.0"
+            "index": "pypi",
+            "version": "==12.8.1"
         },
         "blinker": {
             "hashes": [
                 "sha256:471aee25f3992bd325afa3772f1063dbdbbca947a041b8b89466dc00d606f8b6"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==1.4"
         },
         "certifi": {
@@ -240,7 +240,7 @@
                 "sha256:36bcdd3dbea87c586061005e4a40b9bd0145afd766655b4e0ec1d8870b32555c",
                 "sha256:38526fc46bda73f7ec92033952677323c16061e70a91d15c95f18b11895da494"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==0.68.2"
         },
         "greenlet": {
@@ -304,7 +304,7 @@
                 "sha256:9dcc4547dbb1cb284accfb15ab5667a0e5d1881cc443e0677b4882a4067a807e",
                 "sha256:e0a968b5ba15f8a328fdfd7ab1fcb5af4470c28aaf7e55df02a99bc13138e6e8"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==20.1.0"
         },
         "h11": {
@@ -460,7 +460,7 @@
                 "sha256:358a58f276cb312e3ca29d7a7f244c91e4e0bda7848249d30e4f36d2eb58b67c",
                 "sha256:9fe5da7ec53510881dd35d7a5c677ba45f34cfe6a8e78d1abd20652cf82139a8"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==0.18.0"
         },
         "prometheus-client": {
@@ -468,7 +468,7 @@
                 "sha256:3a8baade6cb80bcfe43297e33e7623f3118d660d41387593758e2fb1ea173a86",
                 "sha256:b014bc76815eb1399da8ce5fc84b7717a3e63652b0c0f8804092c9363acab1b2"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==0.11.0"
         },
         "psycopg2-binary": {
@@ -503,7 +503,7 @@
                 "sha256:f8559617b1fcf59a9aedba2c9838b5b6aa211ffedecabca412b92a1ff75aac1a",
                 "sha256:fbb42a541b1093385a2d8c7eec94d26d30437d0e77c1d25dae1dcc46741a385e"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==2.9.1"
         },
         "pycparser": {
@@ -539,7 +539,7 @@
                 "sha256:ea5cb40a3b23b3265f6325727ddfc45141b08ed665458be8c6285e7b85bd73a1",
                 "sha256:fec866a0b59f372b7e776f2d7308511784dace622e0992a0b59ea3ccee0ae833"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==1.8.2"
         },
         "pygments": {
@@ -614,7 +614,7 @@
                 "sha256:0e7e0cfca8660dea8b7d5cd8c4f6c5e29e11f31158c0b0ae91a397f00e5a05a2",
                 "sha256:432b788c4530cfe16d8d943a09d40ca6c16149727e4afe8c2c9d5580c59d9f24"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==3.5.3"
         },
         "requests": {
@@ -622,7 +622,7 @@
                 "sha256:6c1246513ecd5ecd4528a0906f910e8f0f9c6b8ec72030dc9fd154dc1a6efd24",
                 "sha256:b8aa58f8cf793ffd8782d3d8cb19e66ef36f7aba4353eec859e74678b01b07a7"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==2.26.0"
         },
         "requests-oauthlib": {
@@ -646,7 +646,7 @@
                 "sha256:92950a3e60863de48dd1800882939bbaf089a37497ebf9f2ecf7c9fd0a4c4a95",
                 "sha256:be09ec43fae9a75a4d26ea3cd520e5fa3ea2ea8cf481be33e6ec9416f0369cac"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==1.10.0"
         },
         "sentry-sdk": {
@@ -654,7 +654,7 @@
                 "sha256:b9844751e40710e84a457c5bc29b21c383ccb2b63d76eeaad72f7f1c808c8828",
                 "sha256:c091cc7115ff25fe3a0e410dbecd7a996f81a3f6137d2272daef32d6c3cfa6dc"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==1.4.3"
         },
         "six": {
@@ -698,7 +698,7 @@
                 "sha256:e37621b37c73b034997b5116678862f38ee70e5a054821c7b19d0e55df270dec",
                 "sha256:e93978993a2ad0af43f132be3ea8805f56b2f2cd223403ec28d3e7d5c6d39ed1"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==1.4.25"
         },
         "sqlalchemy-utils": {
@@ -706,7 +706,7 @@
                 "sha256:a6aaee154f798be4e479af0ceffaa5034d35fcf6f40707c0947d21bde64e05e5",
                 "sha256:b1bf67d904fed16b16ef1dc07f03e5e93a6b23899f920f6b41c09be45fbb85f2"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==0.37.8"
         },
         "starlette": {
@@ -722,7 +722,7 @@
                 "sha256:43242a20e3e73291a28bcbcacfd6e000b02d3857a9a9fff56b297a27afdc932f",
                 "sha256:f78f4ea81b0fabc06728c11dc2a8c01277bfc5181b321a4770471902e3eb844a"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==8.0.1"
         },
         "testfixtures": {
@@ -730,7 +730,7 @@
                 "sha256:2600100ae96ffd082334b378e355550fef8b4a529a6fa4c34f47130905c7426d",
                 "sha256:6ddb7f56a123e1a9339f130a200359092bd0a6455e31838d6c477e8729bb7763"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==6.18.3"
         },
         "typing-extensions": {
@@ -795,7 +795,7 @@
                 "sha256:ff0ae4b1dc70c3362b04f4127e228b17e84946de611f85b32f565b990762deaf",
                 "sha256:fffe509f556861c7343c6cba57ed05fe7bcf4b48a934a5b946ccb45428cf8883"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==4.2.0"
         },
         "urllib3": {
@@ -814,7 +814,7 @@
                 "sha256:17f898c64c71a2640514d4089da2689e5db1ce5d4086c2d53699bf99513421c1",
                 "sha256:d9a3c0dd1ca86728d3e235182683b4cf94cd53a867c288eaeca80ee781b2caff"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==0.15.0"
         },
         "uvloop": {
@@ -905,7 +905,7 @@
                 "sha256:380f1b5da05e5a1429225676655dddb96f5ae8c75bdf91e53d798871b902a115",
                 "sha256:7de4cfc7eb6b710de325712d40125689101d21d25283eed7e9998722cf10eb91"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==21.9b0"
         },
         "certifi": {
@@ -994,7 +994,7 @@
                 "sha256:07528381786f2a6237b061f6e96610a4167b226cb926e2aa2b6b1d78057c576b",
                 "sha256:bf8fd333346d844f616e8d47905ef3a3384edae6b4e9beb0c5101e25e3110907"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==3.9.2"
         },
         "future": {
@@ -1064,7 +1064,7 @@
             "hashes": [
                 "sha256:20de0e5dd5a18292d36d928cc3d6e52f8b2ac73daec40d41eb62dee154933b68"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==1.1.4"
         },
         "idna": {
@@ -1087,7 +1087,7 @@
                 "sha256:2097be5c814d1b974aea57673176a924c4c8c9583890e7a5f082f547b9975b11",
                 "sha256:f16148f9163e1e526f1008d7c8d966d9c15600ca20d1a754287cf96d00ba6f1d"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==7.28.0"
         },
         "isort": {
@@ -1095,7 +1095,7 @@
                 "sha256:9c2ea1e62d871267b78307fe511c0838ba0da28698c5732d54e2790bf3ba9899",
                 "sha256:e17d6e2b81095c9db0a03a8025a957f334d6ea30b26f9ec70805411e5c7c81f2"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==5.9.3"
         },
         "jedi": {
@@ -1154,7 +1154,7 @@
                 "sha256:ecd2c3fe726758037234c93df7e98deb257fd15c24c9180dacf1ef829da5f921",
                 "sha256:ef565033fa5a958e62796867b1df10c40263ea9ded87164d67572834e57a174d"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==0.910"
         },
         "mypy-extensions": {
@@ -1278,7 +1278,7 @@
                 "sha256:131b36680866a76e6781d13f101efb86cf674ebb9762eb70d3082b6f29889e89",
                 "sha256:7310f8d27bc79ced999e760ca304d69f6ba6c6649c0b60fb0e04a4a77cacc134"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==6.2.5"
         },
         "pytest-asyncio": {
@@ -1286,7 +1286,7 @@
                 "sha256:2564ceb9612bbd560d19ca4b41347b54e7835c2f792c504f698e05395ed63f6f",
                 "sha256:3042bcdf1c5d978f6b74d96a151c4cfb9dcece65006198389ccd7e6c60eb1eea"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==0.15.1"
         },
         "pytest-cov": {
@@ -1294,7 +1294,7 @@
                 "sha256:578d5d15ac4a25e5f961c938b85a05b09fdaae9deef3bb6de9a6e766622ca7a6",
                 "sha256:e7f0f5b1617d2210a2cabc266dfe2f4c75a8d32fb89eafb7ad9d06f6d076d470"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==3.0.0"
         },
         "pytest-mock": {
@@ -1302,7 +1302,7 @@
                 "sha256:30c2f2cc9759e76eee674b81ea28c9f0b94f8f0445a1b87762cadf774f0df7e3",
                 "sha256:40217a058c52a63f1042f0784f62009e976ba824c418cced42e88d5f40ab0e62"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==3.6.1"
         },
         "pyyaml": {
@@ -1397,7 +1397,7 @@
                 "sha256:6c1246513ecd5ecd4528a0906f910e8f0f9c6b8ec72030dc9fd154dc1a6efd24",
                 "sha256:b8aa58f8cf793ffd8782d3d8cb19e66ef36f7aba4353eec859e74678b01b07a7"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==2.26.0"
         },
         "six": {
@@ -1441,7 +1441,7 @@
                 "sha256:e37621b37c73b034997b5116678862f38ee70e5a054821c7b19d0e55df270dec",
                 "sha256:e93978993a2ad0af43f132be3ea8805f56b2f2cd223403ec28d3e7d5c6d39ed1"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==1.4.25"
         },
         "sqlalchemy-stubs": {
@@ -1449,7 +1449,7 @@
                 "sha256:5eec7aa110adf9b957b631799a72fef396b23ff99fe296df726645d01e312aa5",
                 "sha256:c665d6dd4482ef642f01027fa06c3d5e91befabb219dc71fc2a09e7d7695f7ae"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==0.4"
         },
         "sqlalchemy-utils": {
@@ -1457,7 +1457,7 @@
                 "sha256:a6aaee154f798be4e479af0ceffaa5034d35fcf6f40707c0947d21bde64e05e5",
                 "sha256:b1bf67d904fed16b16ef1dc07f03e5e93a6b23899f920f6b41c09be45fbb85f2"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==0.37.8"
         },
         "toml": {
@@ -1489,7 +1489,7 @@
                 "sha256:5f5648ffc025708858097173cf695164c20f2b5e3f57177de14e352cae8cc335",
                 "sha256:f142c48f4080757ca2a9441ec40213bda3b1535eebebfc4f3519e5aa46498076"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==3.5.9"
         },
         "types-requests": {
@@ -1497,7 +1497,7 @@
                 "sha256:4ec8b71da73e5344adb9bee725a74ec8598e7286f9bcb17500d627f259fe4fb9",
                 "sha256:543ba8b3b23e38ac028da1d163aecbbc27d3cc8f654ae64339da539a191a2b1c"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==2.25.9"
         },
         "typing-extensions": {
@@ -1528,7 +1528,7 @@
                 "sha256:4c3d7157d9ae058364e130c831702e4a65a1f729d4b4def912418ed09772c851",
                 "sha256:cd5cad0930673d0e52609712c63fe4721a8f4c4342dc338bd7ea5fa0666b8515"
             ],
-            "index": "gitlab-libraries",
+            "index": "pypi",
             "version": "==0.8.0"
         }
     }

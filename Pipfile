@@ -1,12 +1,12 @@
 [[source]]
-name = "gitlab-libraries"
-url = "https://bink-libs:y6nzdKbo9J6MkEmwvB-i@git.bink.com/api/v4/groups/86/-/packages/pypi/simple"
-verify_ssl = true
-
-[[source]]
 url = "https://pypi.org/simple"
 verify_ssl = true
 name = "pypi"
+
+[[source]]
+name = "gitlab-libraries"
+url = "https://bink-libs:y6nzdKbo9J6MkEmwvB-i@git.bink.com/api/v4/groups/86/-/packages/pypi/simple"
+verify_ssl = true
 
 [packages]
 fastapi = "*"
@@ -28,17 +28,17 @@ redis = "*"
 tenacity = "*"
 azure-identity = "*"
 azure-keyvault = "*"
-azure-storage-blob = "*"
+azure-storage-blob = "!=12.9.0"  # version 12.9.0 has bad type annotations
 apscheduler = "*"
 sqlalchemy-utils = "*"
 testfixtures = "*"
-retry-tasks-lib = "*"
+retry-tasks-lib = {version="*", index="gitlab-libraries"}
 
 [dev-packages]
 sqlalchemy-stubs = "*"
 flake8 = "*"
 isort = "*"
-black = "*"
+black = "==21.9b0"
 mypy = "*"
 ipython = "*"
 pytest = "*"
@@ -53,6 +53,3 @@ types-requests = "*"
 
 [requires]
 python_version = "3.9"
-
-[pipenv]
-allow_prereleases = true
