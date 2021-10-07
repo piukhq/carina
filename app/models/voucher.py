@@ -6,7 +6,7 @@ from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.orm import relationship
 
 from app.db.base_class import Base, TimestampMixin
-from app.enums import QueuedRetryStatuses, VoucherFetchType, VoucherUpdateStatuses
+from app.enums import QueuedRetryStatuses, VoucherFetchType, VoucherTypeStatuses, VoucherUpdateStatuses
 
 
 class Voucher(Base, TimestampMixin):  # pragma: no cover
@@ -37,6 +37,7 @@ class VoucherConfig(Base, TimestampMixin):  # pragma: no cover
     validity_days = Column(Integer, nullable=True)
     retailer_slug = Column(String(32), index=True, nullable=False)
     fetch_type = Column(Enum(VoucherFetchType), nullable=False, default=VoucherFetchType.PRE_LOADED)
+    status = Column(Enum(VoucherTypeStatuses), nullable=False, default=VoucherTypeStatuses.ACTIVE)
 
     vouchers = relationship("Voucher", back_populates="voucher_config")
     allocations = relationship("VoucherAllocation", back_populates="voucher_config")

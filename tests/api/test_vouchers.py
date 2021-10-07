@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from pytest_mock import MockerFixture
 
 from app.core.config import settings
+from app.enums import VoucherTypeStatuses
 from app.models import VoucherAllocation
 from asgi import app
 from tests.api.conftest import SetupType
@@ -86,3 +87,59 @@ def test_post_voucher_allocation_no_more_vouchers(setup: SetupType, mocker: Mock
     assert voucher_allocation is not None
     assert voucher_allocation.voucher_id is None
     assert voucher_allocation.account_url == payload["account_url"]
+
+
+def test_voucher_type_status_ok(setup: SetupType) -> None:
+    db_session, voucher_config, _ = setup
+
+    for transition_status in ("cancelled", "ended"):
+        resp = client.patch(
+            f"/bpl/vouchers/{voucher_config.retailer_slug}/vouchers/{voucher_config.voucher_type_slug}/status",
+            json={"status": transition_status},
+            headers=auth_headers,
+        )
+        assert resp.status_code == status.HTTP_202_ACCEPTED
+        assert resp.json() == {}
+        db_session.refresh(voucher_config)
+        assert voucher_config.status == VoucherTypeStatuses(transition_status)
+
+
+def test_voucher_type_status_bad_status(setup: SetupType) -> None:
+    db_session, voucher_config, _ = setup
+
+    resp = client.patch(
+        f"/bpl/vouchers/{voucher_config.retailer_slug}/vouchers/{voucher_config.voucher_type_slug}/status",
+        json={"status": "active"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    db_session.refresh(voucher_config)
+    assert voucher_config.status == VoucherTypeStatuses.ACTIVE
+
+
+def test_voucher_type_status_invalid_retailer(setup: SetupType) -> None:
+    db_session, voucher_config, _ = setup
+
+    resp = client.patch(
+        f"/bpl/vouchers/unknown-retailer/vouchers/{voucher_config.voucher_type_slug}/status",
+        json={"status": "cancelled"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == HttpErrors.INVALID_RETAILER.value.status_code
+    assert resp.json() == HttpErrors.INVALID_RETAILER.value.detail
+    db_session.refresh(voucher_config)
+    assert voucher_config.status == VoucherTypeStatuses.ACTIVE
+
+
+def test_voucher_type_status_voucher_type_not_found(setup: SetupType) -> None:
+    db_session, voucher_config, _ = setup
+
+    resp = client.patch(
+        f"/bpl/vouchers/{voucher_config.retailer_slug}/vouchers/invalid-voucher-type/status",
+        json={"status": "cancelled"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == HttpErrors.UNKNOWN_VOUCHER_TYPE.value.status_code
+    assert resp.json() == HttpErrors.UNKNOWN_VOUCHER_TYPE.value.detail
+    db_session.refresh(voucher_config)
+    assert voucher_config.status == VoucherTypeStatuses.ACTIVE

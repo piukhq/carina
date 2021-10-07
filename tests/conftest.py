@@ -9,6 +9,7 @@ from testfixtures import LogCapture
 
 from app.db.base import Base
 from app.db.session import SyncSessionMaker, sync_engine
+from app.enums import VoucherTypeStatuses
 from app.models import Voucher, VoucherConfig
 
 if TYPE_CHECKING:
@@ -66,6 +67,7 @@ def voucher_config(db_session: "Session") -> VoucherConfig:
         voucher_type_slug="test-voucher",
         validity_days=15,
         retailer_slug="test-retailer",
+        status=VoucherTypeStatuses.ACTIVE,
     )
     db_session.add(config)
     db_session.commit()
