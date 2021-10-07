@@ -8,17 +8,25 @@ from app.enums import HttpErrors
 from app.models import Voucher, VoucherAllocation, VoucherConfig
 
 
-async def get_voucher_config(db_session: AsyncSession, retailer_slug: str, voucher_type_slug: str) -> VoucherConfig:
-    async def _query() -> List[VoucherConfig]:
-        return (await db_session.execute(select(VoucherConfig).filter_by(retailer_slug=retailer_slug))).scalars().all()
+async def get_voucher_config(
+    db_session: AsyncSession,
+    retailer_slug: str,
+    voucher_type_slug: str,
+    for_update: bool = False,
+) -> VoucherConfig:
+    async def _query(by_voucher_type_slug: bool = False) -> List[VoucherConfig]:
+        stmt = select(VoucherConfig).where(VoucherConfig.retailer_slug == retailer_slug)
+        if by_voucher_type_slug:
+            stmt = stmt.where(VoucherConfig.voucher_type_slug == voucher_type_slug)
+            if for_update:
+                stmt = stmt.with_for_update()
+        return await db_session.execute(stmt)
 
-    retailer_voucher_configs = await async_run_query(_query, db_session)
+    retailer_voucher_configs = (await async_run_query(_query, db_session)).scalars().all()
     if not retailer_voucher_configs:
         raise HttpErrors.INVALID_RETAILER.value
 
-    voucher_config = next(
-        (voucher for voucher in retailer_voucher_configs if voucher.voucher_type_slug == voucher_type_slug), None
-    )
+    voucher_config = (await async_run_query(_query, db_session, by_voucher_type_slug=True)).scalar_one_or_none()
     if voucher_config is None:
         raise HttpErrors.UNKNOWN_VOUCHER_TYPE.value
 

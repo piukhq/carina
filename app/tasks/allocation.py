@@ -133,11 +133,14 @@ def allocate_voucher(voucher_allocation_id: int) -> None:
             else:  # requeue the allocation attempt
                 if allocation.status != QueuedRetryStatuses.WAITING:
                     # Only do a Sentry alert for the first allocation failure (when status is changing to WAITING)
-                    sentry_sdk.capture_message(
-                        f"No Voucher Codes Available for retailer: {allocation.voucher_config.retailer_slug}, "
-                        f"voucher type slug: {allocation.voucher_config.voucher_type_slug} "
-                        f"on {datetime.utcnow().strftime('%Y-%m-%d')}"
-                    )
+                    with sentry_sdk.push_scope() as scope:
+                        scope.fingerprint = ["{{ default }}", "{{ message }}"]
+                        event_id = sentry_sdk.capture_message(
+                            f"No Voucher Codes Available for retailer: {allocation.voucher_config.retailer_slug}, "
+                            f"voucher type slug: {allocation.voucher_config.voucher_type_slug} "
+                            f"on {datetime.utcnow().strftime('%Y-%m-%d')}"
+                        )
+                        logger.info(f"Sentry event ID: {event_id}")
 
                     def _set_waiting() -> None:
                         allocation.status = QueuedRetryStatuses.WAITING

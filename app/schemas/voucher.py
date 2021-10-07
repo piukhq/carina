@@ -1,12 +1,18 @@
 import datetime
 
+from typing import Literal
+
 from pydantic import AnyHttpUrl, BaseModel, validator
 
-from app.enums import VoucherUpdateStatuses
+from app.enums import VoucherTypeStatuses, VoucherUpdateStatuses
 
 
 class VoucherAllocationSchema(BaseModel):  # pragma: no cover
     account_url: AnyHttpUrl
+
+
+class VoucherStatusSchema(BaseModel):
+    status: Literal[VoucherTypeStatuses.CANCELLED, VoucherTypeStatuses.ENDED]
 
 
 class VoucherUpdateSchema(BaseModel):  # pragma: no cover

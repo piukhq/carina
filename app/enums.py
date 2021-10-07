@@ -40,6 +40,12 @@ class QueuedRetryStatuses(Enum):
     WAITING = "waiting"
 
 
+class VoucherTypeStatuses(str, Enum):
+    ACTIVE = "active"
+    CANCELLED = "cancelled"
+    ENDED = "ended"
+
+
 class VoucherUpdateStatuses(Enum):
     ISSUED = "issued"
     CANCELLED = "cancelled"
