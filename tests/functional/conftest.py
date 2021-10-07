@@ -115,7 +115,6 @@ def voucher_update(db_session: "Session", voucher: Voucher) -> VoucherUpdate:
 def voucher_status_adjustment_task_params(voucher_update: VoucherUpdate) -> dict:
     return {
         "voucher_id": str(voucher_update.voucher_id),
-        "voucher_code": voucher_update.voucher.voucher_code,
         "retailer_slug": voucher_update.voucher.retailer_slug,
         "date": str(datetime.fromisoformat(voucher_update.date.isoformat()).timestamp()),
         "status": voucher_update.status.name,  # type: ignore [attr-defined]
@@ -147,7 +146,7 @@ def voucher_status_adjustment_retry_task(
 
 @pytest.fixture(scope="function")
 def adjustment_expected_payload(voucher_status_adjustment_retry_task: RetryTask) -> dict:
-    params = voucher_status_adjustment_retry_task.get_params
+    params = voucher_status_adjustment_retry_task.params
     return {
         "status": params["status"],
         "date": params["date"],

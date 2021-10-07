@@ -6,7 +6,7 @@ import rq
 import sentry_sdk
 
 from retry_tasks_lib.db.models import RetryTask
-from retry_tasks_lib.enums import QueuedRetryStatuses
+from retry_tasks_lib.enums import RetryTaskStatuses
 from retry_tasks_lib.utils.synchronous import enqueue_task, get_retry_task
 from sqlalchemy.future import select
 
@@ -54,14 +54,14 @@ def _process_and_issue_voucher(db_session: "Session", retry_task: RetryTask, tas
     retry_task.update_task(db_session, increase_attempts=True)
     response_audit = _process_issuance(task_params)
     retry_task.update_task(
-        db_session, response_audit=response_audit, status=QueuedRetryStatuses.SUCCESS, clear_next_attempt_time=True
+        db_session, response_audit=response_audit, status=RetryTaskStatuses.SUCCESS, clear_next_attempt_time=True
     )
 
 
 def issue_voucher(retry_task_id: int) -> None:
     with SyncSessionMaker() as db_session:
         retry_task = get_retry_task(db_session, retry_task_id)
-        task_params = retry_task.get_params
+        task_params = retry_task.params
 
         # Process the allocation if it has a voucher, else try to get a voucher - requeue that if necessary
         if "voucher_id" in task_params:
@@ -107,7 +107,7 @@ def issue_voucher(retry_task_id: int) -> None:
                 sync_run_query(_add_voucher_to_task_values, db_session)
                 _process_and_issue_voucher(db_session, retry_task, task_params)
             else:  # requeue the allocation attempt
-                if retry_task.retry_status != QueuedRetryStatuses.WAITING:
+                if retry_task.retry_status != RetryTaskStatuses.WAITING:
                     # Only do a Sentry alert for the first allocation failure (when status is changing to WAITING)
                     with sentry_sdk.push_scope() as scope:
                         scope.fingerprint = ["{{ default }}", "{{ message }}"]
@@ -119,7 +119,7 @@ def issue_voucher(retry_task_id: int) -> None:
                         logger.info(f"Sentry event ID: {event_id}")
 
                     def _set_waiting() -> None:
-                        retry_task.retry_status = QueuedRetryStatuses.WAITING.name
+                        retry_task.retry_status = RetryTaskStatuses.WAITING.name
                         db_session.commit()
 
                     sync_run_query(_set_waiting, db_session)

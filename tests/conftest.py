@@ -147,7 +147,6 @@ def voucher_status_adjustment_task_type(db_session: "Session") -> TaskType:
             TaskTypeKey(task_type_id=task.task_type_id, name=key_name, type=key_type)
             for key_name, key_type in (
                 ("voucher_id", "STRING"),
-                ("voucher_code", "STRING"),
                 ("retailer_slug", "STRING"),
                 ("date", "FLOAT"),
                 ("status", "STRING"),

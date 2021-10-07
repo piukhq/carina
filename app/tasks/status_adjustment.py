@@ -3,7 +3,7 @@ from datetime import datetime
 import click
 import rq
 
-from retry_tasks_lib.enums import QueuedRetryStatuses
+from retry_tasks_lib.enums import RetryTaskStatuses
 from retry_tasks_lib.utils.synchronous import get_retry_task
 
 from app.core.config import redis, settings
@@ -13,7 +13,7 @@ from . import logger, send_request_with_metrics
 
 
 def _process_status_adjustment(task_params: dict) -> dict:
-    logger.info(f"Processing status adjustment for voucher code: {task_params['voucher_code']}")
+    logger.info(f"Processing status adjustment for voucher: {task_params['voucher_id']}")
     timestamp = datetime.utcnow()
     response_audit: dict = {"timestamp": timestamp.isoformat()}
 
@@ -33,7 +33,7 @@ def _process_status_adjustment(task_params: dict) -> dict:
     )
     resp.raise_for_status()
     response_audit["response"] = {"status": resp.status_code, "body": resp.text}
-    logger.info(f"Status adjustment succeeded for voucher code: {task_params['voucher_code']}")
+    logger.info(f"Status adjustment succeeded for voucher: {task_params['voucher_id']}")
 
     return response_audit
 
@@ -44,10 +44,10 @@ def status_adjustment(retry_task_id: int) -> None:
         retry_task = get_retry_task(db_session, retry_task_id)
         retry_task.update_task(db_session, increase_attempts=True)
 
-        response_audit = _process_status_adjustment(retry_task.get_params)
+        response_audit = _process_status_adjustment(retry_task.params)
 
         retry_task.update_task(
-            db_session, response_audit=response_audit, status=QueuedRetryStatuses.SUCCESS, clear_next_attempt_time=True
+            db_session, response_audit=response_audit, status=RetryTaskStatuses.SUCCESS, clear_next_attempt_time=True
         )
 
 
