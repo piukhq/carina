@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 import rq
 
-from retry_task_lib.utils.error_handler import handle_request_exception
+from retry_tasks_lib.utils.error_handler import handle_request_exception
 
 from app.core.config import redis, settings
 from app.db.session import SyncSessionMaker

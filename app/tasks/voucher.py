@@ -1,4 +1,4 @@
-from retry_task_lib.utils.asynchronous import enqueue_retry_task
+from retry_tasks_lib.utils.asynchronous import enqueue_retry_task
 
 from app.core.config import redis, settings
 from app.db.session import AsyncSessionMaker

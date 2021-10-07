@@ -16,8 +16,8 @@ import sentry_sdk
 from azure.core.exceptions import HttpResponseError, ResourceExistsError
 from azure.storage.blob import BlobClient, BlobLeaseClient, BlobServiceClient
 from pydantic import ValidationError
-from retry_task_lib.db.models import RetryTask, TaskType
-from retry_task_lib.enums import QueuedRetryStatuses
+from retry_tasks_lib.db.models import RetryTask, TaskType
+from retry_tasks_lib.enums import QueuedRetryStatuses
 from sqlalchemy import update
 from sqlalchemy.future import select
 

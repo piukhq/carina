@@ -32,7 +32,7 @@ azure-storage-blob = "*"
 apscheduler = "*"
 sqlalchemy-utils = "*"
 testfixtures = "*"
-retry-task-lib = "*"
+retry-tasks-lib = "*"
 
 [dev-packages]
 sqlalchemy-stubs = "*"

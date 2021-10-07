@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from retry_task_lib.db.models import RetryTask, TaskType
+from retry_tasks_lib.db.models import RetryTask, TaskType
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload

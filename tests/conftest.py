@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Callable, Generator
 
 import pytest
 
-from retry_task_lib.db.models import TaskType, TaskTypeKey
+from retry_tasks_lib.db.models import TaskType, TaskTypeKey
 from sqlalchemy_utils import create_database, database_exists, drop_database
 from testfixtures import LogCapture
 

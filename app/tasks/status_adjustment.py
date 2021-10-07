@@ -3,8 +3,8 @@ from datetime import datetime
 import click
 import rq
 
-from retry_task_lib.enums import QueuedRetryStatuses
-from retry_task_lib.utils.synchronous import get_retry_task
+from retry_tasks_lib.enums import QueuedRetryStatuses
+from retry_tasks_lib.utils.synchronous import get_retry_task
 
 from app.core.config import redis, settings
 from app.db.session import SyncSessionMaker

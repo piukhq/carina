@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, List, Tuple
 from fastapi import status
 from fastapi.testclient import TestClient
 from pytest_mock import MockerFixture
-from retry_task_lib.db.models import RetryTask, TaskType, TaskTypeKeyValue
+from retry_tasks_lib.db.models import RetryTask, TaskType, TaskTypeKeyValue
 from sqlalchemy.future import select
 
 from app.core.config import settings

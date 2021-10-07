@@ -8,7 +8,7 @@ import pytest
 
 from azure.storage.blob import BlobClient, BlobServiceClient, ContainerClient
 from pytest_mock import MockerFixture
-from retry_task_lib.db.models import RetryTask, TaskType, TaskTypeKeyValue
+from retry_tasks_lib.db.models import RetryTask, TaskType, TaskTypeKeyValue
 from sqlalchemy.future import select
 from testfixtures import LogCapture
 

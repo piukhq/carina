@@ -5,9 +5,9 @@ import click
 import rq
 import sentry_sdk
 
-from retry_task_lib.db.models import RetryTask
-from retry_task_lib.enums import QueuedRetryStatuses
-from retry_task_lib.utils.synchronous import enqueue_task, get_retry_task
+from retry_tasks_lib.db.models import RetryTask
+from retry_tasks_lib.enums import QueuedRetryStatuses
+from retry_tasks_lib.utils.synchronous import enqueue_task, get_retry_task
 from sqlalchemy.future import select
 
 from app.core.config import redis, settings

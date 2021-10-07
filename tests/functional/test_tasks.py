@@ -8,8 +8,8 @@ import pytest
 import requests
 
 from pytest_mock import MockerFixture
-from retry_task_lib.db.models import RetryTask
-from retry_task_lib.enums import QueuedRetryStatuses
+from retry_tasks_lib.db.models import RetryTask
+from retry_tasks_lib.enums import QueuedRetryStatuses
 from sqlalchemy.orm import Session
 from testfixtures import LogCapture
 

@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from retry_task_lib.db.models import RetryTask, TaskType, TaskTypeKeyValue
+from retry_tasks_lib.db.models import RetryTask, TaskType, TaskTypeKeyValue
 
 from app.core.config import settings
 from app.enums import VoucherUpdateStatuses
