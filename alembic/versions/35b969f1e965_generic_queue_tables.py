@@ -37,7 +37,9 @@ def populate_task_type_and_keys() -> None:
 
 
 def populate_voucher_allocation_task_type_and_keys(task_type: sa.Table, task_type_key: sa.Table) -> None:
-    inserted_obj = conn.execute(sa.insert(task_type).values(name="voucher_issuance"))
+    inserted_obj = conn.execute(
+        sa.insert(task_type).values(name="voucher_issuance", path="app.tasks.allocation.issue_voucher")
+    )
     task_type_id = inserted_obj.inserted_primary_key[0]
     key_data_list = [
         {"name": "account_url", "type": "STRING", "task_type_id": task_type_id},
@@ -52,7 +54,11 @@ def populate_voucher_allocation_task_type_and_keys(task_type: sa.Table, task_typ
 
 
 def populate_voucher_status_adjustment_task_type_and_keys(task_type: sa.Table, task_type_key: sa.Table) -> None:
-    inserted_obj = conn.execute(sa.insert(task_type).values(name="voucher_status_adjustment"))
+    inserted_obj = conn.execute(
+        sa.insert(task_type).values(
+            name="voucher_status_adjustment", path="app.tasks.status_adjustment.status_adjustment"
+        )
+    )
     task_type_id = inserted_obj.inserted_primary_key[0]
     key_data_list = [
         {"name": "voucher_id", "type": "STRING", "task_type_id": task_type_id},
@@ -73,7 +79,8 @@ def upgrade() -> None:
             "updated_at", sa.DateTime(), server_default=sa.text("TIMEZONE('utc', CURRENT_TIMESTAMP)"), nullable=False
         ),
         sa.Column("task_type_id", sa.Integer(), nullable=False),
-        sa.Column("name", sa.String(), nullable=False),
+        sa.Column("name", sa.String(), nullable=False, index=True),
+        sa.Column("path", sa.String(), nullable=False),
         sa.PrimaryKeyConstraint("task_type_id"),
     )
     op.create_table(
