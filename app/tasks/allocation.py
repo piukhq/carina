@@ -6,14 +6,13 @@ import rq
 import sentry_sdk
 
 from sqlalchemy.future import select
-from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.config import redis, settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
 from app.enums import QueuedRetryStatuses
-from app.models import Voucher, VoucherAllocation
+from app.models import Voucher, VoucherAllocation, VoucherConfig
 
 from . import logger, send_request_with_metrics
 
@@ -21,7 +20,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy.orm import Session
 
 
-def _process_allocation(allocation: VoucherAllocation) -> dict:
+def _process_allocation(allocation: VoucherAllocation, allocated_voucher: Voucher) -> dict:
     logger.info(f"Processing allocation for voucher: {allocation.voucher_id}")
     timestamp = datetime.utcnow()
     response_audit: dict = {"timestamp": timestamp.isoformat()}
@@ -30,7 +29,7 @@ def _process_allocation(allocation: VoucherAllocation) -> dict:
         "POST",
         allocation.account_url,
         json={
-            "voucher_code": allocation.voucher.voucher_code,
+            "voucher_code": allocated_voucher.voucher_code,
             "issued_date": allocation.issued_date,
             "expiry_date": allocation.expiry_date,
             "voucher_type_slug": allocation.voucher_config.voucher_type_slug,
@@ -47,12 +46,18 @@ def _process_allocation(allocation: VoucherAllocation) -> dict:
 
 
 def _process_and_allocate_voucher(db_session: "Session", allocation: VoucherAllocation) -> None:
+    def _get_voucher() -> Voucher:
+        voucher = db_session.execute(select(Voucher).where(Voucher.id == allocation.voucher_id)).scalars().one()
+        return voucher
+
+    allocated_voucher = sync_run_query(_get_voucher, db_session)
+
     def _increase_attempts() -> None:
         allocation.attempts += 1
         db_session.commit()
 
     sync_run_query(_increase_attempts, db_session)
-    response_audit = _process_allocation(allocation)
+    response_audit = _process_allocation(allocation, allocated_voucher)
 
     def _update_allocation() -> None:
         allocation.response_data.append(response_audit)
@@ -85,18 +90,16 @@ def allocate_voucher(voucher_allocation_id: int) -> None:
             return (
                 db_session.execute(
                     select(VoucherAllocation)
-                    .options(
-                        joinedload(VoucherAllocation.voucher),
-                        joinedload(VoucherAllocation.voucher_config),
-                    )
-                    .filter_by(id=voucher_allocation_id)
+                    .with_for_update()
+                    .join(VoucherConfig)
+                    .where(VoucherAllocation.id == voucher_allocation_id)
                 )
                 .scalars()
                 .one()
             )
 
         allocation = sync_run_query(_get_allocation, db_session)
-        if allocation.status not in ([QueuedRetryStatuses.IN_PROGRESS, QueuedRetryStatuses.WAITING]):
+        if allocation.status not in [QueuedRetryStatuses.IN_PROGRESS, QueuedRetryStatuses.WAITING]:
             raise ValueError(f"Incorrect state: {allocation.status}")
 
         def _get_allocable_voucher() -> Optional[Voucher]:
@@ -126,6 +129,7 @@ def allocate_voucher(voucher_allocation_id: int) -> None:
 
                 def _set_allocable_voucher() -> None:
                     allocation.voucher = allocable_voucher
+                    allocable_voucher.allocated = True
                     db_session.commit()
 
                 sync_run_query(_set_allocable_voucher, db_session)
