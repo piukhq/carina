@@ -113,7 +113,7 @@ def capture() -> Generator:
 
 @pytest.fixture(scope="function")
 def voucher_issuance_task_type(db_session: "Session") -> TaskType:
-    task = TaskType(name="voucher_issuance")
+    task = TaskType(name="voucher_issuance", path="not needed")
     db_session.add(task)
     db_session.flush()
 
@@ -138,7 +138,7 @@ def voucher_issuance_task_type(db_session: "Session") -> TaskType:
 
 @pytest.fixture(scope="function")
 def voucher_status_adjustment_task_type(db_session: "Session") -> TaskType:
-    task = TaskType(name="voucher_status_adjustment")
+    task = TaskType(name="voucher_status_adjustment", path="not needed")
     db_session.add(task)
     db_session.flush()
 
