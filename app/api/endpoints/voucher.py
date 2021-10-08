@@ -12,7 +12,7 @@ from app.enums import VoucherTypeStatuses
 from app.fetch_voucher import get_allocable_voucher
 from app.schemas import VoucherAllocationSchema
 from app.schemas.voucher import VoucherStatusSchema
-from app.tasks.voucher import enqueue_voucher_allocation
+from app.tasks.voucher import enqueue_voucher_allocation_retry_task
 
 router = APIRouter()
 
@@ -30,11 +30,11 @@ async def allocation(
 ) -> Any:
     voucher_config = await crud.get_voucher_config(db_session, retailer_slug, voucher_type_slug)
     voucher, issued, expiry = await get_allocable_voucher(db_session, voucher_config)
-    voucher_allocation = await crud.create_allocation(
+    retry_task = await crud.create_voucher_allocation_retry_task(
         db_session, voucher, issued, expiry, voucher_config, payload.account_url
     )
 
-    asyncio.create_task(enqueue_voucher_allocation(voucher_allocation.id))
+    asyncio.create_task(enqueue_voucher_allocation_retry_task(retry_task.retry_task_id))
     return {}
 
 

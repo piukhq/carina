@@ -19,11 +19,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger("db-base-class")
 
 
-class ModelBase:
-    id = Column(Integer, primary_key=True, index=True)
+Base = declarative_base()
 
-
-Base = declarative_base(cls=ModelBase)
 
 utc_timestamp_sql = text("TIMEZONE('utc', CURRENT_TIMESTAMP)")
 

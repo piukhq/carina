@@ -33,6 +33,7 @@ class Voucher(Base, TimestampMixin):  # pragma: no cover
 class VoucherConfig(Base, TimestampMixin):  # pragma: no cover
     __tablename__ = "voucher_config"
 
+    id = Column(Integer, primary_key=True)
     voucher_type_slug = Column(String(32), index=True, nullable=False)
     validity_days = Column(Integer, nullable=True)
     retailer_slug = Column(String(32), index=True, nullable=False)
@@ -54,6 +55,7 @@ class VoucherConfig(Base, TimestampMixin):  # pragma: no cover
 class VoucherAllocation(Base, TimestampMixin):
     __tablename__ = "voucher_allocation"
 
+    id = Column(Integer, primary_key=True)
     status = Column(Enum(QueuedRetryStatuses), nullable=False, default=QueuedRetryStatuses.PENDING)
     attempts = Column(Integer, default=0, nullable=False)
     account_url = Column(String, nullable=False)
@@ -76,6 +78,7 @@ class VoucherAllocation(Base, TimestampMixin):
 class VoucherUpdate(Base, TimestampMixin):  # pragma: no cover
     __tablename__ = "voucher_update"
 
+    id = Column(Integer, primary_key=True)
     voucher_id = Column(UUID(as_uuid=True), ForeignKey("voucher.id", ondelete="CASCADE"), nullable=False)
     date = Column(Date, nullable=False)
     status = Column(Enum(VoucherUpdateStatuses), nullable=False)
