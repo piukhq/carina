@@ -1,6 +1,7 @@
 import json
 
 from datetime import datetime
+from typing import Callable
 from unittest import mock
 
 import httpretty
@@ -51,8 +52,9 @@ def test__process_allocation_ok(
 
     mock_datetime.utcnow.return_value = fake_now
     httpretty.register_uri("POST", voucher_allocation.account_url, body="OK", status=200)
+    allocated_voucher = voucher_allocation.voucher
 
-    response_audit = _process_allocation(voucher_allocation)
+    response_audit = _process_allocation(voucher_allocation, allocated_voucher)
 
     last_request = httpretty.last_request()
     assert last_request.method == "POST"
@@ -79,7 +81,8 @@ def test__process_allocation_http_errors(
         httpretty.register_uri("POST", voucher_allocation.account_url, body=body, status=status)
 
         with pytest.raises(requests.RequestException) as excinfo:
-            _process_allocation(voucher_allocation)
+            allocated_voucher = voucher_allocation.voucher
+            _process_allocation(voucher_allocation, allocated_voucher)
 
         assert isinstance(excinfo.value, requests.RequestException)
         assert excinfo.value.response.status_code == status
@@ -98,7 +101,8 @@ def test__process_allocation_connection_error(
     mock_send_request_with_metrics.side_effect = requests.Timeout("Request timed out")
 
     with pytest.raises(requests.RequestException) as excinfo:
-        _process_allocation(voucher_allocation)
+        allocated_voucher = voucher_allocation.voucher
+        _process_allocation(voucher_allocation, allocated_voucher)
 
     assert isinstance(excinfo.value, requests.Timeout)
     assert excinfo.value.response is None
@@ -166,6 +170,7 @@ def test_voucher_allocation_no_voucher_but_one_available(
 def test_voucher_allocation_no_voucher_and_allocation_is_requeued(
     db_session: "Session",
     voucher_allocation_no_voucher: VoucherAllocation,
+    create_voucher: Callable,
     capture: LogCapture,
     mocker: MockerFixture,
 ) -> None:
@@ -182,7 +187,7 @@ def test_voucher_allocation_no_voucher_and_allocation_is_requeued(
     allocate_voucher(voucher_allocation_no_voucher.id)
 
     db_session.refresh(voucher_allocation_no_voucher)
-    mock_queue.return_value.enqueue_at.assert_called()
+    mock_queue.return_value.enqueue_at.assert_called_once()
     sentry_spy.assert_called_once()
     assert voucher_allocation_no_voucher.attempts == 1
     assert voucher_allocation_no_voucher.next_attempt_time is not None
@@ -190,6 +195,21 @@ def test_voucher_allocation_no_voucher_and_allocation_is_requeued(
     expected_msgs = ["Requeued task for execution at", "Next attempt time at"]
     for expected_msg in expected_msgs:
         assert any(expected_msg in record.msg for record in capture.records)
+
+    # Add new voucher and check that it's allocated and marked as allocated
+    voucher = create_voucher()  # The defaults will be correct for this test
+
+    # call allocate_voucher again
+    allocate_voucher(voucher_allocation_no_voucher.id)
+
+    db_session.refresh(voucher_allocation_no_voucher)
+    db_session.refresh(voucher)
+    mock_queue.return_value.enqueue_at.assert_called_once()  # should not have been called again
+    assert voucher_allocation_no_voucher.attempts == 2
+    assert voucher_allocation_no_voucher.next_attempt_time is None
+    assert voucher_allocation_no_voucher.status == QueuedRetryStatuses.SUCCESS
+    assert voucher_allocation_no_voucher.voucher_id == voucher.id
+    assert voucher.allocated
 
 
 @httpretty.activate
