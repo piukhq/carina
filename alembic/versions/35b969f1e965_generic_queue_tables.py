@@ -93,9 +93,9 @@ def upgrade() -> None:
         ),
         sa.Column("retry_task_id", sa.Integer(), nullable=False),
         sa.Column("attempts", sa.Integer(), nullable=False),
-        sa.Column("response_data", postgresql.JSONB(astext_type=sa.Text()), nullable=False),  # type: ignore [call-arg]
+        sa.Column("audit_data", postgresql.JSONB(astext_type=sa.Text()), nullable=False),  # type: ignore [call-arg]
         sa.Column("next_attempt_time", sa.DateTime(), nullable=True),
-        sa.Column("retry_status", retrytaskstatuses, nullable=False),
+        sa.Column("status", retrytaskstatuses, nullable=False),
         sa.Column("task_type_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(["task_type_id"], ["task_type.task_type_id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("retry_task_id"),
