@@ -92,7 +92,8 @@ def issue_voucher(retry_task_id: int) -> None:
                 task_params[VOUCHER_ID] = str(allocable_voucher.id)
                 task_params[VOUCHER_CODE] = allocable_voucher.voucher_code
 
-                def _add_voucher_to_task_values() -> None:
+                def _add_voucher_to_task_values_and_set_allocated() -> None:
+                    allocable_voucher.allocated = True
                     db_session.add_all(
                         retry_task.get_task_type_key_values(
                             [
@@ -104,10 +105,10 @@ def issue_voucher(retry_task_id: int) -> None:
 
                     db_session.commit()
 
-                sync_run_query(_add_voucher_to_task_values, db_session)
+                sync_run_query(_add_voucher_to_task_values_and_set_allocated, db_session)
                 _process_and_issue_voucher(db_session, retry_task, task_params)
             else:  # requeue the allocation attempt
-                if retry_task.retry_status != RetryTaskStatuses.WAITING:
+                if retry_task.status != RetryTaskStatuses.WAITING:
                     # Only do a Sentry alert for the first allocation failure (when status is changing to WAITING)
                     with sentry_sdk.push_scope() as scope:
                         scope.fingerprint = ["{{ default }}", "{{ message }}"]
@@ -119,7 +120,7 @@ def issue_voucher(retry_task_id: int) -> None:
                         logger.info(f"Sentry event ID: {event_id}")
 
                     def _set_waiting() -> None:
-                        retry_task.retry_status = RetryTaskStatuses.WAITING.name
+                        retry_task.status = RetryTaskStatuses.WAITING.name
                         db_session.commit()
 
                     sync_run_query(_set_waiting, db_session)

@@ -427,7 +427,7 @@ class VoucherUpdatesAgent(BlobFileAgent):
             keys = task_type.key_ids_by_name
 
             retry_tasks = [
-                RetryTask(task_type_id=task_type.task_type_id, retry_status=RetryTaskStatuses.IN_PROGRESS)
+                RetryTask(task_type_id=task_type.task_type_id, status=RetryTaskStatuses.IN_PROGRESS)
                 for _ in range(len(voucher_updates))
             ]
             db_session.add_all(retry_tasks)

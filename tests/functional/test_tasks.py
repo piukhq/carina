@@ -81,7 +81,7 @@ def test__process_issuance_connection_error(
 
 @httpretty.activate
 def test_voucher_issuance(db_session: "Session", issuance_retry_task: RetryTask) -> None:
-    issuance_retry_task.retry_status = RetryTaskStatuses.IN_PROGRESS
+    issuance_retry_task.status = RetryTaskStatuses.IN_PROGRESS
     db_session.commit()
 
     httpretty.register_uri("POST", issuance_retry_task.params["account_url"], body="OK", status=200)
@@ -92,11 +92,11 @@ def test_voucher_issuance(db_session: "Session", issuance_retry_task: RetryTask)
 
     assert issuance_retry_task.attempts == 1
     assert issuance_retry_task.next_attempt_time is None
-    assert issuance_retry_task.retry_status == RetryTaskStatuses.SUCCESS
+    assert issuance_retry_task.status == RetryTaskStatuses.SUCCESS
 
 
 def test_voucher_issuance_wrong_status(db_session: "Session", issuance_retry_task: RetryTask) -> None:
-    issuance_retry_task.retry_status = RetryTaskStatuses.FAILED
+    issuance_retry_task.status = RetryTaskStatuses.FAILED
     db_session.commit()
 
     with pytest.raises(ValueError):
@@ -106,7 +106,7 @@ def test_voucher_issuance_wrong_status(db_session: "Session", issuance_retry_tas
 
     assert issuance_retry_task.attempts == 0
     assert issuance_retry_task.next_attempt_time is None
-    assert issuance_retry_task.retry_status == RetryTaskStatuses.FAILED
+    assert issuance_retry_task.status == RetryTaskStatuses.FAILED
 
 
 @httpretty.activate
@@ -115,7 +115,7 @@ def test_voucher_issuance_no_voucher_but_one_available(
 ) -> None:
     """test that an allocable voucher (the pytest 'voucher' fixture) is allocated, resulting in success"""
     mock_queue = mocker.patch("app.tasks.allocation.enqueue_task")
-    issuance_retry_task_no_voucher.retry_status = RetryTaskStatuses.IN_PROGRESS
+    issuance_retry_task_no_voucher.status = RetryTaskStatuses.IN_PROGRESS
     db_session.commit()
 
     httpretty.register_uri("POST", issuance_retry_task_no_voucher.params["account_url"], body="OK", status=200)
@@ -127,7 +127,7 @@ def test_voucher_issuance_no_voucher_but_one_available(
     assert not mock_queue.return_value.enqueue_at.called
     assert issuance_retry_task_no_voucher.attempts == 1
     assert issuance_retry_task_no_voucher.next_attempt_time is None
-    assert issuance_retry_task_no_voucher.retry_status == RetryTaskStatuses.SUCCESS
+    assert issuance_retry_task_no_voucher.status == RetryTaskStatuses.SUCCESS
 
 
 @httpretty.activate
@@ -136,6 +136,7 @@ def test_voucher_issuance_no_voucher_and_allocation_is_requeued(
     issuance_retry_task_no_voucher: RetryTask,
     capture: LogCapture,
     mocker: MockerFixture,
+    create_voucher: Callable,
 ) -> None:
     """test that no allocable voucher results in the allocation being requeued"""
     mock_queue = mocker.patch("app.tasks.allocation.enqueue_task")
@@ -143,7 +144,7 @@ def test_voucher_issuance_no_voucher_and_allocation_is_requeued(
     from app.tasks.allocation import sentry_sdk as mock_sentry_sdk
 
     sentry_spy = mocker.spy(mock_sentry_sdk, "capture_message")
-    issuance_retry_task_no_voucher.retry_status = RetryTaskStatuses.IN_PROGRESS
+    issuance_retry_task_no_voucher.status = RetryTaskStatuses.IN_PROGRESS
     db_session.commit()
 
     httpretty.register_uri("POST", issuance_retry_task_no_voucher.params["account_url"], body="OK", status=200)
@@ -151,26 +152,26 @@ def test_voucher_issuance_no_voucher_and_allocation_is_requeued(
     issue_voucher(issuance_retry_task_no_voucher.retry_task_id)
 
     db_session.refresh(issuance_retry_task_no_voucher)
-    mock_queue.assert_called()
+    mock_queue.assert_called_once()
     sentry_spy.assert_called_once()
     assert issuance_retry_task_no_voucher.attempts == 1
     assert issuance_retry_task_no_voucher.next_attempt_time is not None
-    assert issuance_retry_task_no_voucher.retry_status == RetryTaskStatuses.WAITING
+    assert issuance_retry_task_no_voucher.status == RetryTaskStatuses.WAITING
     assert any("Next attempt time at" in record.msg for record in capture.records)
 
     # Add new voucher and check that it's allocated and marked as allocated
     voucher = create_voucher()  # The defaults will be correct for this test
 
     # call allocate_voucher again
-    allocate_voucher(voucher_allocation_no_voucher.id)
+    issue_voucher(issuance_retry_task_no_voucher.retry_task_id)
 
-    db_session.refresh(voucher_allocation_no_voucher)
+    db_session.refresh(issuance_retry_task_no_voucher)
     db_session.refresh(voucher)
-    mock_queue.return_value.enqueue_at.assert_called_once()  # should not have been called again
-    assert voucher_allocation_no_voucher.attempts == 2
-    assert voucher_allocation_no_voucher.next_attempt_time is None
-    assert voucher_allocation_no_voucher.status == QueuedRetryStatuses.SUCCESS
-    assert voucher_allocation_no_voucher.voucher_id == voucher.id
+    mock_queue.assert_called_once()  # should not have been called again
+    assert issuance_retry_task_no_voucher.attempts == 2
+    assert issuance_retry_task_no_voucher.next_attempt_time is None
+    assert issuance_retry_task_no_voucher.status == RetryTaskStatuses.SUCCESS
+    assert issuance_retry_task_no_voucher.params["voucher_id"] == str(voucher.id)
     assert voucher.allocated
 
 
@@ -242,7 +243,7 @@ def test__process_status_adjustment_connection_error(
 def test_status_adjustment(
     db_session: "Session", voucher_status_adjustment_retry_task: RetryTask, adjustment_url: str
 ) -> None:
-    voucher_status_adjustment_retry_task.retry_status = RetryTaskStatuses.IN_PROGRESS
+    voucher_status_adjustment_retry_task.status = RetryTaskStatuses.IN_PROGRESS
     db_session.commit()
 
     httpretty.register_uri("PATCH", adjustment_url, body="OK", status=200)
@@ -253,11 +254,11 @@ def test_status_adjustment(
 
     assert voucher_status_adjustment_retry_task.attempts == 1
     assert voucher_status_adjustment_retry_task.next_attempt_time is None
-    assert voucher_status_adjustment_retry_task.retry_status == RetryTaskStatuses.SUCCESS
+    assert voucher_status_adjustment_retry_task.status == RetryTaskStatuses.SUCCESS
 
 
 def test_status_adjustment_wrong_status(db_session: "Session", voucher_status_adjustment_retry_task: RetryTask) -> None:
-    voucher_status_adjustment_retry_task.retry_status = RetryTaskStatuses.FAILED
+    voucher_status_adjustment_retry_task.status = RetryTaskStatuses.FAILED
     db_session.commit()
 
     with pytest.raises(ValueError):
@@ -267,4 +268,4 @@ def test_status_adjustment_wrong_status(db_session: "Session", voucher_status_ad
 
     assert voucher_status_adjustment_retry_task.attempts == 0
     assert voucher_status_adjustment_retry_task.next_attempt_time is None
-    assert voucher_status_adjustment_retry_task.retry_status == RetryTaskStatuses.FAILED
+    assert voucher_status_adjustment_retry_task.status == RetryTaskStatuses.FAILED
