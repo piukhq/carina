@@ -1,6 +1,7 @@
 import json
 
 from datetime import datetime
+from typing import Callable
 from unittest import mock
 
 import httpretty
@@ -156,6 +157,21 @@ def test_voucher_issuance_no_voucher_and_allocation_is_requeued(
     assert issuance_retry_task_no_voucher.next_attempt_time is not None
     assert issuance_retry_task_no_voucher.retry_status == RetryTaskStatuses.WAITING
     assert any("Next attempt time at" in record.msg for record in capture.records)
+
+    # Add new voucher and check that it's allocated and marked as allocated
+    voucher = create_voucher()  # The defaults will be correct for this test
+
+    # call allocate_voucher again
+    allocate_voucher(voucher_allocation_no_voucher.id)
+
+    db_session.refresh(voucher_allocation_no_voucher)
+    db_session.refresh(voucher)
+    mock_queue.return_value.enqueue_at.assert_called_once()  # should not have been called again
+    assert voucher_allocation_no_voucher.attempts == 2
+    assert voucher_allocation_no_voucher.next_attempt_time is None
+    assert voucher_allocation_no_voucher.status == QueuedRetryStatuses.SUCCESS
+    assert voucher_allocation_no_voucher.voucher_id == voucher.id
+    assert voucher.allocated
 
 
 @httpretty.activate

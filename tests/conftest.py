@@ -87,6 +87,30 @@ def voucher(db_session: "Session", voucher_config: VoucherConfig) -> Voucher:
     return vc
 
 
+@pytest.fixture(scope="function")
+def create_voucher(db_session: "Session", voucher_config: VoucherConfig) -> Callable:
+    def _create_voucher(**voucher_params: dict) -> Voucher:
+        """
+        Create a voucher in the test DB
+        :param voucher_params: override any default values for the voucher
+        :return: Callable function
+        """
+        mock_voucher_params = {
+            "voucher_code": "TSTCD1234",
+            "retailer_slug": voucher_config.retailer_slug,
+            "voucher_config": voucher_config,
+        }
+
+        mock_voucher_params.update(voucher_params)
+        voucher = Voucher(**mock_voucher_params)
+        db_session.add(voucher)
+        db_session.commit()
+
+        return voucher
+
+    return _create_voucher
+
+
 @pytest.fixture()
 def create_vouchers(db_session: "Session", voucher_config: VoucherConfig) -> Callable:
     def fn(override_datas: list[dict]) -> dict[str, Voucher]:

@@ -130,6 +130,9 @@ def test_voucher_type_status_ok(setup: SetupType) -> None:
     db_session, voucher_config, _ = setup
 
     for transition_status in ("cancelled", "ended"):
+        voucher_config.status = VoucherTypeStatuses.ACTIVE
+        db_session.commit()
+
         resp = client.patch(
             f"/bpl/vouchers/{voucher_config.retailer_slug}/vouchers/{voucher_config.voucher_type_slug}/status",
             json={"status": transition_status},
@@ -180,3 +183,19 @@ def test_voucher_type_status_voucher_type_not_found(setup: SetupType) -> None:
     assert resp.json() == HttpErrors.UNKNOWN_VOUCHER_TYPE.value.detail
     db_session.refresh(voucher_config)
     assert voucher_config.status == VoucherTypeStatuses.ACTIVE
+
+
+def test_voucher_type_status_wrong_voucher_config_status(setup: SetupType) -> None:
+    db_session, voucher_config, _ = setup
+    voucher_config.status = VoucherTypeStatuses.CANCELLED
+    db_session.commit()
+
+    resp = client.patch(
+        f"/bpl/vouchers/{voucher_config.retailer_slug}/vouchers/{voucher_config.voucher_type_slug}/status",
+        json={"status": "ended"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == HttpErrors.STATUS_UPDATE_FAILED.value.status_code
+    assert resp.json() == HttpErrors.STATUS_UPDATE_FAILED.value.detail
+    db_session.refresh(voucher_config)
+    assert voucher_config.status == VoucherTypeStatuses.CANCELLED
