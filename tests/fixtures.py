@@ -28,3 +28,10 @@ class HttpErrors(Enum):
         },
         status_code=status.HTTP_404_NOT_FOUND,
     )
+    STATUS_UPDATE_FAILED = HttpError(
+        detail={
+            "display_message": "Status could not be updated as requested",
+            "error": "STATUS_UPDATE_FAILED",
+        },
+        status_code=status.HTTP_409_CONFLICT,
+    )

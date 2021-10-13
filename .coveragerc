@@ -2,6 +2,7 @@
 omit = *test*
        *alembic*
         app/version.py
+        app/tasks/error_handlers.py
 branch = True
 
 [report]

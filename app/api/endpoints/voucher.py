@@ -8,11 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import crud
 from app.api.deps import get_session, user_is_authorised
 from app.db.base_class import async_run_query
-from app.enums import VoucherTypeStatuses
+from app.enums import HttpErrors, VoucherTypeStatuses
 from app.fetch_voucher import get_allocable_voucher
 from app.schemas import VoucherAllocationSchema
 from app.schemas.voucher import VoucherStatusSchema
-from app.tasks.voucher import enqueue_voucher_allocation
+from app.tasks.voucher import enqueue_voucher_allocation_retry_task
 
 router = APIRouter()
 
@@ -30,11 +30,11 @@ async def allocation(
 ) -> Any:
     voucher_config = await crud.get_voucher_config(db_session, retailer_slug, voucher_type_slug)
     voucher, issued, expiry = await get_allocable_voucher(db_session, voucher_config)
-    voucher_allocation = await crud.create_allocation(
+    retry_task = await crud.create_voucher_issuance_retry_task(
         db_session, voucher, issued, expiry, voucher_config, payload.account_url
     )
 
-    asyncio.create_task(enqueue_voucher_allocation(voucher_allocation.id))
+    asyncio.create_task(enqueue_voucher_allocation_retry_task(retry_task.retry_task_id))
     return {}
 
 
@@ -50,9 +50,12 @@ async def voucher_type_status(
     db_session: AsyncSession = Depends(get_session),
 ) -> Any:
     voucher_config = await crud.get_voucher_config(db_session, retailer_slug, voucher_type_slug, for_update=True)
-    voucher_config.status = VoucherTypeStatuses(payload.status)
+
+    if voucher_config.status != VoucherTypeStatuses.ACTIVE:
+        raise HttpErrors.STATUS_UPDATE_FAILED.value
 
     async def _query() -> None:
+        voucher_config.status = VoucherTypeStatuses(payload.status)
         return await db_session.commit()
 
     await async_run_query(_query, db_session)

@@ -30,14 +30,13 @@ class HttpErrors(Enum):
         },
         status_code=status.HTTP_404_NOT_FOUND,
     )
-
-
-class QueuedRetryStatuses(Enum):
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
-    FAILED = "failed"
-    SUCCESS = "success"
-    WAITING = "waiting"
+    STATUS_UPDATE_FAILED = HTTPException(
+        detail={
+            "display_message": "Status could not be updated as requested",
+            "error": "STATUS_UPDATE_FAILED",
+        },
+        status_code=status.HTTP_409_CONFLICT,
+    )
 
 
 class VoucherTypeStatuses(str, Enum):
