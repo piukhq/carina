@@ -5,29 +5,28 @@ from typing import TYPE_CHECKING, Any, Callable
 
 import sentry_sdk
 
-from sqlalchemy import Column, DateTime, Integer, text
+from retry_tasks_lib.db.models import load_models_to_metadata
+from sqlalchemy import Column, DateTime, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import declarative_base, declarative_mixin  # type: ignore[attr-defined]
 
 from app.core.config import settings
 from app.version import __version__
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import Session
 
 logger = logging.getLogger("db-base-class")
 
 
-class ModelBase:
-    id = Column(Integer, primary_key=True, index=True)
+Base = declarative_base()
+load_models_to_metadata(Base.metadata)
 
-
-Base = declarative_base(cls=ModelBase)
 
 utc_timestamp_sql = text("TIMEZONE('utc', CURRENT_TIMESTAMP)")
 
-if settings.SENTRY_DSN:
+if settings.SENTRY_DSN:  # pragma: no cover
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
         environment=settings.SENTRY_ENV,

@@ -39,14 +39,6 @@ class HttpErrors(Enum):
     )
 
 
-class QueuedRetryStatuses(Enum):
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
-    FAILED = "failed"
-    SUCCESS = "success"
-    WAITING = "waiting"
-
-
 class VoucherTypeStatuses(str, Enum):
     ACTIVE = "active"
     CANCELLED = "cancelled"
