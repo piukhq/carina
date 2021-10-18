@@ -114,7 +114,7 @@ def test_voucher_issuance_no_voucher_but_one_available(
     db_session: "Session", issuance_retry_task_no_voucher: RetryTask, mocker: MockerFixture, voucher: Voucher
 ) -> None:
     """test that an allocable voucher (the pytest 'voucher' fixture) is allocated, resulting in success"""
-    mock_queue = mocker.patch("app.tasks.allocation.enqueue_task")
+    mock_queue = mocker.patch("app.tasks.allocation.enqueue_retry_task_delay")
     issuance_retry_task_no_voucher.status = RetryTaskStatuses.IN_PROGRESS
     db_session.commit()
 
@@ -139,7 +139,7 @@ def test_voucher_issuance_no_voucher_and_allocation_is_requeued(
     create_voucher: Callable,
 ) -> None:
     """test that no allocable voucher results in the allocation being requeued"""
-    mock_queue = mocker.patch("app.tasks.allocation.enqueue_task")
+    mock_queue = mocker.patch("app.tasks.allocation.enqueue_retry_task_delay")
     mock_queue.return_value = fake_now
     from app.tasks.allocation import sentry_sdk as mock_sentry_sdk
 

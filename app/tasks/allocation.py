@@ -7,7 +7,7 @@ import sentry_sdk
 
 from retry_tasks_lib.db.models import RetryTask
 from retry_tasks_lib.enums import RetryTaskStatuses
-from retry_tasks_lib.utils.synchronous import enqueue_task, get_retry_task
+from retry_tasks_lib.utils.synchronous import enqueue_retry_task_delay, get_retry_task
 from sqlalchemy.future import select
 
 from app.core.config import redis, settings
@@ -125,12 +125,12 @@ def issue_voucher(retry_task_id: int) -> None:
 
                     sync_run_query(_set_waiting, db_session)
 
-                next_attempt_time = enqueue_task(
+                next_attempt_time = enqueue_retry_task_delay(
                     queue=settings.VOUCHER_ALLOCATION_TASK_QUEUE,
                     connection=redis,
                     action=issue_voucher,
                     retry_task=retry_task,
-                    backoff_seconds=settings.VOUCHER_ALLOCATION_REQUEUE_BACKOFF_SECONDS,
+                    delay_seconds=settings.VOUCHER_ALLOCATION_REQUEUE_BACKOFF_SECONDS,
                 )
                 logger.info(f"Next attempt time at {next_attempt_time}")
                 retry_task.update_task(db_session, next_attempt_time=next_attempt_time, increase_attempts=True)
