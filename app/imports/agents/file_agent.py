@@ -422,9 +422,11 @@ class VoucherUpdatesAgent(BlobFileAgent):
         def _create_retry_tasks() -> List[RetryTask]:
 
             task_type: TaskType = (
-                db_session.execute(select(TaskType).where(TaskType.name == "voucher_status_adjustment")).scalars().one()
+                db_session.execute(select(TaskType).where(TaskType.name == "voucher_status_adjustment"))
+                .unique()
+                .scalar_one()
             )
-            keys = task_type.key_ids_by_name
+            keys = task_type.get_key_ids_by_name()
 
             retry_tasks = [
                 RetryTask(task_type_id=task_type.task_type_id, status=RetryTaskStatuses.IN_PROGRESS)

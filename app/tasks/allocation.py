@@ -61,7 +61,7 @@ def _process_and_issue_voucher(db_session: "Session", retry_task: RetryTask, tas
 def issue_voucher(retry_task_id: int) -> None:
     with SyncSessionMaker() as db_session:
         retry_task = get_retry_task(db_session, retry_task_id)
-        task_params = retry_task.params
+        task_params = retry_task.get_params()
 
         # Process the allocation if it has a voucher, else try to get a voucher - requeue that if necessary
         if "voucher_id" in task_params:
@@ -88,7 +88,7 @@ def issue_voucher(retry_task_id: int) -> None:
 
             allocable_voucher: Voucher = sync_run_query(_get_allocable_voucher, db_session)
             if allocable_voucher:
-                key_ids = retry_task.task_type.key_ids_by_name
+                key_ids = retry_task.task_type.get_key_ids_by_name()
                 task_params[VOUCHER_ID] = str(allocable_voucher.id)
                 task_params[VOUCHER_CODE] = allocable_voucher.voucher_code
 
