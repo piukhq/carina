@@ -16,7 +16,7 @@ async_engine = create_async_engine(
     settings.SQLALCHEMY_DATABASE_URI, pool_pre_ping=True, future=True, echo=settings.SQL_DEBUG, **null_pool
 )
 sync_engine = create_engine(
-    settings.SQLALCHEMY_DATABASE_URI.replace("+asyncpg", ""),
+    settings.SQLALCHEMY_DATABASE_URI.replace("+asyncpg", "").replace("ssl=", "sslmode="),
     pool_pre_ping=True,
     poolclass=NullPool,
     echo=settings.SQL_DEBUG,

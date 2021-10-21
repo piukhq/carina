@@ -84,7 +84,7 @@ def test_voucher_issuance(db_session: "Session", issuance_retry_task: RetryTask)
     issuance_retry_task.status = RetryTaskStatuses.IN_PROGRESS
     db_session.commit()
 
-    httpretty.register_uri("POST", issuance_retry_task.params["account_url"], body="OK", status=200)
+    httpretty.register_uri("POST", issuance_retry_task.get_params()["account_url"], body="OK", status=200)
 
     issue_voucher(issuance_retry_task.retry_task_id)
 
@@ -114,11 +114,11 @@ def test_voucher_issuance_no_voucher_but_one_available(
     db_session: "Session", issuance_retry_task_no_voucher: RetryTask, mocker: MockerFixture, voucher: Voucher
 ) -> None:
     """test that an allocable voucher (the pytest 'voucher' fixture) is allocated, resulting in success"""
-    mock_queue = mocker.patch("app.tasks.allocation.enqueue_task")
+    mock_queue = mocker.patch("app.tasks.allocation.enqueue_retry_task_delay")
     issuance_retry_task_no_voucher.status = RetryTaskStatuses.IN_PROGRESS
     db_session.commit()
 
-    httpretty.register_uri("POST", issuance_retry_task_no_voucher.params["account_url"], body="OK", status=200)
+    httpretty.register_uri("POST", issuance_retry_task_no_voucher.get_params()["account_url"], body="OK", status=200)
 
     issue_voucher(issuance_retry_task_no_voucher.retry_task_id)
 
@@ -139,7 +139,7 @@ def test_voucher_issuance_no_voucher_and_allocation_is_requeued(
     create_voucher: Callable,
 ) -> None:
     """test that no allocable voucher results in the allocation being requeued"""
-    mock_queue = mocker.patch("app.tasks.allocation.enqueue_task")
+    mock_queue = mocker.patch("app.tasks.allocation.enqueue_retry_task_delay")
     mock_queue.return_value = fake_now
     from app.tasks.allocation import sentry_sdk as mock_sentry_sdk
 
@@ -147,7 +147,7 @@ def test_voucher_issuance_no_voucher_and_allocation_is_requeued(
     issuance_retry_task_no_voucher.status = RetryTaskStatuses.IN_PROGRESS
     db_session.commit()
 
-    httpretty.register_uri("POST", issuance_retry_task_no_voucher.params["account_url"], body="OK", status=200)
+    httpretty.register_uri("POST", issuance_retry_task_no_voucher.get_params()["account_url"], body="OK", status=200)
 
     issue_voucher(issuance_retry_task_no_voucher.retry_task_id)
 
@@ -171,7 +171,7 @@ def test_voucher_issuance_no_voucher_and_allocation_is_requeued(
     assert issuance_retry_task_no_voucher.attempts == 2
     assert issuance_retry_task_no_voucher.next_attempt_time is None
     assert issuance_retry_task_no_voucher.status == RetryTaskStatuses.SUCCESS
-    assert issuance_retry_task_no_voucher.params["voucher_id"] == str(voucher.id)
+    assert issuance_retry_task_no_voucher.get_params()["voucher_id"] == str(voucher.id)
     assert voucher.allocated
 
 
@@ -189,7 +189,7 @@ def test__process_status_adjustment_ok(
 
     httpretty.register_uri("PATCH", adjustment_url, body="OK", status=200)
 
-    response_audit = _process_status_adjustment(voucher_status_adjustment_retry_task.params)
+    response_audit = _process_status_adjustment(voucher_status_adjustment_retry_task.get_params())
 
     last_request = httpretty.last_request()
     assert last_request.method == "PATCH"
@@ -215,7 +215,7 @@ def test__process_status_adjustment_http_errors(
         httpretty.register_uri("PATCH", adjustment_url, body=body, status=status)
 
         with pytest.raises(requests.RequestException) as excinfo:
-            _process_status_adjustment(voucher_status_adjustment_retry_task.params)
+            _process_status_adjustment(voucher_status_adjustment_retry_task.get_params())
 
         assert isinstance(excinfo.value, requests.RequestException)
         assert excinfo.value.response.status_code == status
@@ -233,7 +233,7 @@ def test__process_status_adjustment_connection_error(
     mock_send_request_with_metrics.side_effect = requests.Timeout("Request timed out")
 
     with pytest.raises(requests.RequestException) as excinfo:
-        _process_status_adjustment(voucher_status_adjustment_retry_task.params)
+        _process_status_adjustment(voucher_status_adjustment_retry_task.get_params())
 
     assert isinstance(excinfo.value, requests.Timeout)
     assert excinfo.value.response is None

@@ -422,25 +422,27 @@ class VoucherUpdatesAgent(BlobFileAgent):
         def _create_retry_tasks() -> List[RetryTask]:
 
             task_type: TaskType = (
-                db_session.execute(select(TaskType).where(TaskType.name == "voucher_status_adjustment")).scalars().one()
+                db_session.execute(select(TaskType).where(TaskType.name == "voucher_status_adjustment"))
+                .unique()
+                .scalar_one()
             )
-            keys = task_type.key_ids_by_name
+            keys = task_type.get_key_ids_by_name()
 
             retry_tasks = [
                 RetryTask(task_type_id=task_type.task_type_id, status=RetryTaskStatuses.IN_PROGRESS)
-                for _ in range(len(voucher_updates))
+                for _ in voucher_updates
             ]
             db_session.add_all(retry_tasks)
             db_session.flush()
 
-            for i, voucher_update in enumerate(voucher_updates):
+            for retry_task, voucher_update in zip(retry_tasks, voucher_updates):
                 values = [
                     (keys["voucher_id"], str(voucher_update.voucher_id)),
                     (keys["retailer_slug"], str(voucher_update.voucher.retailer_slug)),
                     (keys["date"], datetime.fromisoformat(voucher_update.date.isoformat()).timestamp()),
-                    (keys["status"], voucher_update.status.name),  # type: ignore [attr-defined]
+                    (keys["status"], voucher_update.status.value),  # type: ignore [attr-defined]
                 ]
-                db_session.bulk_save_objects(retry_tasks[i].get_task_type_key_values(values))
+                db_session.bulk_save_objects(retry_task.get_task_type_key_values(values))
 
             db_session.flush()
             return retry_tasks

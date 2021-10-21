@@ -50,7 +50,7 @@ def issuance_retry_task(
     db_session.add(task)
     db_session.flush()
 
-    key_ids = voucher_issuance_task_type.key_ids_by_name
+    key_ids = voucher_issuance_task_type.get_key_ids_by_name()
     db_session.add_all(
         [
             TaskTypeKeyValue(
@@ -73,7 +73,7 @@ def issuance_retry_task_no_voucher(
     db_session.add(task)
     db_session.flush()
 
-    key_ids = voucher_issuance_task_type.key_ids_by_name
+    key_ids = voucher_issuance_task_type.get_key_ids_by_name()
     db_session.add_all(
         [
             TaskTypeKeyValue(
@@ -129,7 +129,7 @@ def voucher_status_adjustment_retry_task(
     db_session.add(task)
     db_session.flush()
 
-    key_ids = voucher_status_adjustment_task_type.key_ids_by_name
+    key_ids = voucher_status_adjustment_task_type.get_key_ids_by_name()
     db_session.add_all(
         [
             TaskTypeKeyValue(
@@ -146,7 +146,7 @@ def voucher_status_adjustment_retry_task(
 
 @pytest.fixture(scope="function")
 def adjustment_expected_payload(voucher_status_adjustment_retry_task: RetryTask) -> dict:
-    params = voucher_status_adjustment_retry_task.params
+    params = voucher_status_adjustment_retry_task.get_params()
     return {
         "status": params["status"],
         "date": params["date"],
