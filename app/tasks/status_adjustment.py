@@ -44,7 +44,7 @@ def status_adjustment(retry_task_id: int) -> None:
         retry_task = get_retry_task(db_session, retry_task_id)
         retry_task.update_task(db_session, increase_attempts=True)
 
-        response_audit = _process_status_adjustment(retry_task.params)
+        response_audit = _process_status_adjustment(retry_task.get_params())
 
         retry_task.update_task(
             db_session, response_audit=response_audit, status=RetryTaskStatuses.SUCCESS, clear_next_attempt_time=True

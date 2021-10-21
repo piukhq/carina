@@ -1,9 +1,9 @@
 from typing import List, Optional
 
-from retry_tasks_lib.db.models import RetryTask, TaskType
+from retry_tasks_lib.db.models import RetryTask
+from retry_tasks_lib.utils.asynchronous import async_create_task
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy.orm import joinedload
 
 from app.db.base_class import async_run_query
 from app.enums import HttpErrors
@@ -66,43 +66,26 @@ async def create_voucher_issuance_retry_task(
     account_url: str,
 ) -> RetryTask:
     async def _query() -> RetryTask:
-
-        task_type: TaskType = (
-            (
-                await db_session.execute(
-                    select(TaskType)
-                    .options(joinedload(TaskType.task_type_keys))
-                    .where(TaskType.name == "voucher_issuance")
-                )
-            )
-            .scalars()
-            .first()
-        )
-        # move get keys to model as property
-        retry_task = RetryTask(task_type_id=task_type.task_type_id)
-        db_session.add(retry_task)
-        await db_session.flush()
-
-        # move task type keys value creation to model with dict required as param
-        keys = task_type.key_ids_by_name
-        values = [
-            (keys["account_url"], account_url),
-            (keys["issued_date"], str(issued_date)),
-            (keys["expiry_date"], str(expiry_date)),
-            (keys["voucher_config_id"], str(voucher_config.id)),
-            (keys["voucher_type_slug"], voucher_config.voucher_type_slug),
-        ]
+        task_params = {
+            "account_url": account_url,
+            "issued_date": issued_date,
+            "expiry_date": expiry_date,
+            "voucher_config_id": voucher_config.id,
+            "voucher_type_slug": voucher_config.voucher_type_slug,
+        }
 
         if voucher is not None:
             voucher.allocated = True
-            values.extend(
-                [
-                    (keys["voucher_id"], str(voucher.id)),
-                    (keys["voucher_code"], voucher.voucher_code),
-                ]
+            task_params.update(
+                {
+                    "voucher_id": voucher.id,
+                    "voucher_code": voucher.voucher_code,
+                }
             )
 
-        db_session.add_all(retry_task.get_task_type_key_values(values))
+        retry_task = await async_create_task(
+            db_session=db_session, task_type_name="voucher_issuance", params=task_params
+        )
         await db_session.commit()
         return retry_task
 
