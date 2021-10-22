@@ -22,9 +22,7 @@ def voucher_issuance_task_params(voucher: Voucher) -> dict:
         "voucher_id": str(voucher.id),
         "voucher_code": voucher.voucher_code,
         "issued_date": str(now.timestamp()),
-        "expiry_date": str(
-            (now + timedelta(days=voucher.voucher_config.validity_days)).timestamp()  # type: ignore [arg-type]
-        ),
+        "expiry_date": str((now + timedelta(days=voucher.voucher_config.validity_days)).timestamp()),
         "voucher_config_id": str(voucher.voucher_config_id),
         "voucher_type_slug": voucher.voucher_config.voucher_type_slug,
     }
@@ -36,7 +34,7 @@ def voucher_issuance_task_params_no_voucher(voucher_config: VoucherConfig) -> di
     return {
         "account_url": "http://test.url/",
         "issued_date": str(now.timestamp()),
-        "expiry_date": str((now + timedelta(days=voucher_config.validity_days)).timestamp()),  # type: ignore [arg-type]
+        "expiry_date": str((now + timedelta(days=voucher_config.validity_days)).timestamp()),
         "voucher_config_id": str(voucher_config.id),
         "voucher_type_slug": voucher_config.voucher_type_slug,
     }
@@ -117,7 +115,7 @@ def voucher_status_adjustment_task_params(voucher_update: VoucherUpdate) -> dict
         "voucher_id": str(voucher_update.voucher_id),
         "retailer_slug": voucher_update.voucher.retailer_slug,
         "date": str(datetime.fromisoformat(voucher_update.date.isoformat()).timestamp()),
-        "status": voucher_update.status.name,  # type: ignore [attr-defined]
+        "status": voucher_update.status.name,
     }
 
 

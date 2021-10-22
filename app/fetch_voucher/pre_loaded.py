@@ -12,7 +12,7 @@ async def get_voucher(
 ) -> Tuple[Optional[Voucher], float, float]:
     now = datetime.utcnow()
     issued = now.timestamp()
-    expiry = (now + timedelta(days=voucher_config.validity_days)).timestamp()  # type: ignore [arg-type]
+    expiry = (now + timedelta(days=voucher_config.validity_days)).timestamp()
     voucher = await get_allocable_voucher(db_session, voucher_config)
 
     return voucher, issued, expiry
