@@ -14,7 +14,8 @@ from retry_tasks_lib.enums import RetryTaskStatuses
 from sqlalchemy.orm import Session
 from testfixtures import LogCapture
 
-from app.models import Voucher
+from app.enums import VoucherTypeStatuses
+from app.models import Voucher, VoucherConfig
 from app.tasks.allocation import _process_issuance, issue_voucher
 from app.tasks.status_adjustment import _process_status_adjustment, status_adjustment
 
@@ -107,6 +108,27 @@ def test_voucher_issuance_wrong_status(db_session: "Session", issuance_retry_tas
     assert issuance_retry_task.attempts == 0
     assert issuance_retry_task.next_attempt_time is None
     assert issuance_retry_task.status == RetryTaskStatuses.FAILED
+
+
+@httpretty.activate
+def test_voucher_issuance_campaign_is_cancelled(
+    db_session: "Session", issuance_retry_task: RetryTask, voucher_config: VoucherConfig
+) -> None:
+    """
+    Test that, if the campaign has been cancelled by the time we get to issue a voucher, the issuance is also cancelled
+    """
+    issuance_retry_task.status = RetryTaskStatuses.IN_PROGRESS
+    db_session.commit()
+    voucher_config.status = VoucherTypeStatuses.CANCELLED
+    db_session.commit()
+
+    issue_voucher(issuance_retry_task.retry_task_id)
+
+    db_session.refresh(issuance_retry_task)
+
+    assert issuance_retry_task.attempts == 1
+    assert issuance_retry_task.next_attempt_time is None
+    assert issuance_retry_task.status == RetryTaskStatuses.CANCELLED
 
 
 @httpretty.activate

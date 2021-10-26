@@ -18,7 +18,6 @@ branch_labels = None
 depends_on = None
 
 
-conn = op.get_bind()
 taskparamskeytypes = postgresql.ENUM(
     "STRING", "INTEGER", "FLOAT", "BOOLEAN", "DATE", "DATETIME", name="taskparamskeytypes"
 )
@@ -28,6 +27,7 @@ retrytaskstatuses = postgresql.ENUM(
 
 
 def populate_task_type_and_keys() -> None:
+    conn = op.get_bind()
     metadata = sa.MetaData()
     task_type = sa.Table("task_type", metadata, autoload_with=conn)
     task_type_key = sa.Table("task_type_key", metadata, autoload_with=conn)
@@ -37,6 +37,7 @@ def populate_task_type_and_keys() -> None:
 
 
 def populate_voucher_allocation_task_type_and_keys(task_type: sa.Table, task_type_key: sa.Table) -> None:
+    conn = op.get_bind()
     inserted_obj = conn.execute(
         sa.insert(task_type).values(name="voucher_issuance", path="app.tasks.allocation.issue_voucher")
     )
@@ -54,6 +55,7 @@ def populate_voucher_allocation_task_type_and_keys(task_type: sa.Table, task_typ
 
 
 def populate_voucher_status_adjustment_task_type_and_keys(task_type: sa.Table, task_type_key: sa.Table) -> None:
+    conn = op.get_bind()
     inserted_obj = conn.execute(
         sa.insert(task_type).values(
             name="voucher_status_adjustment", path="app.tasks.status_adjustment.status_adjustment"
@@ -134,6 +136,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    conn = op.get_bind()
     op.drop_table("task_type_key_value")
     op.drop_table("task_type_key")
     op.drop_table("retry_task")
