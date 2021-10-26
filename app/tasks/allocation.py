@@ -53,16 +53,14 @@ def _process_issuance(task_params: dict) -> dict:
 
 def _process_and_issue_voucher(db_session: "Session", retry_task: RetryTask, task_params: dict) -> None:
     retry_task.update_task(db_session, increase_attempts=True)
-    voucher_config = sync_run_query(
+    voucher_config_status: VoucherTypeStatuses = sync_run_query(
         lambda: db_session.execute(
-            select(VoucherConfig).with_for_update().where(VoucherConfig.id == task_params["voucher_config_id"])
-        )
-        .scalars()
-        .one(),
+            select(VoucherConfig.status).where(VoucherConfig.id == task_params["voucher_config_id"])
+        ).scalar_one(),
         db_session,
     )
 
-    if voucher_config.status in [VoucherTypeStatuses.ENDED, VoucherTypeStatuses.CANCELLED]:
+    if voucher_config_status in [VoucherTypeStatuses.ENDED, VoucherTypeStatuses.CANCELLED]:
         retry_task.update_task(
             db_session, response_audit={}, status=RetryTaskStatuses.CANCELLED, clear_next_attempt_time=True
         )
