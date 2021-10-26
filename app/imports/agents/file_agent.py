@@ -342,7 +342,7 @@ class VoucherUpdatesAgent(BlobFileAgent):
                 update_rows.extend(rows)
 
             db_session.execute(
-                update(Voucher)  # type: ignore
+                update(Voucher)
                 .where(Voucher.voucher_code.in_(unallocated_voucher_codes), Voucher.retailer_slug == retailer_slug)
                 .values(deleted=True)
             )
@@ -440,7 +440,7 @@ class VoucherUpdatesAgent(BlobFileAgent):
                     (keys["voucher_id"], str(voucher_update.voucher_id)),
                     (keys["retailer_slug"], str(voucher_update.voucher.retailer_slug)),
                     (keys["date"], datetime.fromisoformat(voucher_update.date.isoformat()).timestamp()),
-                    (keys["status"], voucher_update.status.value),  # type: ignore [attr-defined]
+                    (keys["status"], voucher_update.status.value),
                 ]
                 db_session.bulk_save_objects(retry_task.get_task_type_key_values(values))
 

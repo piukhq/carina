@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "484f1b13b71a4be9934c5c2ada65b594519d89910bfd4764179bd681ab7a4878"
+            "sha256": "db7e43f948b5963799a857b73079b9f2297401de10e1f18d8d88aa176b6cff45"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -687,11 +687,11 @@
         },
         "retry-tasks-lib": {
             "hashes": [
-                "sha256:7d194c7077d7f2988d9c2d12beb2cde1ac5055d1bbb95819d4119aac6f15a7ff",
-                "sha256:e920e99fc4bdfd30438dfc8a8708a8dace727bb36718d7e9353c4666dcfc66c1"
+                "sha256:6329c41378a9f0e24871eafb583abdce06eb5f8ab338563f6fdbe646728d0f97",
+                "sha256:b7e43f19b3979efb887a09f17c5e3d59b057b2a92c35c062ccbc958cf7a4603c"
             ],
             "index": "gitlab-libraries",
-            "version": "==1.3.0"
+            "version": "==1.5.0"
         },
         "rq": {
             "hashes": [
@@ -766,14 +766,6 @@
             ],
             "index": "pypi",
             "version": "==1.4.26"
-        },
-        "sqlalchemy-utils": {
-            "hashes": [
-                "sha256:4667edbdcb1ece011076b69772ef524bfbb17cc97e03f11ee6b85d98e7741d61",
-                "sha256:bb6f4da8ac044cb0dd4d0278b1fb434141a5ee9d1881c757a076830ddbb04160"
-            ],
-            "index": "pypi",
-            "version": "==0.37.9"
         },
         "starlette": {
             "hashes": [
@@ -1301,11 +1293,11 @@
         },
         "prompt-toolkit": {
             "hashes": [
-                "sha256:6076e46efae19b1e0ca1ec003ed37a933dc94b4d20f486235d436e64771dcd5c",
-                "sha256:eb71d5a6b72ce6db177af4a7d4d7085b99756bf656d98ffcc4fecd36850eea6c"
+                "sha256:27f13ff4e4850fe8f860b77414c7880f67c6158076a7b099062cc8570f1562e5",
+                "sha256:62b3d3ea5a3ccee94dc1aac018279cf64866a76837156ebe159b981c42dd20a8"
             ],
             "markers": "python_full_version >= '3.6.2'",
-            "version": "==3.0.20"
+            "version": "==3.0.21"
         },
         "ptyprocess": {
             "hashes": [
@@ -1529,14 +1521,6 @@
             ],
             "index": "pypi",
             "version": "==1.4.26"
-        },
-        "sqlalchemy-stubs": {
-            "hashes": [
-                "sha256:5eec7aa110adf9b957b631799a72fef396b23ff99fe296df726645d01e312aa5",
-                "sha256:c665d6dd4482ef642f01027fa06c3d5e91befabb219dc71fc2a09e7d7695f7ae"
-            ],
-            "index": "pypi",
-            "version": "==0.4"
         },
         "sqlalchemy-utils": {
             "hashes": [

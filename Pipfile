@@ -30,12 +30,10 @@ azure-identity = "*"
 azure-keyvault = "*"
 azure-storage-blob = "!=12.9.0"  # version 12.9.0 has bad type annotations
 apscheduler = "*"
-sqlalchemy-utils = "*"
 testfixtures = "*"
-retry-tasks-lib = {version=">=1.3.0", index="gitlab-libraries"}
+retry-tasks-lib = {version=">=1.5.0", index="gitlab-libraries"}
 
 [dev-packages]
-sqlalchemy-stubs = "*"
 flake8 = "*"
 isort = "*"
 black = "==21.9b0"
