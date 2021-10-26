@@ -8,7 +8,7 @@ import sentry_sdk
 from retry_tasks_lib.db.models import load_models_to_metadata
 from sqlalchemy import Column, DateTime, text
 from sqlalchemy.exc import DBAPIError
-from sqlalchemy.orm import declarative_base, declarative_mixin  # type: ignore[attr-defined]
+from sqlalchemy.orm import declarative_base, declarative_mixin
 
 from app.core.config import settings
 from app.version import __version__
