@@ -13,7 +13,8 @@ from sqlalchemy.future import select
 from app.core.config import redis, settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
-from app.models import Voucher
+from app.enums import VoucherTypeStatuses
+from app.models import Voucher, VoucherConfig
 
 from . import logger, send_request_with_metrics
 
@@ -52,10 +53,24 @@ def _process_issuance(task_params: dict) -> dict:
 
 def _process_and_issue_voucher(db_session: "Session", retry_task: RetryTask, task_params: dict) -> None:
     retry_task.update_task(db_session, increase_attempts=True)
-    response_audit = _process_issuance(task_params)
-    retry_task.update_task(
-        db_session, response_audit=response_audit, status=RetryTaskStatuses.SUCCESS, clear_next_attempt_time=True
+    voucher_config = sync_run_query(
+        lambda: db_session.execute(
+            select(VoucherConfig).with_for_update().where(VoucherConfig.id == task_params["voucher_config_id"])
+        )
+        .scalars()
+        .one(),
+        db_session,
     )
+
+    if voucher_config.status in [VoucherTypeStatuses.ENDED, VoucherTypeStatuses.CANCELLED]:
+        retry_task.update_task(
+            db_session, response_audit={}, status=RetryTaskStatuses.CANCELLED, clear_next_attempt_time=True
+        )
+    else:
+        response_audit = _process_issuance(task_params)
+        retry_task.update_task(
+            db_session, response_audit=response_audit, status=RetryTaskStatuses.SUCCESS, clear_next_attempt_time=True
+        )
 
 
 def issue_voucher(retry_task_id: int) -> None:

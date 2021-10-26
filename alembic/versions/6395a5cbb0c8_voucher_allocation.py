@@ -17,12 +17,12 @@ down_revision = "6ee302570436"
 branch_labels = None
 depends_on = None
 
-bind = op.get_bind()
 voucherallocationstatuses = sa.Enum("PENDING", "IN_PROGRESS", "FAILED", "SUCCESS", name="voucherallocationstatuses")
 voucherfetchtype = sa.Enum("PRE_ALLOCATED", name="voucherfetchtype")
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
     op.create_table(
         "voucher_allocation",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -53,6 +53,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
     op.drop_column("voucher_config", "fetch_type")
     op.drop_index(op.f("ix_voucher_allocation_id"), table_name="voucher_allocation")
     op.drop_table("voucher_allocation")
