@@ -60,7 +60,7 @@ def _process_and_issue_voucher(db_session: "Session", retry_task: RetryTask, tas
         db_session,
     )
 
-    if voucher_config_status in [VoucherTypeStatuses.ENDED, VoucherTypeStatuses.CANCELLED]:
+    if voucher_config_status == VoucherTypeStatuses.CANCELLED:
         retry_task.update_task(
             db_session, response_audit={}, status=RetryTaskStatuses.CANCELLED, clear_next_attempt_time=True
         )
