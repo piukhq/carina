@@ -7,7 +7,7 @@ from collections import defaultdict
 from datetime import datetime
 from functools import lru_cache
 from io import StringIO
-from typing import TYPE_CHECKING, DefaultDict, List, NamedTuple, Optional, Tuple, Union, cast
+from typing import TYPE_CHECKING, DefaultDict, NamedTuple, Optional, Union, cast
 
 import click
 import rq
@@ -265,7 +265,7 @@ class VoucherUpdatesAgent(BlobFileAgent):
 
         # This is a defaultdict(list) incase we encounter the voucher code twice in one file
         voucher_update_rows_by_code: defaultdict = defaultdict(list[VoucherUpdateRow])
-        invalid_rows: list[Tuple[int, Exception]] = []
+        invalid_rows: list[tuple[int, Exception]] = []
         for row_num, row in enumerate(content_reader, start=1):
             try:
                 data = VoucherUpdateSchema(
@@ -418,11 +418,13 @@ class VoucherUpdatesAgent(BlobFileAgent):
         self.enqueue_voucher_updates(db_session, voucher_updates)
 
     @staticmethod
-    def enqueue_voucher_updates(db_session: "Session", voucher_updates: List[VoucherUpdate]) -> None:
-        def _create_retry_tasks() -> List[RetryTask]:
+    def enqueue_voucher_updates(db_session: "Session", voucher_updates: list[VoucherUpdate]) -> None:
+        def _create_retry_tasks() -> tuple[list[RetryTask], str]:
 
             task_type: TaskType = (
-                db_session.execute(select(TaskType).where(TaskType.name == "voucher_status_adjustment"))
+                db_session.execute(
+                    select(TaskType).where(TaskType.name == settings.VOUCHER_STATUS_ADJUSTMENT_TASK_NAME)
+                )
                 .unique()
                 .scalar_one()
             )
@@ -445,7 +447,7 @@ class VoucherUpdatesAgent(BlobFileAgent):
                 db_session.bulk_save_objects(retry_task.get_task_type_key_values(values))
 
             db_session.flush()
-            return retry_tasks
+            return retry_tasks, task_type.queue_name
 
         def _commit() -> None:
             db_session.commit()
@@ -454,8 +456,8 @@ class VoucherUpdatesAgent(BlobFileAgent):
             db_session.rollback()
 
         try:
-            q = rq.Queue(settings.VOUCHER_STATUS_UPDATE_TASK_QUEUE, connection=redis)
-            retry_tasks = sync_run_query(_create_retry_tasks, db_session)
+            retry_tasks, task_queue_name = sync_run_query(_create_retry_tasks, db_session)
+            q = rq.Queue(task_queue_name, connection=redis)
             try:
                 q.enqueue_many(
                     [

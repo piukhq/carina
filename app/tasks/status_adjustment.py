@@ -3,8 +3,10 @@ from datetime import datetime
 import click
 import rq
 
+from retry_tasks_lib.db.models import TaskType
 from retry_tasks_lib.enums import RetryTaskStatuses
 from retry_tasks_lib.utils.synchronous import get_retry_task
+from sqlalchemy.future import select
 
 from app.core.config import redis, settings
 from app.db.session import SyncSessionMaker
@@ -65,7 +67,12 @@ def worker(burst: bool = False) -> None:  # pragma: no cover
     # prometheus_client.multiprocess.MultiProcessCollector(registry)
     # prometheus_client.start_http_server(9100, registry=registry)
 
-    q = rq.Queue(settings.VOUCHER_STATUS_UPDATE_TASK_QUEUE, connection=redis)
+    with SyncSessionMaker() as db_session:
+        task_queue_name = db_session.execute(
+            select(TaskType.queue_name).where(TaskType.name == settings.VOUCHER_STATUS_ADJUSTMENT_TASK_NAME)
+        ).scalar_one()
+
+    q = rq.Queue(task_queue_name, connection=redis)
     worker = rq.Worker(
         queues=[q],
         connection=redis,

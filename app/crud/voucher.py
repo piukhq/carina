@@ -5,6 +5,7 @@ from retry_tasks_lib.utils.asynchronous import async_create_task
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
+from app.core.config import settings
 from app.db.base_class import async_run_query
 from app.enums import HttpErrors
 from app.models import Voucher, VoucherConfig
@@ -84,7 +85,7 @@ async def create_voucher_issuance_retry_task(
             )
 
         retry_task = await async_create_task(
-            db_session=db_session, task_type_name="voucher_issuance", params=task_params
+            db_session=db_session, task_type_name=settings.VOUCHER_ISSUANCE_TASK_NAME, params=task_params
         )
         await db_session.commit()
         return retry_task

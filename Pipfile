@@ -4,9 +4,9 @@ verify_ssl = true
 name = "pypi"
 
 [[source]]
-name = "gitlab-libraries"
 url = "https://bink-libs:y6nzdKbo9J6MkEmwvB-i@git.bink.com/api/v4/groups/86/-/packages/pypi/simple"
 verify_ssl = true
+name = "gitlab-libraries"
 
 [packages]
 fastapi = "*"
@@ -31,7 +31,8 @@ azure-keyvault = "*"
 azure-storage-blob = "!=12.9.0"  # version 12.9.0 has bad type annotations
 apscheduler = "*"
 testfixtures = "*"
-retry-tasks-lib = {version=">=1.5.0", index="gitlab-libraries"}
+retry-tasks-lib = {version=">=1.7.0", index="gitlab-libraries"}
+hiredis = "*"
 
 [dev-packages]
 flake8 = "*"
