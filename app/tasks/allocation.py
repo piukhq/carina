@@ -5,7 +5,7 @@ import click
 import rq
 import sentry_sdk
 
-from retry_tasks_lib.db.models import RetryTask
+from retry_tasks_lib.db.models import RetryTask, TaskType
 from retry_tasks_lib.enums import RetryTaskStatuses
 from retry_tasks_lib.utils.synchronous import enqueue_retry_task_delay, get_retry_task
 from sqlalchemy.future import select
@@ -139,9 +139,7 @@ def issue_voucher(retry_task_id: int) -> None:
                     sync_run_query(_set_waiting, db_session)
 
                 next_attempt_time = enqueue_retry_task_delay(
-                    queue=settings.VOUCHER_ALLOCATION_TASK_QUEUE,
                     connection=redis,
-                    action=issue_voucher,
                     retry_task=retry_task,
                     delay_seconds=settings.VOUCHER_ALLOCATION_REQUEUE_BACKOFF_SECONDS,
                 )
@@ -163,7 +161,12 @@ def worker(burst: bool = False) -> None:  # pragma: no cover
     # prometheus_client.multiprocess.MultiProcessCollector(registry)
     # prometheus_client.start_http_server(9100, registry=registry)
 
-    q = rq.Queue(settings.VOUCHER_ALLOCATION_TASK_QUEUE, connection=redis)
+    with SyncSessionMaker() as db_session:
+        task_queue_name = db_session.execute(
+            select(TaskType.queue_name).where(TaskType.name == settings.VOUCHER_ISSUANCE_TASK_NAME)
+        ).scalar_one()
+
+    q = rq.Queue(task_queue_name, connection=redis)
     worker = rq.Worker(
         queues=[q],
         connection=redis,

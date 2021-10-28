@@ -8,6 +8,7 @@ from retry_tasks_lib.db.models import TaskType, TaskTypeKey
 from sqlalchemy_utils import create_database, database_exists, drop_database
 from testfixtures import LogCapture
 
+from app.core.config import settings
 from app.db.base import Base
 from app.db.session import SyncSessionMaker, sync_engine
 from app.enums import VoucherTypeStatuses
@@ -137,11 +138,11 @@ def capture() -> Generator:
 
 @pytest.fixture(scope="function")
 def voucher_issuance_task_type(db_session: "Session") -> TaskType:
-    task = TaskType(name="voucher_issuance", path="not needed")
+    task = TaskType(name=settings.VOUCHER_ISSUANCE_TASK_NAME, path="test.path", queue_name="test_queue")
     db_session.add(task)
     db_session.flush()
 
-    db_session.add_all(
+    db_session.bulk_save_objects(
         [
             TaskTypeKey(task_type_id=task.task_type_id, name=key_name, type=key_type)
             for key_name, key_type in (
@@ -162,11 +163,11 @@ def voucher_issuance_task_type(db_session: "Session") -> TaskType:
 
 @pytest.fixture(scope="function")
 def voucher_status_adjustment_task_type(db_session: "Session") -> TaskType:
-    task = TaskType(name="voucher_status_adjustment", path="not needed")
+    task = TaskType(name=settings.VOUCHER_STATUS_ADJUSTMENT_TASK_NAME, path="test.path", queue_name="test_queue")
     db_session.add(task)
     db_session.flush()
 
-    db_session.add_all(
+    db_session.bulk_save_objects(
         [
             TaskTypeKey(task_type_id=task.task_type_id, name=key_name, type=key_type)
             for key_name, key_type in (

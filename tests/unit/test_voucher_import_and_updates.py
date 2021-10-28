@@ -191,6 +191,7 @@ def test_updates_agent__process_csv_voucher_code_fails_non_validating_rows(
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    mocker.patch.object(VoucherUpdatesAgent, "enqueue_voucher_updates")
     mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     voucher_agent = VoucherUpdatesAgent()
@@ -229,6 +230,7 @@ def test_updates_agent__process_csv_voucher_code_fails_malformed_csv_rows(
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    mocker.patch.object(VoucherUpdatesAgent, "enqueue_voucher_updates")
     mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     voucher_agent = VoucherUpdatesAgent()
@@ -300,6 +302,7 @@ def test_updates_agent__process_updates_voucher_code_not_allocated(setup: SetupT
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    mocker.patch.object(VoucherUpdatesAgent, "enqueue_voucher_updates")
     mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     voucher_agent = VoucherUpdatesAgent()
@@ -338,6 +341,7 @@ def test_updates_agent__process_updates_voucher_code_does_not_exist(setup: Setup
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    mocker.patch.object(VoucherUpdatesAgent, "enqueue_voucher_updates")
     mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     voucher_agent = VoucherUpdatesAgent()
