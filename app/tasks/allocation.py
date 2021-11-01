@@ -64,9 +64,7 @@ def _get_voucher_config_status(db_session: "Session", voucher_config_id: int) ->
 
 def _cancel_task(db_session: "Session", retry_task: RetryTask, task_params: dict) -> None:
     """The campaign been cancelled: cancel the task and soft delete any associated voucher"""
-    retry_task.update_task(
-        db_session, response_audit={}, status=RetryTaskStatuses.CANCELLED, clear_next_attempt_time=True
-    )
+    retry_task.update_task(db_session, status=RetryTaskStatuses.CANCELLED, clear_next_attempt_time=True)
 
     if task_params.get("voucher_id"):
         voucher: Voucher = sync_run_query(
