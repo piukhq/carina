@@ -130,7 +130,7 @@ def test_voucher_issuance_campaign_is_cancelled(
 
     db_session.refresh(issuance_retry_task)
 
-    assert issuance_retry_task.attempts == 1
+    assert issuance_retry_task.attempts == 0
     assert issuance_retry_task.next_attempt_time is None
     assert issuance_retry_task.status == RetryTaskStatuses.CANCELLED
     assert spy.call_count == 0
@@ -140,6 +140,35 @@ def test_voucher_issuance_campaign_is_cancelled(
     db_session.refresh(voucher)
     assert not voucher.allocated
     assert voucher.deleted
+
+
+@httpretty.activate
+def test_voucher_issuance_no_voucher_campaign_is_cancelled(
+    db_session: "Session",
+    issuance_retry_task_no_voucher: RetryTask,
+    voucher_config: VoucherConfig,
+    mocker: MockerFixture,
+) -> None:
+    """
+    Test that, if the campaign has been cancelled by the time we get to issue a voucher, the issuance is also cancelled.
+    This is the test for when the task exists but a voucher has not yet become available
+    """
+    issuance_retry_task_no_voucher.status = RetryTaskStatuses.IN_PROGRESS
+    db_session.commit()
+    voucher_config.status = VoucherTypeStatuses.CANCELLED
+    db_session.commit()
+    import app.tasks.allocation as tasks_allocation
+
+    spy = mocker.spy(tasks_allocation, "_process_issuance")
+
+    issue_voucher(issuance_retry_task_no_voucher.retry_task_id)
+
+    db_session.refresh(issuance_retry_task_no_voucher)
+
+    assert issuance_retry_task_no_voucher.attempts == 0
+    assert issuance_retry_task_no_voucher.next_attempt_time is None
+    assert issuance_retry_task_no_voucher.status == RetryTaskStatuses.CANCELLED
+    assert spy.call_count == 0
 
 
 @httpretty.activate
