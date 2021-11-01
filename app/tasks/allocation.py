@@ -51,30 +51,48 @@ def _process_issuance(task_params: dict) -> dict:
     return response_audit
 
 
-def _process_and_issue_voucher(db_session: "Session", retry_task: RetryTask, task_params: dict) -> None:
-    retry_task.update_task(db_session, increase_attempts=True)
+def _get_voucher_config_status(db_session: "Session", voucher_config_id: int) -> VoucherTypeStatuses:
     voucher_config_status: VoucherTypeStatuses = sync_run_query(
         lambda: db_session.execute(
-            select(VoucherConfig.status).where(VoucherConfig.id == task_params["voucher_config_id"])
+            select(VoucherConfig.status).where(VoucherConfig.id == voucher_config_id)
         ).scalar_one(),
         db_session,
     )
 
-    if voucher_config_status == VoucherTypeStatuses.CANCELLED:
-        retry_task.update_task(
-            db_session, response_audit={}, status=RetryTaskStatuses.CANCELLED, clear_next_attempt_time=True
+    return voucher_config_status
+
+
+def _cancel_task(db_session: "Session", retry_task: RetryTask, task_params: dict) -> None:
+    """The campaign been cancelled: cancel the task and soft delete any associated voucher"""
+    retry_task.update_task(db_session, status=RetryTaskStatuses.CANCELLED, clear_next_attempt_time=True)
+
+    if task_params.get("voucher_id"):
+        voucher: Voucher = sync_run_query(
+            lambda: db_session.execute(select(Voucher).where(Voucher.id == task_params.get("voucher_id"))).scalar_one(),
+            db_session,
         )
-    else:
-        response_audit = _process_issuance(task_params)
-        retry_task.update_task(
-            db_session, response_audit=response_audit, status=RetryTaskStatuses.SUCCESS, clear_next_attempt_time=True
-        )
+        voucher.deleted = True
+        db_session.commit()
+
+
+def _process_and_issue_voucher(db_session: "Session", retry_task: RetryTask, task_params: dict) -> None:
+    retry_task.update_task(db_session, increase_attempts=True)
+    response_audit = _process_issuance(task_params)
+    retry_task.update_task(
+        db_session, response_audit=response_audit, status=RetryTaskStatuses.SUCCESS, clear_next_attempt_time=True
+    )
 
 
 def issue_voucher(retry_task_id: int) -> None:
+    """Try to fetch and issue a voucher, unless the campaign has been cancelled"""
     with SyncSessionMaker() as db_session:
         retry_task = get_retry_task(db_session, retry_task_id)
         task_params = retry_task.get_params()
+
+        voucher_config_status = _get_voucher_config_status(db_session, task_params["voucher_config_id"])
+        if voucher_config_status == VoucherTypeStatuses.CANCELLED:
+            _cancel_task(db_session, retry_task, task_params)
+            return
 
         # Process the allocation if it has a voucher, else try to get a voucher - requeue that if necessary
         if "voucher_id" in task_params:
