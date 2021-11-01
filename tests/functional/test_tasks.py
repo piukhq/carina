@@ -11,6 +11,7 @@ import requests
 from pytest_mock import MockerFixture
 from retry_tasks_lib.db.models import RetryTask
 from retry_tasks_lib.enums import RetryTaskStatuses
+from sqlalchemy.future import select
 from sqlalchemy.orm import Session
 from testfixtures import LogCapture
 
@@ -112,7 +113,7 @@ def test_voucher_issuance_wrong_status(db_session: "Session", issuance_retry_tas
 
 @httpretty.activate
 def test_voucher_issuance_campaign_is_cancelled(
-    db_session: "Session", issuance_retry_task: RetryTask, voucher_config: VoucherConfig
+    db_session: "Session", issuance_retry_task: RetryTask, voucher_config: VoucherConfig, mocker: MockerFixture
 ) -> None:
     """
     Test that, if the campaign has been cancelled by the time we get to issue a voucher, the issuance is also cancelled
@@ -121,6 +122,9 @@ def test_voucher_issuance_campaign_is_cancelled(
     db_session.commit()
     voucher_config.status = VoucherTypeStatuses.CANCELLED
     db_session.commit()
+    import app.tasks.allocation as tasks_allocation
+
+    spy = mocker.spy(tasks_allocation, "_process_issuance")
 
     issue_voucher(issuance_retry_task.retry_task_id)
 
@@ -129,6 +133,13 @@ def test_voucher_issuance_campaign_is_cancelled(
     assert issuance_retry_task.attempts == 1
     assert issuance_retry_task.next_attempt_time is None
     assert issuance_retry_task.status == RetryTaskStatuses.CANCELLED
+    assert spy.call_count == 0
+    voucher = db_session.execute(
+        select(Voucher).where(Voucher.id == issuance_retry_task.get_params()["voucher_id"])
+    ).scalar_one()
+    db_session.refresh(voucher)
+    assert not voucher.allocated
+    assert voucher.deleted
 
 
 @httpretty.activate

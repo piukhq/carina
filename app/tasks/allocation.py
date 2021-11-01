@@ -64,6 +64,12 @@ def _process_and_issue_voucher(db_session: "Session", retry_task: RetryTask, tas
         retry_task.update_task(
             db_session, response_audit={}, status=RetryTaskStatuses.CANCELLED, clear_next_attempt_time=True
         )
+        voucher: Voucher = sync_run_query(
+            lambda: db_session.execute(select(Voucher).where(Voucher.id == task_params["voucher_id"])).scalar_one(),
+            db_session,
+        )
+        voucher.deleted = True
+        db_session.commit()
     else:
         response_audit = _process_issuance(task_params)
         retry_task.update_task(
