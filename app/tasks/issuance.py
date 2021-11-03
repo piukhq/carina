@@ -1,11 +1,9 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-import click
-import rq
 import sentry_sdk
 
-from retry_tasks_lib.db.models import RetryTask, TaskType
+from retry_tasks_lib.db.models import RetryTask
 from retry_tasks_lib.enums import RetryTaskStatuses
 from retry_tasks_lib.utils.synchronous import enqueue_retry_task_delay, get_retry_task
 from sqlalchemy.future import select
@@ -83,6 +81,8 @@ def _process_and_issue_voucher(db_session: "Session", retry_task: RetryTask, tas
     )
 
 
+# NOTE: Inter-dependency: If this function's name or module changes, ensure that
+# it is relevantly reflected in the TaskType table
 def issue_voucher(retry_task_id: int) -> None:
     """Try to fetch and issue a voucher, unless the campaign has been cancelled"""
     with SyncSessionMaker() as db_session:
@@ -159,40 +159,7 @@ def issue_voucher(retry_task_id: int) -> None:
                 next_attempt_time = enqueue_retry_task_delay(
                     connection=redis,
                     retry_task=retry_task,
-                    delay_seconds=settings.VOUCHER_ALLOCATION_REQUEUE_BACKOFF_SECONDS,
+                    delay_seconds=settings.VOUCHER_ISSUANCE_REQUEUE_BACKOFF_SECONDS,
                 )
                 logger.info(f"Next attempt time at {next_attempt_time}")
                 retry_task.update_task(db_session, next_attempt_time=next_attempt_time, increase_attempts=True)
-
-
-@click.group()
-def cli() -> None:  # pragma: no cover
-    pass
-
-
-@cli.command()
-def worker(burst: bool = False) -> None:  # pragma: no cover
-    from app.tasks.error_handlers import handle_voucher_issuance_error
-
-    # placeholder for when we implement prometheus metrics
-    # registry = prometheus_client.CollectorRegistry()
-    # prometheus_client.multiprocess.MultiProcessCollector(registry)
-    # prometheus_client.start_http_server(9100, registry=registry)
-
-    with SyncSessionMaker() as db_session:
-        task_queue_name = db_session.execute(
-            select(TaskType.queue_name).where(TaskType.name == settings.VOUCHER_ISSUANCE_TASK_NAME)
-        ).scalar_one()
-
-    q = rq.Queue(task_queue_name, connection=redis)
-    worker = rq.Worker(
-        queues=[q],
-        connection=redis,
-        log_job_description=True,
-        exception_handlers=[handle_voucher_issuance_error],
-    )
-    worker.work(burst=burst, with_scheduler=True)
-
-
-if __name__ == "__main__":  # pragma: no cover
-    cli()

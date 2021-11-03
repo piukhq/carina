@@ -1,14 +1,9 @@
 from datetime import datetime
 
-import click
-import rq
-
-from retry_tasks_lib.db.models import TaskType
 from retry_tasks_lib.enums import RetryTaskStatuses
 from retry_tasks_lib.utils.synchronous import get_retry_task
-from sqlalchemy.future import select
 
-from app.core.config import redis, settings
+from app.core.config import settings
 from app.db.session import SyncSessionMaker
 
 from . import logger, send_request_with_metrics
@@ -40,6 +35,8 @@ def _process_status_adjustment(task_params: dict) -> dict:
     return response_audit
 
 
+# NOTE: Inter-dependency: If this function's name or module changes, ensure that
+# it is relevantly reflected in the TaskType table
 def status_adjustment(retry_task_id: int) -> None:
     with SyncSessionMaker() as db_session:
 
@@ -51,36 +48,3 @@ def status_adjustment(retry_task_id: int) -> None:
         retry_task.update_task(
             db_session, response_audit=response_audit, status=RetryTaskStatuses.SUCCESS, clear_next_attempt_time=True
         )
-
-
-@click.group()
-def cli() -> None:  # pragma: no cover
-    pass
-
-
-@cli.command()
-def worker(burst: bool = False) -> None:  # pragma: no cover
-    from app.tasks.error_handlers import handle_voucher_status_adjustment_error
-
-    # placeholder for when we implement prometheus metrics
-    # registry = prometheus_client.CollectorRegistry()
-    # prometheus_client.multiprocess.MultiProcessCollector(registry)
-    # prometheus_client.start_http_server(9100, registry=registry)
-
-    with SyncSessionMaker() as db_session:
-        task_queue_name = db_session.execute(
-            select(TaskType.queue_name).where(TaskType.name == settings.VOUCHER_STATUS_ADJUSTMENT_TASK_NAME)
-        ).scalar_one()
-
-    q = rq.Queue(task_queue_name, connection=redis)
-    worker = rq.Worker(
-        queues=[q],
-        connection=redis,
-        log_job_description=True,
-        exception_handlers=[handle_voucher_status_adjustment_error],
-    )
-    worker.work(burst=burst, with_scheduler=True)
-
-
-if __name__ == "__main__":  # pragma: no cover
-    cli()
