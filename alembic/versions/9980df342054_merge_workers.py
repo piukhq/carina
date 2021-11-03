@@ -27,20 +27,17 @@ def _get_table_and_connection() -> tuple[sa.engine.Connection, sa.Table]:
 
 def set_error_handler_path_and_update_queue_name() -> None:
     conn, task_type = _get_table_and_connection()
-    for task_name in (
-        settings.VOUCHER_ISSUANCE_TASK_NAME,
-        settings.VOUCHER_STATUS_ADJUSTMENT_TASK_NAME,
-    ):
-        conn.execute(
-            sa.update(task_type)
-            .where(task_type.c.name == task_name)
-            .values(
-                queue_name="carina:default",
-                error_handler_path=(
-                    handle_retry_task_request_error.__module__ + "." + handle_retry_task_request_error.__name__
-                ),
-            )
+    task_names = (settings.VOUCHER_ISSUANCE_TASK_NAME, settings.VOUCHER_STATUS_ADJUSTMENT_TASK_NAME)
+    conn.execute(
+        sa.update(task_type)
+        .where(task_type.c.name.in_(task_names))
+        .values(
+            queue_name="carina:default",
+            error_handler_path=(
+                handle_retry_task_request_error.__module__ + "." + handle_retry_task_request_error.__name__
+            ),
         )
+    )
 
 
 def revert_queue_name_update() -> None:
