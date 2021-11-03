@@ -17,14 +17,14 @@ from testfixtures import LogCapture
 
 from app.enums import VoucherTypeStatuses
 from app.models import Voucher, VoucherConfig
-from app.tasks.allocation import _process_issuance, issue_voucher
+from app.tasks.issuance import _process_issuance, issue_voucher
 from app.tasks.status_adjustment import _process_status_adjustment, status_adjustment
 
 fake_now = datetime.utcnow()
 
 
 @httpretty.activate
-@mock.patch("app.tasks.allocation.datetime")
+@mock.patch("app.tasks.issuance.datetime")
 def test__process_issuance_ok(
     mock_datetime: mock.Mock, voucher_issuance_task_params: dict, issuance_expected_payload: dict
 ) -> None:
@@ -67,7 +67,7 @@ def test__process_issuance_http_errors(voucher_issuance_task_params: dict, issua
         assert json.loads(last_request.body) == issuance_expected_payload
 
 
-@mock.patch("app.tasks.allocation.send_request_with_metrics")
+@mock.patch("app.tasks.issuance.send_request_with_metrics")
 def test__process_issuance_connection_error(
     mock_send_request_with_metrics: mock.MagicMock, voucher_issuance_task_params: dict
 ) -> None:
@@ -122,7 +122,7 @@ def test_voucher_issuance_campaign_is_cancelled(
     db_session.commit()
     voucher_config.status = VoucherTypeStatuses.CANCELLED
     db_session.commit()
-    import app.tasks.allocation as tasks_allocation
+    import app.tasks.issuance as tasks_allocation
 
     spy = mocker.spy(tasks_allocation, "_process_issuance")
 
@@ -157,7 +157,7 @@ def test_voucher_issuance_no_voucher_campaign_is_cancelled(
     db_session.commit()
     voucher_config.status = VoucherTypeStatuses.CANCELLED
     db_session.commit()
-    import app.tasks.allocation as tasks_allocation
+    import app.tasks.issuance as tasks_allocation
 
     spy = mocker.spy(tasks_allocation, "_process_issuance")
 
@@ -176,7 +176,7 @@ def test_voucher_issuance_no_voucher_but_one_available(
     db_session: "Session", issuance_retry_task_no_voucher: RetryTask, mocker: MockerFixture, voucher: Voucher
 ) -> None:
     """test that an allocable voucher (the pytest 'voucher' fixture) is allocated, resulting in success"""
-    mock_queue = mocker.patch("app.tasks.allocation.enqueue_retry_task_delay")
+    mock_queue = mocker.patch("app.tasks.issuance.enqueue_retry_task_delay")
     issuance_retry_task_no_voucher.status = RetryTaskStatuses.IN_PROGRESS
     db_session.commit()
 
@@ -201,9 +201,9 @@ def test_voucher_issuance_no_voucher_and_allocation_is_requeued(
     create_voucher: Callable,
 ) -> None:
     """test that no allocable voucher results in the allocation being requeued"""
-    mock_queue = mocker.patch("app.tasks.allocation.enqueue_retry_task_delay")
+    mock_queue = mocker.patch("app.tasks.issuance.enqueue_retry_task_delay")
     mock_queue.return_value = fake_now
-    from app.tasks.allocation import sentry_sdk as mock_sentry_sdk
+    from app.tasks.issuance import sentry_sdk as mock_sentry_sdk
 
     sentry_spy = mocker.spy(mock_sentry_sdk, "capture_message")
     issuance_retry_task_no_voucher.status = RetryTaskStatuses.IN_PROGRESS

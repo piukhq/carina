@@ -176,13 +176,6 @@ class Settings(BaseSettings):
     POLARIS_URL: str = "http://polaris-api"
     REDIS_URL: str
 
-    VOUCHER_ALLOCATION_MAX_RETRIES: int = 6
-    VOUCHER_ALLOCATION_BACKOFF_BASE: float = 3
-    VOUCHER_ALLOCATION_REQUEUE_BACKOFF_SECONDS: int = 60 * 60 * 12  # 12 hours
-
-    VOUCHER_STATUS_UPDATE_MAX_RETRIES: int = 6
-    VOUCHER_STATUS_UPDATE_BACKOFF_BASE: float = 3
-
     BLOB_STORAGE_DSN: str = ""
     BLOB_IMPORT_CONTAINER = "carina-imports"
     BLOB_ARCHIVE_CONTAINER = "carina-archive"
@@ -195,7 +188,19 @@ class Settings(BaseSettings):
     REDIS_KEY_PREFIX = "carinavouchers"
 
     VOUCHER_ISSUANCE_TASK_NAME = "voucher-issuance"
+    VOUCHER_ISSUANCE_REQUEUE_BACKOFF_SECONDS: int = 60 * 60 * 12  # 12 hours
     VOUCHER_STATUS_ADJUSTMENT_TASK_NAME = "voucher-status-adjustment"
+
+    TASK_MAX_RETRIES: int = 6
+    TASK_RETRY_BACKOFF_BASE: float = 3.0
+    TASK_QUEUE_PREFIX: str = "carina:"
+    TASK_QUEUES: Optional[list[str]] = None
+
+    @validator("TASK_QUEUES")
+    def task_queues(cls, v: Optional[list[str]], values: dict[str, Any]) -> Any:
+        if v and isinstance(v, list):
+            return v
+        return (values["TASK_QUEUE_PREFIX"] + name for name in ("high", "default", "low"))
 
     class Config:
         case_sensitive = True

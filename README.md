@@ -17,7 +17,7 @@ BPL Voucher Management API
 
 ### voucher allocation worker (rq)
 
-- `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES pipenv run python -m app.tasks.allocation worker`
+- `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES pipenv run python -m app.tasks.worker worker`
 - this worker deals with allocating vouchers to account_holders, through Polaris' API
 
 > Running the command with the above environment variable is a work around for [this issue](https://github.com/rq/rq/issues/1418). It's a mac only issue to do with os.fork()'ing which rq.Worker utilises.

@@ -13,12 +13,19 @@ from app.db.base import Base
 from app.db.session import SyncSessionMaker, sync_engine
 from app.enums import VoucherTypeStatuses
 from app.models import Voucher, VoucherConfig
+from app.tasks.error_handlers import handle_retry_task_request_error
+from app.tasks.issuance import issue_voucher
+from app.tasks.status_adjustment import status_adjustment
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 
 # Top-level conftest for tests, doing things like setting up DB
+
+
+def _get_path(fun: Callable) -> str:
+    return fun.__module__ + "." + fun.__name__
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -138,7 +145,12 @@ def capture() -> Generator:
 
 @pytest.fixture(scope="function")
 def voucher_issuance_task_type(db_session: "Session") -> TaskType:
-    task = TaskType(name=settings.VOUCHER_ISSUANCE_TASK_NAME, path="test.path", queue_name="test_queue")
+    task = TaskType(
+        name=settings.VOUCHER_ISSUANCE_TASK_NAME,
+        path=_get_path(issue_voucher),
+        queue_name="carina:default",
+        error_handler_path=_get_path(handle_retry_task_request_error),
+    )
     db_session.add(task)
     db_session.flush()
 
@@ -163,7 +175,12 @@ def voucher_issuance_task_type(db_session: "Session") -> TaskType:
 
 @pytest.fixture(scope="function")
 def voucher_status_adjustment_task_type(db_session: "Session") -> TaskType:
-    task = TaskType(name=settings.VOUCHER_STATUS_ADJUSTMENT_TASK_NAME, path="test.path", queue_name="test_queue")
+    task = TaskType(
+        name=settings.VOUCHER_STATUS_ADJUSTMENT_TASK_NAME,
+        path=_get_path(status_adjustment),
+        queue_name="carina:default",
+        error_handler_path=_get_path(handle_retry_task_request_error),
+    )
     db_session.add(task)
     db_session.flush()
 
