@@ -12,7 +12,7 @@ from retry_tasks_lib.db.models import RetryTask, TaskType, TaskTypeKeyValue
 from sqlalchemy.future import select
 from testfixtures import LogCapture
 
-from app.enums import VoucherUpdateStatuses, FileAgentType
+from app.enums import FileAgentType, VoucherUpdateStatuses
 from app.imports.agents.file_agent import (
     BlobProcessingError,
     VoucherFileLog,
