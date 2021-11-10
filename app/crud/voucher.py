@@ -1,4 +1,5 @@
 from typing import List, Optional
+from uuid import uuid4
 
 from retry_tasks_lib.db.models import RetryTask
 from retry_tasks_lib.utils.asynchronous import async_create_task
@@ -73,6 +74,7 @@ async def create_voucher_issuance_retry_task(
             "expiry_date": expiry_date,
             "voucher_config_id": voucher_config.id,
             "voucher_type_slug": voucher_config.voucher_type_slug,
+            "idempotency_token": uuid4(),
         }
 
         if voucher is not None:

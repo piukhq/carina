@@ -39,7 +39,10 @@ def _process_issuance(task_params: dict) -> dict:
             "voucher_type_slug": task_params["voucher_type_slug"],
             "voucher_id": task_params["voucher_id"],
         },
-        headers={"Authorization": f"Token {settings.POLARIS_AUTH_TOKEN}"},
+        headers={
+            "Authorization": f"Token {settings.POLARIS_AUTH_TOKEN}",
+            "Idempotency-Token": task_params["idempotency_token"],
+        },
         timeout=(3.03, 10),
     )
     resp.raise_for_status()

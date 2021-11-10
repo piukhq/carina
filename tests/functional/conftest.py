@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 import pytest
 
@@ -25,6 +26,7 @@ def voucher_issuance_task_params(voucher: Voucher) -> dict:
         "expiry_date": str((now + timedelta(days=voucher.voucher_config.validity_days)).timestamp()),
         "voucher_config_id": str(voucher.voucher_config_id),
         "voucher_type_slug": voucher.voucher_config.voucher_type_slug,
+        "idempotency_token": str(uuid4()),
     }
 
 
@@ -37,6 +39,7 @@ def voucher_issuance_task_params_no_voucher(voucher_config: VoucherConfig) -> di
         "expiry_date": str((now + timedelta(days=voucher_config.validity_days)).timestamp()),
         "voucher_config_id": str(voucher_config.id),
         "voucher_type_slug": voucher_config.voucher_type_slug,
+        "idempotency_token": str(uuid4()),
     }
 
 
