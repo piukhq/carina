@@ -12,8 +12,14 @@ from retry_tasks_lib.db.models import RetryTask, TaskType, TaskTypeKeyValue
 from sqlalchemy.future import select
 from testfixtures import LogCapture
 
-from app.enums import VoucherUpdateStatuses
-from app.imports.agents.file_agent import BlobProcessingError, VoucherImportAgent, VoucherUpdateRow, VoucherUpdatesAgent
+from app.enums import VoucherUpdateStatuses, FileAgentType
+from app.imports.agents.file_agent import (
+    BlobProcessingError,
+    VoucherFileLog,
+    VoucherImportAgent,
+    VoucherUpdateRow,
+    VoucherUpdatesAgent,
+)
 from app.models import Voucher, VoucherUpdate
 from app.schemas import VoucherUpdateSchema
 from app.tasks.status_adjustment import status_adjustment
@@ -390,15 +396,23 @@ def test_process_blobs(setup: SetupType, mocker: MockerFixture) -> None:
     container_client = mocker.patch.object(voucher_agent, "container_client", spec=ContainerClient)
     mock_process_csv = mocker.patch.object(voucher_agent, "process_csv")
     mock_move_blob = mocker.patch.object(voucher_agent, "move_blob")
+    file_name = "test-retailer/voucher-updates/update.csv"
     container_client.list_blobs = mocker.MagicMock(
         return_value=[
-            Blob("test-retailer/voucher-updates/update.csv"),
+            Blob(file_name),
         ]
     )
     mock_blob_service_client.get_blob_client.return_value = mocker.MagicMock(spec=BlobClient)
 
     voucher_agent.process_blobs("test-retailer", db_session=db_session)
 
+    voucher_file_log_row = db_session.execute(
+        select(VoucherFileLog).where(
+            VoucherFileLog.file_name == file_name, VoucherFileLog.file_agent_type == FileAgentType.UPDATE
+        )
+    ).scalar_one_or_none()
+
+    assert voucher_file_log_row
     mock_process_csv.assert_called_once()
     mock_move_blob.assert_called_once()
 
@@ -462,6 +476,87 @@ def test_process_blobs_not_csv(setup: SetupType, mocker: MockerFixture) -> None:
     mock_move_blob.assert_called_once()
     assert mock_move_blob.call_args[0][0] == "ERROR-CONTAINER"
     mock_process_csv.assert_not_called()
+
+
+def test_process_blobs_filename_is_duplicate(setup: SetupType, mocker: MockerFixture) -> None:
+    db_session, _, _ = setup
+    file_name = "test-retailer/voucher-updates/update.csv"
+    db_session.add(
+        VoucherFileLog(
+            file_name=file_name,
+            file_agent_type=FileAgentType.UPDATE,
+        )
+    )
+    db_session.commit()
+    MockBlobServiceClient = mocker.patch("app.imports.agents.file_agent.BlobServiceClient", autospec=True)
+    mock_blob_service_client = mocker.MagicMock(spec=BlobServiceClient)
+    MockBlobServiceClient.from_connection_string.return_value = mock_blob_service_client
+    from app.imports.agents.file_agent import sentry_sdk
+
+    capture_message_spy = mocker.spy(sentry_sdk, "capture_message")
+
+    voucher_agent = VoucherUpdatesAgent()
+    mock_process_csv = mocker.patch.object(voucher_agent, "process_csv")
+    container_client = mocker.patch.object(voucher_agent, "container_client", spec=ContainerClient)
+    mock_move_blob = mocker.patch.object(voucher_agent, "move_blob")
+    container_client.list_blobs = mocker.MagicMock(
+        return_value=[
+            Blob(file_name),
+        ]
+    )
+    mock_blob_service_client.get_blob_client.return_value = mocker.MagicMock(spec=BlobClient)
+    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings.BLOB_ERROR_CONTAINER = "ERROR-CONTAINER"
+
+    voucher_agent.process_blobs("test-retailer", db_session=db_session)
+    assert capture_message_spy.call_count == 1  # Errors should all be rolled up in to a single call
+    assert (
+        "test-retailer/voucher-updates/update.csv is a duplicate. Moving to ERROR-CONTAINER for checking"
+        == capture_message_spy.call_args.args[0]
+    )
+    mock_move_blob.assert_called_once()
+    assert mock_move_blob.call_args[0][0] == "ERROR-CONTAINER"
+    mock_process_csv.assert_not_called()
+
+
+def test_process_blobs_filename_is_not_duplicate(setup: SetupType, mocker: MockerFixture) -> None:
+    """A filename exists in the log, but the file agent type is different"""
+    db_session, _, _ = setup
+    file_name = "test-retailer/voucher-updates/update.csv"
+    db_session.add(
+        VoucherFileLog(
+            file_name=file_name,
+            file_agent_type=FileAgentType.IMPORT,
+        )
+    )
+    db_session.commit()
+    MockBlobServiceClient = mocker.patch("app.imports.agents.file_agent.BlobServiceClient", autospec=True)
+    mock_blob_service_client = mocker.MagicMock(spec=BlobServiceClient)
+
+    MockBlobServiceClient.from_connection_string.return_value = mock_blob_service_client
+    voucher_agent = VoucherUpdatesAgent()
+    container_client = mocker.patch.object(voucher_agent, "container_client", spec=ContainerClient)
+    mock_process_csv = mocker.patch.object(voucher_agent, "process_csv")
+    mock_move_blob = mocker.patch.object(voucher_agent, "move_blob")
+    file_name = "test-retailer/voucher-updates/update.csv"
+    container_client.list_blobs = mocker.MagicMock(
+        return_value=[
+            Blob(file_name),
+        ]
+    )
+    mock_blob_service_client.get_blob_client.return_value = mocker.MagicMock(spec=BlobClient)
+
+    voucher_agent.process_blobs("test-retailer", db_session=db_session)
+
+    voucher_file_log_row = db_session.execute(
+        select(VoucherFileLog).where(
+            VoucherFileLog.file_name == file_name, VoucherFileLog.file_agent_type == FileAgentType.UPDATE
+        )
+    ).scalar_one_or_none()
+
+    assert voucher_file_log_row  # The new record
+    mock_process_csv.assert_called_once()
+    mock_move_blob.assert_called_once()
 
 
 def test_move_blob(mocker: MockerFixture) -> None:

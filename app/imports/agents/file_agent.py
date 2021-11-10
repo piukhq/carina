@@ -24,8 +24,8 @@ from sqlalchemy.future import select
 from app.core.config import redis, settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
-from app.enums import VoucherUpdateStatuses
-from app.models import Voucher, VoucherConfig, VoucherUpdate
+from app.enums import FileAgentType, VoucherUpdateStatuses
+from app.models import Voucher, VoucherConfig, VoucherFileLog, VoucherUpdate
 from app.scheduler import CronScheduler
 from app.schemas import VoucherUpdateSchema
 from app.tasks.status_adjustment import status_adjustment
@@ -57,12 +57,22 @@ class BlobFileAgent:
         self.blob_service_client = BlobServiceClient.from_connection_string(
             settings.BLOB_STORAGE_DSN, logger=blob_client_logger
         )
-
         try:
             self.blob_service_client.create_container(self.container_name)
         except ResourceExistsError:
             pass  # this is fine
         self.container_client = self.blob_service_client.get_container_client(self.container_name)
+
+    def _blob_name_is_duplicate(self, db_session: "Session") -> bool:
+        file_name = sync_run_query(
+            lambda: db_session.execute(
+                select(VoucherFileLog.file_name)
+                    .where(VoucherFileLog.file_agent_type == self.file_agent_type)  # type: ignore
+            ).scalar_one_or_none(),
+            db_session,
+        )
+
+        return True if file_name else False
 
     def retailer_slugs(self, db_session: "Session") -> list[str]:
         return sync_run_query(
@@ -132,6 +142,14 @@ class BlobFileAgent:
                     sentry_sdk.capture_message(msg)
                 continue
 
+            if self._blob_name_is_duplicate(db_session):
+                msg = f"{blob.name} is a duplicate. Moving to {settings.BLOB_ERROR_CONTAINER} for checking"
+                logger.error(msg)
+                if settings.SENTRY_DSN:
+                    sentry_sdk.capture_message(msg)
+                self.move_blob(settings.BLOB_ERROR_CONTAINER, blob_client, lease)
+                continue
+
             if not blob.name.endswith(".csv"):
                 msg = f"{blob.name} does not have .csv ext. Moving to {settings.BLOB_ERROR_CONTAINER} for checking"
                 logger.error(msg)
@@ -164,11 +182,22 @@ class BlobFileAgent:
             else:
                 logger.debug(f"Archiving blob {blob.name}.")
                 self.move_blob(settings.BLOB_ARCHIVE_CONTAINER, blob_client, lease)
+                db_session.add(
+                    VoucherFileLog(
+                        file_name=blob.name,
+                        file_agent_type=self.file_agent_type,  # type: ignore
+                    )
+                )
+                db_session.commit()
 
 
 class VoucherImportAgent(BlobFileAgent):
     blob_path_template = string.Template("$retailer_slug/available-vouchers/")
     scheduler_name = "carina-voucher-import-scheduler"
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.file_agent_type = FileAgentType.IMPORT
 
     @lru_cache()
     def voucher_configs_by_voucher_type_slug(
@@ -259,6 +288,10 @@ class VoucherImportAgent(BlobFileAgent):
 class VoucherUpdatesAgent(BlobFileAgent):
     blob_path_template = string.Template("$retailer_slug/voucher-updates/")
     scheduler_name = "carina-voucher-update-scheduler"
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.file_agent_type = FileAgentType.UPDATE
 
     def process_csv(self, retailer_slug: str, blob_name: str, blob_content: str, db_session: "Session") -> None:
         content_reader = csv.reader(StringIO(blob_content), delimiter=",", quotechar="|")

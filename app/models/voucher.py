@@ -5,7 +5,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.db.base_class import Base, TimestampMixin
-from app.enums import VoucherFetchType, VoucherTypeStatuses, VoucherUpdateStatuses
+from app.enums import FileAgentType, VoucherFetchType, VoucherTypeStatuses, VoucherUpdateStatuses
 
 
 class Voucher(Base, TimestampMixin):  # pragma: no cover
@@ -60,6 +60,20 @@ class VoucherUpdate(Base, TimestampMixin):  # pragma: no cover
     voucher = relationship("Voucher", back_populates="updates")
 
     __mapper_args__ = {"eager_defaults": True}
+
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__}({self.id})"
+
+
+class VoucherFileLog(Base, TimestampMixin):  # pragma: no cover
+    __tablename__ = "voucher_file_log"
+
+    id = Column(Integer, primary_key=True)
+    file_name = Column(String(500), index=True, nullable=False)
+    file_agent_type = Column(Enum(FileAgentType), index=True, nullable=False)
+
+    __mapper_args__ = {"eager_defaults": True}
+    __table_args__ = (UniqueConstraint("file_name", "file_agent_type", name="file_name_file_agent_type_unq"),)
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}({self.id})"
