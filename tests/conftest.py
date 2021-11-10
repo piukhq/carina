@@ -165,6 +165,7 @@ def voucher_issuance_task_type(db_session: "Session") -> TaskType:
                 ("voucher_type_slug", "STRING"),
                 ("voucher_id", "STRING"),
                 ("voucher_code", "STRING"),
+                ("idempotency_token", "STRING"),
             )
         ]
     )
