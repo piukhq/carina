@@ -67,15 +67,15 @@ class BlobFileAgent:
         file_name = sync_run_query(
             lambda: db_session.execute(
                 select(VoucherFileLog.file_name).where(
-                    VoucherFileLog.file_agent_type == self.file_agent_type
-                )  # type: ignore
+                    VoucherFileLog.file_agent_type == self.file_agent_type  # type: ignore
+                )
             ).scalar_one_or_none(),
             db_session,
         )
 
         return True if file_name else False
 
-    def _log_and_capture_msg(self, msg: str):
+    def _log_and_capture_msg(self, msg: str) -> None:
         logger.error(msg)
         if settings.SENTRY_DSN:
             sentry_sdk.capture_message(msg)
