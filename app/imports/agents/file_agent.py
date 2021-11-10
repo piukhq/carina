@@ -186,13 +186,17 @@ class BlobFileAgent:
             else:
                 logger.debug(f"Archiving blob {blob.name}.")
                 self.move_blob(settings.BLOB_ARCHIVE_CONTAINER, blob_client, lease)
-                db_session.add(
-                    VoucherFileLog(
-                        file_name=blob.name,
-                        file_agent_type=self.file_agent_type,  # type: ignore
+
+                def add_voucher_file_log() -> None:
+                    db_session.add(
+                        VoucherFileLog(
+                            file_name=blob.name,
+                            file_agent_type=self.file_agent_type,  # type: ignore
+                        )
                     )
-                )
-                db_session.commit()
+                    db_session.commit()
+
+                sync_run_query(add_voucher_file_log, db_session)
 
 
 class VoucherImportAgent(BlobFileAgent):
