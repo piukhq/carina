@@ -53,3 +53,8 @@ class VoucherUpdateStatuses(Enum):
 
 class VoucherFetchType(Enum):
     PRE_LOADED = "pre_loaded"
+
+
+class FileAgentType(Enum):
+    IMPORT = "import"
+    UPDATE = "update"
