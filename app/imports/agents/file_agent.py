@@ -63,11 +63,12 @@ class BlobFileAgent:
             pass  # this is fine
         self.container_client = self.blob_service_client.get_container_client(self.container_name)
 
-    def _blob_name_is_duplicate(self, db_session: "Session") -> bool:
+    def _blob_name_is_duplicate(self, db_session: "Session", file_name: str) -> bool:
         file_name = sync_run_query(
             lambda: db_session.execute(
                 select(VoucherFileLog.file_name).where(
-                    VoucherFileLog.file_agent_type == self.file_agent_type  # type: ignore
+                    VoucherFileLog.file_agent_type == self.file_agent_type,  # type: ignore
+                    VoucherFileLog.file_name == file_name,
                 )
             ).scalar_one_or_none(),
             db_session,
@@ -148,7 +149,7 @@ class BlobFileAgent:
                     sentry_sdk.capture_message(msg)
                 continue
 
-            if self._blob_name_is_duplicate(db_session):
+            if self._blob_name_is_duplicate(db_session, file_name=blob.name):
                 self._log_and_capture_msg(
                     f"{blob.name} is a duplicate. Moving to {settings.BLOB_ERROR_CONTAINER} for checking"
                 )

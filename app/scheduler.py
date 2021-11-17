@@ -92,8 +92,9 @@ class CronScheduler:  # pragma: no cover
         try:
             if is_leader(self.name):
                 self.callback()
-        except Exception:
+        except Exception as e:
             if settings.SENTRY_DSN:
+                self.log.exception(repr(e))
                 sentry_sdk.capture_exception()
             else:
                 raise
