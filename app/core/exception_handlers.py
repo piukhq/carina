@@ -13,7 +13,7 @@ def _format_validation_errors(payload: List[dict]) -> Tuple[int, Union[List[dict
         if error["type"] == "value_error.jsondecode":
             return (
                 HTTP_400_BAD_REQUEST,
-                {"display_message": "Malformed request.", "error": "MALFORMED_REQUEST"},
+                {"display_message": "Malformed request.", "code": "MALFORMED_REQUEST"},
             )
 
         else:
@@ -21,7 +21,7 @@ def _format_validation_errors(payload: List[dict]) -> Tuple[int, Union[List[dict
 
     content = {
         "display_message": "Submitted fields are missing or invalid.",
-        "error": "FIELD_VALIDATION_ERROR",
+        "code": "FIELD_VALIDATION_ERROR",
         "fields": fields,
     }
 
