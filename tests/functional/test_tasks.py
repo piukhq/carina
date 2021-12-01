@@ -15,10 +15,13 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import Session
 from testfixtures import LogCapture
 
+from app.core.config import settings
 from app.enums import VoucherTypeStatuses
 from app.models import Voucher, VoucherConfig
 from app.tasks.issuance import _process_issuance, issue_voucher
 from app.tasks.status_adjustment import _process_status_adjustment, status_adjustment
+from app.tasks.voucher_cancellation import cancel_vouchers
+from app.tasks.voucher_deletion import delete_unallocated_vouchers
 
 fake_now = datetime.utcnow()
 
@@ -331,3 +334,68 @@ def test_status_adjustment_wrong_status(db_session: "Session", voucher_status_ad
     assert voucher_status_adjustment_retry_task.attempts == 0
     assert voucher_status_adjustment_retry_task.next_attempt_time is None
     assert voucher_status_adjustment_retry_task.status == RetryTaskStatuses.FAILED
+
+
+def test_delete_unallocated_vouchers(
+    delete_vouchers_retry_task: RetryTask, db_session: Session, voucher: Voucher
+) -> None:
+    task_params = delete_vouchers_retry_task.get_params()
+
+    other_config = VoucherConfig(
+        voucher_type_slug="other-config",
+        validity_days=15,
+        retailer_slug=task_params["retailer_slug"],
+    )
+    db_session.add(other_config)
+    db_session.flush()
+
+    other_voucher = Voucher(
+        voucher_code="sample-other-code",
+        voucher_config_id=other_config.id,
+        retailer_slug=other_config.retailer_slug,
+    )
+    db_session.add(other_voucher)
+    db_session.commit()
+
+    assert voucher.deleted is False
+    delete_unallocated_vouchers(delete_vouchers_retry_task.retry_task_id)
+
+    db_session.refresh(delete_vouchers_retry_task)
+    db_session.refresh(voucher)
+    db_session.refresh(other_voucher)
+
+    assert voucher.deleted is True
+    assert other_voucher.deleted is False
+    assert delete_vouchers_retry_task.next_attempt_time is None
+    assert delete_vouchers_retry_task.attempts == 1
+    assert delete_vouchers_retry_task.audit_data == []
+
+
+@httpretty.activate
+@mock.patch("app.tasks.voucher_cancellation.datetime")
+def test_cancel_vouchers(mock_datetime: mock.Mock, db_session: Session, cancel_vouchers_retry_task: RetryTask) -> None:
+    mock_datetime.utcnow.return_value = fake_now
+    task_params = cancel_vouchers_retry_task.get_params()
+    url = "{base_url}/bpl/loyalty/{retailer_slug}/vouchers/{voucher_type_slug}/cancel".format(
+        base_url=settings.POLARIS_URL,
+        retailer_slug=task_params["retailer_slug"],
+        voucher_type_slug=task_params["voucher_type_slug"],
+    )
+
+    httpretty.register_uri("POST", url, body="OK", status=202)
+    cancel_vouchers(cancel_vouchers_retry_task.retry_task_id)
+    db_session.refresh(cancel_vouchers_retry_task)
+
+    last_request = httpretty.last_request()
+    assert last_request.method == "POST"
+    assert last_request.url == url
+    assert last_request.body == b""
+    assert cancel_vouchers_retry_task.next_attempt_time is None
+    assert cancel_vouchers_retry_task.attempts == 1
+    assert cancel_vouchers_retry_task.audit_data[0] == {
+        "timestamp": fake_now.isoformat(),
+        "response": {
+            "status": 202,
+            "body": "OK",
+        },
+    }

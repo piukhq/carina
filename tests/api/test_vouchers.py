@@ -4,6 +4,7 @@ from fastapi import status
 from fastapi.testclient import TestClient
 from pytest_mock import MockerFixture
 from retry_tasks_lib.db.models import RetryTask, TaskType, TaskTypeKeyValue
+from sqlalchemy import func
 from sqlalchemy.future import select
 
 from app.core.config import settings
@@ -46,7 +47,7 @@ def test_post_voucher_allocation_happy_path(
     setup: SetupType, mocker: MockerFixture, voucher_issuance_task_type: TaskType
 ) -> None:
     db_session, voucher_config, voucher = setup
-    mocker.patch("app.tasks.voucher.enqueue_retry_task")
+    mocker.patch("app.api.tasks.enqueue_retry_task")
 
     resp = client.post(
         f"/bpl/vouchers/{voucher_config.retailer_slug}/vouchers/{voucher_config.voucher_type_slug}/allocation",
@@ -106,7 +107,7 @@ def test_post_voucher_allocation_no_more_vouchers(
     voucher.allocated = True
     db_session.commit()
 
-    mocker.patch("app.tasks.voucher.enqueue_retry_task")
+    mocker.patch("app.api.tasks.enqueue_retry_task")
 
     resp = client.post(
         f"/bpl/vouchers/{voucher_config.retailer_slug}/vouchers/{voucher_config.voucher_type_slug}/allocation",
@@ -126,8 +127,14 @@ def test_post_voucher_allocation_no_more_vouchers(
     assert str(voucher_config.id) in task_params_values
 
 
-def test_voucher_type_status_ok(setup: SetupType) -> None:
+def test_voucher_type_status_ok(
+    setup: SetupType,
+    mocker: MockerFixture,
+    voucher_deletion_task_type: TaskType,
+    voucher_cancellation_task_type: TaskType,
+) -> None:
     db_session, voucher_config, _ = setup
+    mocker.patch("app.api.tasks.enqueue_many_retry_tasks")
 
     for transition_status in ("cancelled", "ended"):
         voucher_config.status = VoucherTypeStatuses.ACTIVE
@@ -142,6 +149,23 @@ def test_voucher_type_status_ok(setup: SetupType) -> None:
         assert resp.json() == {}
         db_session.refresh(voucher_config)
         assert voucher_config.status == VoucherTypeStatuses(transition_status)
+
+    assert (
+        db_session.scalar(
+            select(func.count(RetryTask.retry_task_id)).where(
+                RetryTask.task_type_id == voucher_deletion_task_type.task_type_id
+            )
+        )
+        == 2
+    )
+    assert (
+        db_session.scalar(
+            select(func.count(RetryTask.retry_task_id)).where(
+                RetryTask.task_type_id == voucher_cancellation_task_type.task_type_id
+            )
+        )
+        == 1
+    )
 
 
 def test_voucher_type_status_bad_status(setup: SetupType) -> None:
