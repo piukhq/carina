@@ -5,11 +5,14 @@ import sys
 from logging.config import dictConfig
 from typing import TYPE_CHECKING, Any, Optional
 
+import sentry_sdk
+
 from pydantic import BaseSettings, HttpUrl, PostgresDsn, validator
 from pydantic.validators import str_validator
 from redis import Redis
 
 from app.core.key_vault import KeyVault
+from app.version import __version__
 
 if TYPE_CHECKING:
     from pydantic.typing import CallableGenerator
@@ -266,3 +269,11 @@ redis = Redis.from_url(
     socket_keepalive=True,
     retry_on_timeout=False,
 )
+
+if settings.SENTRY_DSN:  # pragma: no cover
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.SENTRY_ENV,
+        release=__version__,
+        traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+    )

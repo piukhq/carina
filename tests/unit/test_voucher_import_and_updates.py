@@ -3,12 +3,15 @@ import logging
 
 from collections import defaultdict
 from typing import TYPE_CHECKING, DefaultDict, List
+from unittest import mock
 
 import pytest
+import redis
 
 from azure.storage.blob import BlobClient, BlobServiceClient, ContainerClient
 from pytest_mock import MockerFixture
-from retry_tasks_lib.db.models import RetryTask, TaskType, TaskTypeKeyValue
+from retry_tasks_lib.db.models import RetryTask, TaskType
+from sqlalchemy import func
 from sqlalchemy.future import select
 from testfixtures import LogCapture
 
@@ -22,7 +25,6 @@ from app.imports.agents.file_agent import (
 )
 from app.models import Voucher, VoucherUpdate
 from app.schemas import VoucherUpdateSchema
-from app.tasks.status_adjustment import status_adjustment
 from tests.api.conftest import SetupType
 
 if TYPE_CHECKING:
@@ -594,33 +596,56 @@ def test_enqueue_voucher_updates(
 ) -> None:
     db_session, _, voucher = setup
 
-    mock_queue = mocker.patch("rq.Queue")
+    mock_sync_create_many_tasks = mocker.patch("app.imports.agents.file_agent.sync_create_many_tasks")
+    mock_sync_create_many_tasks.return_value = [mock.MagicMock(spec=RetryTask, retry_task_id=1)]
+    mock_enqueue_many_retry_tasks = mocker.patch("app.imports.agents.file_agent.enqueue_many_retry_tasks")
+    mock_redis = mocker.patch("app.imports.agents.file_agent.redis")
+
+    today = datetime.date.today()
     voucher_update = VoucherUpdate(
         voucher=voucher,
-        date=datetime.datetime.utcnow().date(),
+        date=today,
         status=VoucherUpdateStatuses.REDEEMED,
     )
-    db_session.add(voucher_update)
-    db_session.commit()
 
     VoucherUpdatesAgent.enqueue_voucher_updates(db_session, [voucher_update])
-    mock_queue.return_value.enqueue_many.assert_called_once()
-    mock_queue.prepare_data.assert_called_once()
-
-    retry_task = (
-        db_session.execute(
-            select(RetryTask).where(
-                RetryTask.task_type_id == voucher_status_adjustment_task_type.task_type_id,
-                RetryTask.retry_task_id == TaskTypeKeyValue.retry_task_id,
-                TaskTypeKeyValue.value == str(voucher_update.voucher.id),
-            )
-        )
-        .scalars()
-        .first()
+    mock_sync_create_many_tasks.assert_called_once_with(
+        db_session,
+        params_list=[
+            {
+                "date": datetime.datetime.combine(today, datetime.time(0, 0)).timestamp(),
+                "retailer_slug": "test-retailer",
+                "status": "redeemed",
+                "voucher_id": voucher.id,
+            }
+        ],
+        task_type_name="voucher-status-adjustment",
+    )
+    mock_enqueue_many_retry_tasks.assert_called_once_with(
+        db_session,
+        retry_tasks_ids=[1],
+        connection=mock_redis,
     )
 
-    mock_queue.prepare_data.assert_called_with(
-        status_adjustment,
-        kwargs={"retry_task_id": retry_task.retry_task_id},
-        failure_ttl=60 * 60 * 24 * 7,
+
+def test_enqueue_voucher_updates_exception(
+    setup: SetupType, mocker: MockerFixture, voucher_status_adjustment_task_type: TaskType
+) -> None:
+    db_session, _, voucher = setup
+
+    mock_sentry_sdk = mocker.patch("app.imports.agents.file_agent.sentry_sdk")
+    mock_enqueue_many_retry_tasks = mocker.patch("app.imports.agents.file_agent.enqueue_many_retry_tasks")
+    error = redis.RedisError("Fake connection error")
+    mock_enqueue_many_retry_tasks.side_effect = error
+    today = datetime.date.today()
+
+    voucher_update = VoucherUpdate(
+        voucher=voucher,
+        date=today,
+        status=VoucherUpdateStatuses.REDEEMED,
     )
+
+    VoucherUpdatesAgent.enqueue_voucher_updates(db_session, [voucher_update])
+
+    mock_sentry_sdk.capture_exception.assert_called_once_with(error)
+    assert db_session.execute(select(func.count()).select_from(RetryTask)).scalar_one() == 0

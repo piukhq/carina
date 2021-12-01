@@ -10,14 +10,13 @@ from io import StringIO
 from typing import TYPE_CHECKING, DefaultDict, NamedTuple, Optional, Union, cast
 
 import click
-import rq
 import sentry_sdk
 
 from azure.core.exceptions import HttpResponseError, ResourceExistsError
 from azure.storage.blob import BlobClient, BlobLeaseClient, BlobServiceClient
 from pydantic import ValidationError
-from retry_tasks_lib.db.models import RetryTask, TaskType
 from retry_tasks_lib.enums import RetryTaskStatuses
+from retry_tasks_lib.utils.synchronous import enqueue_many_retry_tasks, sync_create_many_tasks
 from sqlalchemy import update
 from sqlalchemy.future import select
 
@@ -28,7 +27,6 @@ from app.enums import FileAgentType, VoucherUpdateStatuses
 from app.models import Voucher, VoucherConfig, VoucherFileLog, VoucherUpdate
 from app.scheduler import CronScheduler
 from app.schemas import VoucherUpdateSchema
-from app.tasks.status_adjustment import status_adjustment
 
 logger = logging.getLogger("voucher-import")
 
@@ -461,64 +459,35 @@ class VoucherUpdatesAgent(BlobFileAgent):
 
     @staticmethod
     def enqueue_voucher_updates(db_session: "Session", voucher_updates: list[VoucherUpdate]) -> None:
-        def _create_retry_tasks() -> tuple[list[RetryTask], str]:
-
-            task_type: TaskType = (
-                db_session.execute(
-                    select(TaskType).where(TaskType.name == settings.VOUCHER_STATUS_ADJUSTMENT_TASK_NAME)
-                )
-                .unique()
-                .scalar_one()
-            )
-            keys = task_type.get_key_ids_by_name()
-
-            retry_tasks = [
-                RetryTask(task_type_id=task_type.task_type_id, status=RetryTaskStatuses.IN_PROGRESS)
-                for _ in voucher_updates
-            ]
-            db_session.add_all(retry_tasks)
-            db_session.flush()
-
-            for retry_task, voucher_update in zip(retry_tasks, voucher_updates):
-                values = [
-                    (keys["voucher_id"], str(voucher_update.voucher_id)),
-                    (keys["retailer_slug"], str(voucher_update.voucher.retailer_slug)),
-                    (keys["date"], datetime.fromisoformat(voucher_update.date.isoformat()).timestamp()),
-                    (keys["status"], voucher_update.status.value),
-                ]
-                db_session.bulk_save_objects(retry_task.get_task_type_key_values(values))
-
-            db_session.flush()
-            return retry_tasks, task_type.queue_name
-
         def _commit() -> None:
             db_session.commit()
 
         def _rollback() -> None:
             db_session.rollback()
 
+        params_list = [
+            {
+                "voucher_id": voucher_update.voucher.id,
+                "retailer_slug": voucher_update.voucher.retailer_slug,
+                "date": datetime.fromisoformat(voucher_update.date.isoformat()).timestamp(),
+                "status": voucher_update.status.value,
+            }
+            for voucher_update in voucher_updates
+        ]
+        tasks = sync_create_many_tasks(
+            db_session, task_type_name=settings.VOUCHER_STATUS_ADJUSTMENT_TASK_NAME, params_list=params_list
+        )
         try:
-            retry_tasks, task_queue_name = sync_run_query(_create_retry_tasks, db_session)
-            q = rq.Queue(task_queue_name, connection=redis)
-            try:
-                q.enqueue_many(
-                    [
-                        rq.Queue.prepare_data(
-                            status_adjustment,
-                            kwargs={"retry_task_id": retry_task.retry_task_id},
-                            failure_ttl=60 * 60 * 24 * 7,  # 1 week
-                        )
-                        for retry_task in retry_tasks
-                    ]
-                )
-            except Exception:
-                sync_run_query(_rollback, db_session)
-                raise
-            else:
-                sync_run_query(_commit, db_session, rollback_on_exc=False)
-
-        except Exception as ex:  # pragma: no cover
+            enqueue_many_retry_tasks(
+                db_session, retry_tasks_ids=[task.retry_task_id for task in tasks], connection=redis
+            )
+        except Exception as ex:
             sentry_sdk.capture_exception(ex)
+            sync_run_query(_rollback, db_session, rollback_on_exc=False)
+        else:
+            for task in tasks:
+                task.status = RetryTaskStatuses.IN_PROGRESS
+            sync_run_query(_commit, db_session, rollback_on_exc=False)
 
 
 @click.group()
