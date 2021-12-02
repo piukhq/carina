@@ -65,17 +65,12 @@ async def voucher_type_status(
 
     await async_run_query(_query, db_session)
 
-    delete_unallocated_voucher_task = await crud.create_delete_unallocated_vouchers_task(
-        db_session, retailer_slug=retailer_slug, voucher_type_slug=voucher_type_slug
+    retry_tasks_ids = await crud.create_delete_and_cancel_vouchers_tasks(
+        db_session,
+        retailer_slug=retailer_slug,
+        voucher_type_slug=voucher_type_slug,
+        create_cancel_task=payload.status == VoucherTypeStatuses.CANCELLED,
     )
-    retry_tasks_ids = [delete_unallocated_voucher_task.retry_task_id]
-
-    if payload.status == VoucherTypeStatuses.CANCELLED:
-
-        cancel_vouchers_task = await crud.create_cancel_vouchers_task(
-            db_session, retailer_slug=retailer_slug, voucher_type_slug=voucher_type_slug
-        )
-        retry_tasks_ids.append(cancel_vouchers_task.retry_task_id)
 
     asyncio.create_task(enqueue_many_tasks(retry_tasks_ids=retry_tasks_ids))
     return {}

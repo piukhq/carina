@@ -99,23 +99,24 @@ async def create_voucher_issuance_retry_task(
     return await _create_retry_task(db_session, settings.VOUCHER_ISSUANCE_TASK_NAME, task_params)
 
 
-async def create_cancel_vouchers_task(
-    db_session: AsyncSession, *, retailer_slug: str, voucher_type_slug: str
-) -> RetryTask:
+async def create_delete_and_cancel_vouchers_tasks(
+    db_session: AsyncSession, *, retailer_slug: str, voucher_type_slug: str, create_cancel_task: bool
+) -> list[int]:
+    task_params = {"retailer_slug": retailer_slug, "voucher_type_slug": voucher_type_slug}
 
-    return await _create_retry_task(
-        db_session,
-        settings.CANCEL_VOUCHERS_TASK_NAME,
-        {"retailer_slug": retailer_slug, "voucher_type_slug": voucher_type_slug},
-    )
+    async def _query() -> tuple[RetryTask, Optional[RetryTask]]:
+        delete_task: RetryTask = await async_create_task(
+            db_session=db_session, task_type_name=settings.DELETE_UNALLOCATED_VOUCHERS_TASK_NAME, params=task_params
+        )
+        cancel_task: Optional[RetryTask] = (
+            await async_create_task(
+                db_session=db_session, task_type_name=settings.CANCEL_VOUCHERS_TASK_NAME, params=task_params
+            )
+            if create_cancel_task is True
+            else None
+        )
 
+        await db_session.commit()
+        return delete_task, cancel_task
 
-async def create_delete_unallocated_vouchers_task(
-    db_session: AsyncSession, *, retailer_slug: str, voucher_type_slug: str
-) -> RetryTask:
-
-    return await _create_retry_task(
-        db_session,
-        settings.DELETE_UNALLOCATED_VOUCHERS_TASK_NAME,
-        {"retailer_slug": retailer_slug, "voucher_type_slug": voucher_type_slug},
-    )
+    return [task.retry_task_id for task in await async_run_query(_query, db_session) if task is not None]
