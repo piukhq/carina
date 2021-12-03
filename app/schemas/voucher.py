@@ -14,6 +14,10 @@ class VoucherAllocationSchema(BaseModel):  # pragma: no cover
 class VoucherStatusSchema(BaseModel):
     status: Literal[VoucherTypeStatuses.CANCELLED, VoucherTypeStatuses.ENDED]
 
+    @validator("status")
+    def get_status(cls, v: str) -> VoucherTypeStatuses:
+        return VoucherTypeStatuses(v)
+
 
 class VoucherUpdateSchema(BaseModel):  # pragma: no cover
     voucher_code: str
