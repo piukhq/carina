@@ -10,12 +10,9 @@ from tenacity.retry import retry_if_exception_type, retry_if_result
 from tenacity.stop import stop_after_attempt
 from tenacity.wait import wait_fixed
 
+from .prometheus import update_metrics_exception_handler, update_metrics_hook
+
 logger = logging.getLogger("tasks")
-
-
-def update_metrics_hook(response: requests.Response, *args: Any, **kwargs: Any) -> None:
-    # placeholder for when we add prometheus metrics
-    pass
 
 
 @retry(
@@ -36,6 +33,13 @@ def send_request_with_metrics(
     timeout: Tuple[float, int],
 ) -> requests.Response:
 
-    return requests.request(
-        method, url, hooks={"response": update_metrics_hook}, headers=headers, json=json, timeout=timeout
-    )
+    try:
+        return requests.request(
+            method, url, hooks={"response": update_metrics_hook}, headers=headers, json=json, timeout=timeout
+        )
+    except requests.HTTPError as ex:
+        update_metrics_hook(ex.response)
+        raise
+    except requests.RequestException as ex:
+        update_metrics_exception_handler(ex, method, url)
+        raise
