@@ -59,37 +59,64 @@ async def get_allocable_voucher(db_session: AsyncSession, voucher_config: Vouche
     return await async_run_query(_query, db_session)
 
 
+async def _create_retry_task(db_session: AsyncSession, task_type_name: str, task_params: dict) -> RetryTask:
+    async def _query() -> RetryTask:
+        retry_task = await async_create_task(db_session=db_session, task_type_name=task_type_name, params=task_params)
+        await db_session.commit()
+        return retry_task
+
+    return await async_run_query(_query, db_session)
+
+
 async def create_voucher_issuance_retry_task(
     db_session: AsyncSession,
+    *,
     voucher: Optional[Voucher],
     issued_date: float,
     expiry_date: float,
     voucher_config: VoucherConfig,
     account_url: str,
 ) -> RetryTask:
-    async def _query() -> RetryTask:
-        task_params = {
-            "account_url": account_url,
-            "issued_date": issued_date,
-            "expiry_date": expiry_date,
-            "voucher_config_id": voucher_config.id,
-            "voucher_type_slug": voucher_config.voucher_type_slug,
-            "idempotency_token": uuid4(),
-        }
 
-        if voucher is not None:
-            voucher.allocated = True
-            task_params.update(
-                {
-                    "voucher_id": voucher.id,
-                    "voucher_code": voucher.voucher_code,
-                }
-            )
+    task_params = {
+        "account_url": account_url,
+        "issued_date": issued_date,
+        "expiry_date": expiry_date,
+        "voucher_config_id": voucher_config.id,
+        "voucher_type_slug": voucher_config.voucher_type_slug,
+        "idempotency_token": uuid4(),
+    }
 
-        retry_task = await async_create_task(
-            db_session=db_session, task_type_name=settings.VOUCHER_ISSUANCE_TASK_NAME, params=task_params
+    if voucher is not None:
+        voucher.allocated = True
+        task_params.update(
+            {
+                "voucher_id": voucher.id,
+                "voucher_code": voucher.voucher_code,
+            }
         )
-        await db_session.commit()
-        return retry_task
 
-    return await async_run_query(_query, db_session)
+    return await _create_retry_task(db_session, settings.VOUCHER_ISSUANCE_TASK_NAME, task_params)
+
+
+async def create_delete_and_cancel_vouchers_tasks(
+    db_session: AsyncSession, *, retailer_slug: str, voucher_type_slug: str, create_cancel_task: bool
+) -> list[int]:
+    task_params = {"retailer_slug": retailer_slug, "voucher_type_slug": voucher_type_slug}
+
+    async def _query() -> tuple[RetryTask, Optional[RetryTask]]:
+        delete_task: RetryTask = await async_create_task(
+            db_session=db_session, task_type_name=settings.DELETE_UNALLOCATED_VOUCHERS_TASK_NAME, params=task_params
+        )
+        cancel_task: Optional[RetryTask] = (
+            await async_create_task(
+                db_session=db_session, task_type_name=settings.CANCEL_VOUCHERS_TASK_NAME, params=task_params
+            )
+            if create_cancel_task is True
+            else None
+        )
+
+        await db_session.commit()
+        return delete_task, cancel_task
+
+    return [task.retry_task_id for task in await async_run_query(_query, db_session) if task is not None]

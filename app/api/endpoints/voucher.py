@@ -7,12 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import crud
 from app.api.deps import get_session, user_is_authorised
+from app.api.tasks import enqueue_many_tasks, enqueue_task
 from app.db.base_class import async_run_query
 from app.enums import HttpErrors, VoucherTypeStatuses
 from app.fetch_voucher import get_allocable_voucher
 from app.schemas import VoucherAllocationSchema
 from app.schemas.voucher import VoucherStatusSchema
-from app.tasks.voucher import enqueue_voucher_allocation_retry_task
 
 router = APIRouter()
 
@@ -31,10 +31,15 @@ async def allocation(
     voucher_config = await crud.get_voucher_config(db_session, retailer_slug, voucher_type_slug)
     voucher, issued, expiry = await get_allocable_voucher(db_session, voucher_config)
     retry_task = await crud.create_voucher_issuance_retry_task(
-        db_session, voucher, issued, expiry, voucher_config, payload.account_url
+        db_session,
+        voucher=voucher,
+        issued_date=issued,
+        expiry_date=expiry,
+        voucher_config=voucher_config,
+        account_url=payload.account_url,
     )
 
-    asyncio.create_task(enqueue_voucher_allocation_retry_task(retry_task.retry_task_id))
+    asyncio.create_task(enqueue_task(retry_task_id=retry_task.retry_task_id))
     return {}
 
 
@@ -55,9 +60,17 @@ async def voucher_type_status(
         raise HttpErrors.STATUS_UPDATE_FAILED.value
 
     async def _query() -> None:
-        voucher_config.status = VoucherTypeStatuses(payload.status)
+        voucher_config.status = payload.status
         return await db_session.commit()
 
     await async_run_query(_query, db_session)
-    # placeholder - add task to delete vouchers here
+
+    retry_tasks_ids = await crud.create_delete_and_cancel_vouchers_tasks(
+        db_session,
+        retailer_slug=retailer_slug,
+        voucher_type_slug=voucher_type_slug,
+        create_cancel_task=payload.status == VoucherTypeStatuses.CANCELLED,
+    )
+
+    asyncio.create_task(enqueue_many_tasks(retry_tasks_ids=retry_tasks_ids))
     return {}

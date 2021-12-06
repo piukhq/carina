@@ -13,7 +13,7 @@ from app.db.base import Base
 from app.db.session import SyncSessionMaker, sync_engine
 from app.enums import VoucherTypeStatuses
 from app.models import Voucher, VoucherConfig
-from app.tasks.error_handlers import handle_retry_task_request_error
+from app.tasks.error_handlers import default_handler, handle_retry_task_request_error
 from app.tasks.issuance import issue_voucher
 from app.tasks.status_adjustment import status_adjustment
 
@@ -193,6 +193,56 @@ def voucher_status_adjustment_task_type(db_session: "Session") -> TaskType:
                 ("retailer_slug", "STRING"),
                 ("date", "FLOAT"),
                 ("status", "STRING"),
+            )
+        ]
+    )
+
+    db_session.commit()
+    return task
+
+
+@pytest.fixture(scope="function")
+def voucher_deletion_task_type(db_session: "Session") -> TaskType:
+    task = TaskType(
+        name=settings.DELETE_UNALLOCATED_VOUCHERS_TASK_NAME,
+        path=_get_path(issue_voucher),
+        queue_name="carina:default",
+        error_handler_path=_get_path(default_handler),
+    )
+    db_session.add(task)
+    db_session.flush()
+
+    db_session.bulk_save_objects(
+        [
+            TaskTypeKey(task_type_id=task.task_type_id, name=key_name, type=key_type)
+            for key_name, key_type in (
+                ("voucher_type_slug", "STRING"),
+                ("retailer_slug", "STRING"),
+            )
+        ]
+    )
+
+    db_session.commit()
+    return task
+
+
+@pytest.fixture(scope="function")
+def voucher_cancellation_task_type(db_session: "Session") -> TaskType:
+    task = TaskType(
+        name=settings.CANCEL_VOUCHERS_TASK_NAME,
+        path=_get_path(issue_voucher),
+        queue_name="carina:default",
+        error_handler_path=_get_path(handle_retry_task_request_error),
+    )
+    db_session.add(task)
+    db_session.flush()
+
+    db_session.bulk_save_objects(
+        [
+            TaskTypeKey(task_type_id=task.task_type_id, name=key_name, type=key_type)
+            for key_name, key_type in (
+                ("voucher_type_slug", "STRING"),
+                ("retailer_slug", "STRING"),
             )
         ]
     )

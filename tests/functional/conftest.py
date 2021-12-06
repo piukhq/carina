@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 
 from retry_tasks_lib.db.models import RetryTask, TaskType, TaskTypeKeyValue
+from retry_tasks_lib.utils.synchronous import sync_create_task
 
 from app.core.config import settings
 from app.enums import VoucherUpdateStatuses
@@ -161,3 +162,35 @@ def adjustment_url(voucher_status_adjustment_task_params: dict) -> str:
         retailer_slug=voucher_status_adjustment_task_params["retailer_slug"],
         voucher_id=voucher_status_adjustment_task_params["voucher_id"],
     )
+
+
+@pytest.fixture(scope="function")
+def delete_vouchers_retry_task(
+    db_session: "Session", voucher_deletion_task_type: TaskType, voucher_config: VoucherConfig
+) -> RetryTask:
+    task = sync_create_task(
+        db_session,
+        task_type_name=voucher_deletion_task_type.name,
+        params={
+            "retailer_slug": voucher_config.retailer_slug,
+            "voucher_type_slug": voucher_config.voucher_type_slug,
+        },
+    )
+    db_session.commit()
+    return task
+
+
+@pytest.fixture(scope="function")
+def cancel_vouchers_retry_task(
+    db_session: "Session", voucher_cancellation_task_type: TaskType, voucher_config: VoucherConfig
+) -> RetryTask:
+    task = sync_create_task(
+        db_session,
+        task_type_name=voucher_cancellation_task_type.name,
+        params={
+            "retailer_slug": voucher_config.retailer_slug,
+            "voucher_type_slug": voucher_config.voucher_type_slug,
+        },
+    )
+    db_session.commit()
+    return task
