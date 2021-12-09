@@ -399,3 +399,65 @@ def test_cancel_vouchers(mock_datetime: mock.Mock, db_session: Session, cancel_v
             "body": "OK",
         },
     }
+
+
+@httpretty.activate
+def test_voucher_issuance_409_from_polaris(db_session: "Session", issuance_retry_task: RetryTask) -> None:
+    """Test voucher is deleted and task retried on a 409 from Polaris"""
+    issuance_retry_task.status = RetryTaskStatuses.IN_PROGRESS
+    db_session.commit()
+
+    # Get the associated voucher
+    voucher = db_session.execute(
+        select(Voucher).where(Voucher.id == issuance_retry_task.get_params()["voucher_id"])
+    ).scalar_one()
+
+    httpretty.register_uri("POST", issuance_retry_task.get_params()["account_url"], body="Conflict", status=409)
+
+    with pytest.raises(requests.RequestException) as excinfo:
+        issue_voucher(issuance_retry_task.retry_task_id)
+
+    assert isinstance(excinfo.value, requests.RequestException)
+    assert excinfo.value.response.status_code == 409
+
+    db_session.refresh(issuance_retry_task)
+    db_session.refresh(voucher)
+
+    assert "voucher_id" not in issuance_retry_task.get_params()
+    assert issuance_retry_task.attempts == 1
+    assert issuance_retry_task.next_attempt_time is None
+    assert issuance_retry_task.status == RetryTaskStatuses.IN_PROGRESS
+    # The voucher should also have been set to allocated: True
+    assert voucher.allocated
+
+
+@httpretty.activate
+def test_voucher_issuance_no_voucher_but_one_available_and_409(
+    db_session: "Session", issuance_retry_task_no_voucher: RetryTask, mocker: MockerFixture, voucher: Voucher
+) -> None:
+    """Test voucher id is deleted for task (from the DB) and task is retried on a 409 from Polaris,
+    if we don't initially have a voucher"""
+    mock_queue = mocker.patch("app.tasks.issuance.enqueue_retry_task_delay")
+    issuance_retry_task_no_voucher.status = RetryTaskStatuses.IN_PROGRESS
+    db_session.commit()
+
+    httpretty.register_uri(
+        "POST", issuance_retry_task_no_voucher.get_params()["account_url"], body="Conflict", status=409
+    )
+
+    with pytest.raises(requests.RequestException) as excinfo:
+        issue_voucher(issuance_retry_task_no_voucher.retry_task_id)
+
+    assert isinstance(excinfo.value, requests.RequestException)
+    assert excinfo.value.response.status_code == 409
+
+    db_session.refresh(issuance_retry_task_no_voucher)
+    db_session.refresh(voucher)
+
+    assert not mock_queue.return_value.enqueue_at.called
+    assert "voucher_id" not in issuance_retry_task_no_voucher.get_params()
+    assert issuance_retry_task_no_voucher.attempts == 1
+    assert issuance_retry_task_no_voucher.next_attempt_time is None
+    assert issuance_retry_task_no_voucher.status == RetryTaskStatuses.IN_PROGRESS
+    # The voucher should also have been set to allocated: True
+    assert voucher.allocated

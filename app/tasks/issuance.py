@@ -3,10 +3,12 @@ from typing import TYPE_CHECKING, Optional
 
 import sentry_sdk
 
-from retry_tasks_lib.db.models import RetryTask
+from requests.exceptions import HTTPError
+from retry_tasks_lib.db.models import RetryTask, TaskTypeKeyValue
 from retry_tasks_lib.enums import RetryTaskStatuses
 from retry_tasks_lib.utils.synchronous import enqueue_retry_task_delay, get_retry_task
 from sqlalchemy.future import select
+from starlette.status import HTTP_409_CONFLICT
 
 from app.core.config import redis, settings
 from app.db.base_class import sync_run_query
@@ -63,25 +65,54 @@ def _get_voucher_config_status(db_session: "Session", voucher_config_id: int) ->
     return voucher_config_status
 
 
+def _get_voucher(db_session: "Session", voucher_id: str) -> Voucher:
+    voucher: Voucher = sync_run_query(
+        lambda: db_session.execute(select(Voucher).where(Voucher.id == voucher_id)).scalar_one(),
+        db_session,
+    )
+
+    return voucher
+
+
 def _cancel_task(db_session: "Session", retry_task: RetryTask, task_params: dict) -> None:
     """The campaign been cancelled: cancel the task and soft delete any associated voucher"""
     retry_task.update_task(db_session, status=RetryTaskStatuses.CANCELLED, clear_next_attempt_time=True)
 
     if task_params.get("voucher_id"):
-        voucher: Voucher = sync_run_query(
-            lambda: db_session.execute(select(Voucher).where(Voucher.id == task_params.get("voucher_id"))).scalar_one(),
-            db_session,
-        )
+        voucher: Voucher = _get_voucher(db_session, task_params.get("voucher_id"))
         voucher.deleted = True
         db_session.commit()
 
 
+def _set_voucher_and_delete_from_task(
+    db_session: "Session", retry_task: RetryTask, voucher_id: str, allocated: bool = True
+) -> None:
+    """
+    set voucher allocated and clear the retry task's voucher id to force a complete retry
+    of the task with a new voucher
+    """
+    voucher: Voucher = _get_voucher(db_session, voucher_id)
+    voucher.allocated = allocated
+    # Now delete the associated voucher id in the DB
+    task_voucher: TaskTypeKeyValue = {value.task_type_key.name: value for value in retry_task.task_type_key_values}["voucher_id"]
+    db_session.delete(task_voucher)
+    db_session.commit()
+
+
 def _process_and_issue_voucher(db_session: "Session", retry_task: RetryTask, task_params: dict) -> None:
     retry_task.update_task(db_session, increase_attempts=True)
-    response_audit = _process_issuance(task_params)
-    retry_task.update_task(
-        db_session, response_audit=response_audit, status=RetryTaskStatuses.SUCCESS, clear_next_attempt_time=True
-    )
+    try:
+        response_audit = _process_issuance(task_params)
+    except HTTPError as e:
+        if e.response.status_code == HTTP_409_CONFLICT:
+            _set_voucher_and_delete_from_task(
+                db_session=db_session, retry_task=retry_task, voucher_id=task_params.get("voucher_id"), allocated=True
+            )
+        raise
+    else:
+        retry_task.update_task(
+            db_session, response_audit=response_audit, status=RetryTaskStatuses.SUCCESS, clear_next_attempt_time=True
+        )
 
 
 # NOTE: Inter-dependency: If this function's name or module changes, ensure that
@@ -140,6 +171,7 @@ def issue_voucher(retry_task_id: int) -> None:
                     db_session.commit()
 
                 sync_run_query(_add_voucher_to_task_values_and_set_allocated, db_session)
+                db_session.refresh(retry_task)
                 _process_and_issue_voucher(db_session, retry_task, task_params)
             else:  # requeue the allocation attempt
                 if retry_task.status != RetryTaskStatuses.WAITING:
