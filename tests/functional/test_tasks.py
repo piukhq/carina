@@ -403,7 +403,7 @@ def test_cancel_vouchers(mock_datetime: mock.Mock, db_session: Session, cancel_v
 
 @httpretty.activate
 def test_voucher_issuance_409_from_polaris(db_session: "Session", issuance_retry_task: RetryTask) -> None:
-    """Test voucher is deleted and task retried on a 409 from Polaris"""
+    """Test voucher is deleted for the task (from the DB) and task retried on a 409 from Polaris"""
     issuance_retry_task.status = RetryTaskStatuses.IN_PROGRESS
     db_session.commit()
 
