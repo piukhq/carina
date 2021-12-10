@@ -94,11 +94,14 @@ def _set_voucher_and_delete_from_task(
     """
     voucher: Voucher = _get_voucher(db_session, voucher_id)
     voucher.allocated = allocated
-    # Now delete the associated voucher id in the DB
-    task_voucher: TaskTypeKeyValue = {value.task_type_key.name: value for value in retry_task.task_type_key_values}[
-        "voucher_id"
-    ]
-    db_session.delete(task_voucher)
+    # Now delete the associated voucher id and voucher code in the DB
+    values_to_delete: dict[str, TaskTypeKeyValue] = {
+        value.task_type_key.name: value
+        for value in retry_task.task_type_key_values
+        if value.task_type_key.name in ("voucher_id", "voucher_code")
+    }
+    db_session.delete(values_to_delete["voucher_id"])
+    db_session.delete(values_to_delete["voucher_code"])
     db_session.commit()
 
 

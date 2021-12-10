@@ -402,7 +402,9 @@ def test_cancel_vouchers(mock_datetime: mock.Mock, db_session: Session, cancel_v
 
 
 @httpretty.activate
-def test_voucher_issuance_409_from_polaris(db_session: "Session", issuance_retry_task: RetryTask) -> None:
+def test_voucher_issuance_409_from_polaris(
+    db_session: "Session", issuance_retry_task: RetryTask, create_voucher: Callable
+) -> None:
     """Test voucher is deleted for the task (from the DB) and task retried on a 409 from Polaris"""
     issuance_retry_task.status = RetryTaskStatuses.IN_PROGRESS
     db_session.commit()
@@ -428,6 +430,18 @@ def test_voucher_issuance_409_from_polaris(db_session: "Session", issuance_retry
     assert issuance_retry_task.next_attempt_time is None
     assert issuance_retry_task.status == RetryTaskStatuses.IN_PROGRESS
     # The voucher should also have been set to allocated: True
+    assert voucher.allocated
+
+    # Now simulate the job being run again, which should pick up and process a new voucher that will not cause a 409
+    httpretty.register_uri("POST", issuance_retry_task.get_params()["account_url"], body="OK", status=200)
+    # Add new voucher and check that it's allocated and marked as allocated
+    create_voucher(**{"voucher_code": "TSTCD5678"})
+    issue_voucher(issuance_retry_task.retry_task_id)
+    db_session.refresh(issuance_retry_task)
+    db_session.refresh(voucher)
+    assert issuance_retry_task.attempts == 2
+    assert issuance_retry_task.next_attempt_time is None
+    assert issuance_retry_task.status == RetryTaskStatuses.SUCCESS
     assert voucher.allocated
 
 
