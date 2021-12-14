@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.db.session import SyncSessionMaker
 
 from . import logger, send_request_with_metrics
+from .prometheus import tasks_run_total
 
 
 def _process_vouchers_cancellation(task_params: dict) -> dict:
@@ -34,6 +35,7 @@ def _process_vouchers_cancellation(task_params: dict) -> dict:
 # NOTE: Inter-dependency: If this function's name or module changes, ensure that
 # it is relevantly reflected in the TaskType table
 def cancel_vouchers(retry_task_id: int) -> None:
+    tasks_run_total.labels(app=settings.PROJECT_NAME, task_name=settings.CANCEL_VOUCHERS_TASK_NAME).inc()
     with SyncSessionMaker() as db_session:
 
         retry_task = get_retry_task(db_session, retry_task_id)
