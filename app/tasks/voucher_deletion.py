@@ -2,16 +2,19 @@ from retry_tasks_lib.enums import RetryTaskStatuses
 from retry_tasks_lib.utils.synchronous import get_retry_task
 from sqlalchemy import update
 
+from app.core.config import settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
 from app.models import Voucher, VoucherConfig
 
 from . import logger
+from .prometheus import tasks_run_total
 
 
 # NOTE: Inter-dependency: If this function's name or module changes, ensure that
 # it is relevantly reflected in the TaskType table
 def delete_unallocated_vouchers(retry_task_id: int) -> None:
+    tasks_run_total.labels(app=settings.PROJECT_NAME, task_name=settings.DELETE_UNALLOCATED_VOUCHERS_TASK_NAME).inc()
     with SyncSessionMaker() as db_session:
 
         retry_task = get_retry_task(db_session, retry_task_id)
