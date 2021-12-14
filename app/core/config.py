@@ -129,7 +129,7 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str = ""
     POSTGRES_DB: str = "carina"
     SQLALCHEMY_DATABASE_URI: Optional[str] = None
-    SQLALCHEMY_DATABASE_URI_PSYCOPG2: Optional[str] = None
+    SQLALCHEMY_DATABASE_URI_ASYNC: Optional[str] = None
     DB_CONNECTION_RETRY_TIMES: int = 3
     SENTRY_DSN: Optional[HttpUrl] = None
     SENTRY_ENV: Optional[str] = None
@@ -154,7 +154,7 @@ class Settings(BaseSettings):
 
         else:
             db_uri = PostgresDsn.build(
-                scheme="postgresql+asyncpg",
+                scheme="postgresql",
                 user=values.get("POSTGRES_USER"),
                 password=values.get("POSTGRES_PASSWORD"),
                 host=values.get("POSTGRES_HOST"),
@@ -167,12 +167,16 @@ class Settings(BaseSettings):
 
         return db_uri
 
-    @validator("SQLALCHEMY_DATABASE_URI_PSYCOPG2", pre=True)
-    def adapt_db_connection_to_psycopg2(cls, v: Optional[str], values: dict[str, Any]) -> Any:
+    @validator("SQLALCHEMY_DATABASE_URI_ASYNC", pre=True)
+    def adapt_db_connection_to_async(cls, v: Optional[str], values: dict[str, Any]) -> Any:
         if isinstance(v, str):
             db_uri = v
         else:
-            db_uri = values["SQLALCHEMY_DATABASE_URI"].replace("+asyncpg", "+psycopg2").replace("ssl=", "sslmode=")
+            db_uri = (
+                values["SQLALCHEMY_DATABASE_URI"]
+                .replace("postgresql://", "postgresql+asyncpg://")
+                .replace("sslmode=", "ssl=")
+            )
 
         return db_uri
 
