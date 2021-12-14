@@ -3,12 +3,12 @@ from typing import TYPE_CHECKING, Optional
 
 import sentry_sdk
 
+from fastapi import status
 from requests.exceptions import HTTPError
 from retry_tasks_lib.db.models import RetryTask, TaskTypeKeyValue
 from retry_tasks_lib.enums import RetryTaskStatuses
 from retry_tasks_lib.utils.synchronous import enqueue_retry_task_delay, get_retry_task
 from sqlalchemy.future import select
-from starlette.status import HTTP_409_CONFLICT
 
 from app.core.config import redis, settings
 from app.db.base_class import sync_run_query
@@ -85,15 +85,13 @@ def _cancel_task(db_session: "Session", retry_task: RetryTask) -> None:
         db_session.commit()
 
 
-def _set_voucher_and_delete_from_task(
-    db_session: "Session", retry_task: RetryTask, voucher_id: str, allocated: bool = True
-) -> None:
+def _set_voucher_and_delete_from_task(db_session: "Session", retry_task: RetryTask, voucher_id: str) -> None:
     """
     set voucher allocated and clear the retry task's voucher id to force a complete retry
     of the task with a new voucher
     """
     voucher: Voucher = _get_voucher(db_session, voucher_id)
-    voucher.allocated = allocated
+    voucher.allocated = True
     # Now delete the associated voucher id and voucher code in the DB
     values_to_delete: dict[str, TaskTypeKeyValue] = {
         value.task_type_key.name: value
@@ -111,12 +109,9 @@ def _process_and_issue_voucher(db_session: "Session", retry_task: RetryTask) -> 
     try:
         response_audit = _process_issuance(task_params)
     except HTTPError as e:
-        if e.response.status_code == HTTP_409_CONFLICT:
+        if e.response.status_code == status.HTTP_409_CONFLICT:
             _set_voucher_and_delete_from_task(
-                db_session=db_session,
-                retry_task=retry_task,
-                voucher_id=task_params.get("voucher_id"),
-                allocated=True,
+                db_session=db_session, retry_task=retry_task, voucher_id=task_params.get("voucher_id")
             )
         raise
     else:

@@ -427,7 +427,7 @@ def test_voucher_issuance_409_from_polaris(
 
     assert "voucher_id" not in issuance_retry_task.get_params()
     assert issuance_retry_task.attempts == 1
-    assert issuance_retry_task.next_attempt_time is None
+    assert issuance_retry_task.next_attempt_time is None  # Will be set by error handler
     assert issuance_retry_task.status == RetryTaskStatuses.IN_PROGRESS
     # The voucher should also have been set to allocated: True
     assert voucher.allocated
@@ -452,6 +452,7 @@ def test_voucher_issuance_no_voucher_but_one_available_and_409(
     """Test voucher id is deleted for task (from the DB) and task is retried on a 409 from Polaris,
     if we don't initially have a voucher"""
     mock_queue = mocker.patch("app.tasks.issuance.enqueue_retry_task_delay")
+    assert "voucher_id" not in issuance_retry_task_no_voucher.get_params()
     issuance_retry_task_no_voucher.status = RetryTaskStatuses.IN_PROGRESS
     db_session.commit()
 
