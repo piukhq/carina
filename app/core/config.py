@@ -41,10 +41,9 @@ class LogLevel(str):
 
 class Settings(BaseSettings):
     API_PREFIX: str = "/bpl/vouchers"
-    SERVER_NAME: str = "test"
-    SERVER_HOST: str = "http://localhost:8000"
     TESTING: bool = False
     SQL_DEBUG: bool = False
+    METRICS_DEBUG: bool = False
 
     @validator("TESTING")
     def is_test(cls, v: bool) -> bool:
