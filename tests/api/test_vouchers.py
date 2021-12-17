@@ -10,7 +10,7 @@ from sqlalchemy.future import select
 from app.core.config import settings
 from app.enums import VoucherTypeStatuses
 from asgi import app
-from tests.api.conftest import SetupType
+from tests.conftest import SetupType
 from tests.fixtures import HttpErrors
 
 if TYPE_CHECKING:
