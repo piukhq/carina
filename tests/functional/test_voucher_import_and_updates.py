@@ -25,7 +25,7 @@ from app.imports.agents.file_agent import (
 )
 from app.models import Voucher, VoucherUpdate
 from app.schemas import VoucherUpdateSchema
-from tests.api.conftest import SetupType
+from tests.conftest import SetupType
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
