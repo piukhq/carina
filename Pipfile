@@ -39,7 +39,7 @@ fastapi-prometheus-metrics = {version=">=0.1.0", index="pypi-cloud"}
 flake8 = "*"
 isort = "*"
 black = "==21.9b0"
-mypy = "*"
+mypy = "==0.910"
 ipython = "*"
 pytest = "*"
 pytest-cov = "*"
