@@ -39,8 +39,8 @@ async def allocation(
         account_url=payload.account_url,
     )
 
-    asyncio.create_task(enqueue_task(retry_task_id=retry_task.retry_task_id))
-    return {}
+    asyncio.create_task(enqueue_task(retry_task_id=retry_task.retry_task_id))  # pragma: coverage bug 1012
+    return {}  # pragma: coverage bug 1012
 
 
 @router.patch(
@@ -56,10 +56,10 @@ async def voucher_type_status(
 ) -> Any:
     voucher_config = await crud.get_voucher_config(db_session, retailer_slug, voucher_type_slug, for_update=True)
 
-    if voucher_config.status != VoucherTypeStatuses.ACTIVE:
+    if voucher_config.status != VoucherTypeStatuses.ACTIVE:  # pragma: coverage bug 1012
         raise HttpErrors.STATUS_UPDATE_FAILED.value
 
-    async def _query() -> None:
+    async def _query() -> None:  # pragma: coverage bug 1012
         voucher_config.status = payload.status
         return await db_session.commit()
 
@@ -72,5 +72,5 @@ async def voucher_type_status(
         create_cancel_task=payload.status == VoucherTypeStatuses.CANCELLED,
     )
 
-    asyncio.create_task(enqueue_many_tasks(retry_tasks_ids=retry_tasks_ids))
-    return {}
+    asyncio.create_task(enqueue_many_tasks(retry_tasks_ids=retry_tasks_ids))  # pragma: coverage bug 1012
+    return {}  # pragma: coverage bug 1012
