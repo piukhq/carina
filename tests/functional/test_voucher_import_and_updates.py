@@ -2,7 +2,7 @@ import datetime
 import logging
 
 from collections import defaultdict
-from typing import TYPE_CHECKING, DefaultDict, List
+from typing import TYPE_CHECKING, Callable, DefaultDict, List
 from unittest import mock
 
 import pytest
@@ -87,6 +87,140 @@ def test_import_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> N
     assert (
         "Pre-existing voucher codes found in test-retailer/available-vouchers/test-voucher/new-vouchers.csv:\nrows: 4"
         == capture_message_spy.call_args_list[1][0][0]
+    )
+
+
+def test_import_agent__process_csv_soft_deleted(
+    setup: SetupType, create_voucher_config: Callable, mocker: MockerFixture
+) -> None:
+    """
+    Test that a voucher code will be imported OK when the code exists in the DB but for a different voucher type slug,
+    and it has been soft deleted
+    """
+    mocker.patch("app.scheduler.sentry_sdk")
+    db_session, voucher_config, pre_existing_voucher = setup
+    second_voucher_config = create_voucher_config(**{"voucher_type_slug": "second-test-voucher"})
+    # Associate the existing voucher with a different voucher config i.e. a different voucher type slug.
+    # This means the same voucher code should import OK for the 'test-voucher' voucher type slug
+    pre_existing_voucher.voucher_config_id = second_voucher_config.id
+    pre_existing_voucher.deleted = True
+    db_session.commit()
+    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
+    from app.scheduler import sentry_sdk as scheduler_sentry_sdk
+
+    mocker.spy(scheduler_sentry_sdk, "capture_message")
+    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings.SENTRY_DSN = "SENTRY_DSN"
+    mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
+
+    capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
+    voucher_agent = VoucherImportAgent()
+    eligible_voucher_codes = ["voucher1", "voucher2", "voucher3"]
+
+    blob_content = "\n".join(eligible_voucher_codes + [pre_existing_voucher.voucher_code])
+
+    voucher_agent.process_csv(
+        retailer_slug=voucher_config.retailer_slug,
+        blob_name="test-retailer/available-vouchers/test-voucher/new-vouchers.csv",
+        blob_content=blob_content,
+        db_session=db_session,
+    )
+
+    vouchers = _get_voucher_rows(db_session)
+    assert len(vouchers) == 5
+    assert all(v in [voucher.voucher_code for voucher in vouchers] for v in eligible_voucher_codes)
+    assert capture_message_spy.call_count == 0  # All vouchers should import OK
+
+
+def test_import_agent__process_csv_not_soft_deleted(
+    setup: SetupType, create_voucher_config: Callable, mocker: MockerFixture
+) -> None:
+    """
+    Test that a voucher code imported for a different voucher type slug, but where that existing voucher code has
+    NOT been soft-deleted, will cause an error to be reported and will not be imported
+    """
+    mocker.patch("app.scheduler.sentry_sdk")
+    db_session, voucher_config, pre_existing_voucher = setup
+    second_voucher_config = create_voucher_config(**{"voucher_type_slug": "second-test-voucher"})
+    # Associate the existing voucher with a different voucher config i.e. a different voucher type slug.
+    # This means the same voucher code should import OK for the 'test-voucher' voucher type slug
+    pre_existing_voucher.voucher_config_id = second_voucher_config.id
+    db_session.commit()
+    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
+    from app.scheduler import sentry_sdk as scheduler_sentry_sdk
+
+    mocker.spy(scheduler_sentry_sdk, "capture_message")
+    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings.SENTRY_DSN = "SENTRY_DSN"
+    mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
+
+    capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
+    voucher_agent = VoucherImportAgent()
+    eligible_voucher_codes = ["voucher1", "voucher2", "voucher3"]
+
+    blob_content = "\n".join(eligible_voucher_codes + [pre_existing_voucher.voucher_code])
+
+    voucher_agent.process_csv(
+        retailer_slug=voucher_config.retailer_slug,
+        blob_name="test-retailer/available-vouchers/test-voucher/new-vouchers.csv",
+        blob_content=blob_content,
+        db_session=db_session,
+    )
+
+    vouchers = _get_voucher_rows(db_session)
+    assert len(vouchers) == 4
+    assert all(v in [voucher.voucher_code for voucher in vouchers] for v in eligible_voucher_codes)
+    # We should be sentry warned about the existing token
+    assert capture_message_spy.call_count == 1
+    assert (
+        "Pre-existing voucher codes found in test-retailer/available-vouchers/test-voucher/new-vouchers.csv:\nrows: 4"
+        == capture_message_spy.call_args_list[0][0][0]
+    )
+
+
+def test_import_agent__process_csv_same_voucher_type_slug_not_soft_deleted(
+    setup: SetupType, mocker: MockerFixture
+) -> None:
+    """
+    Test that a voucher code imported for the same voucher type slug, where that existing voucher code HAS
+    been soft-deleted, will cause an error to be reported and will not be imported
+    """
+    mocker.patch("app.scheduler.sentry_sdk")
+    db_session, voucher_config, pre_existing_voucher = setup
+    pre_existing_voucher.deleted = True
+    db_session.commit()
+    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
+    from app.scheduler import sentry_sdk as scheduler_sentry_sdk
+
+    mocker.spy(scheduler_sentry_sdk, "capture_message")
+    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings.SENTRY_DSN = "SENTRY_DSN"
+    mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
+
+    capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
+    voucher_agent = VoucherImportAgent()
+    eligible_voucher_codes = ["voucher1", "voucher2", "voucher3"]
+
+    blob_content = "\n".join(eligible_voucher_codes + [pre_existing_voucher.voucher_code])
+
+    voucher_agent.process_csv(
+        retailer_slug=voucher_config.retailer_slug,
+        blob_name="test-retailer/available-vouchers/test-voucher/new-vouchers.csv",
+        blob_content=blob_content,
+        db_session=db_session,
+    )
+
+    vouchers = _get_voucher_rows(db_session)
+    assert len(vouchers) == 4
+    assert all(v in [voucher.voucher_code for voucher in vouchers] for v in eligible_voucher_codes)
+    # We should be sentry warned about the existing token
+    assert capture_message_spy.call_count == 1
+    assert (
+        "Pre-existing voucher codes found in test-retailer/available-vouchers/test-voucher/new-vouchers.csv:\nrows: 4"
+        == capture_message_spy.call_args_list[0][0][0]
     )
 
 

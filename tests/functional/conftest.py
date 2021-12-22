@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 from uuid import uuid4
 
 import pytest
@@ -8,7 +8,7 @@ from retry_tasks_lib.db.models import RetryTask, TaskType, TaskTypeKeyValue
 from retry_tasks_lib.utils.synchronous import sync_create_task
 
 from app.core.config import settings
-from app.enums import VoucherUpdateStatuses
+from app.enums import VoucherTypeStatuses, VoucherUpdateStatuses
 from app.models import Voucher, VoucherUpdate
 from app.models.voucher import VoucherConfig
 
@@ -194,3 +194,23 @@ def cancel_vouchers_retry_task(
     )
     db_session.commit()
     return task
+
+
+@pytest.fixture(scope="function")
+def create_voucher_config(db_session: "Session") -> Callable:
+    def _create_voucher_config(**voucher_config_params) -> VoucherConfig:
+        mock_voucher_config_params = {
+            "voucher_type_slug": "test-voucher",
+            "validity_days": 15,
+            "retailer_slug": "test-retailer",
+            "status": VoucherTypeStatuses.ACTIVE,
+        }
+
+        mock_voucher_config_params.update(voucher_config_params)
+        voucher_config = VoucherConfig(**mock_voucher_config_params)
+        db_session.add(voucher_config)
+        db_session.commit()
+
+        return voucher_config
+
+    return _create_voucher_config
