@@ -21,7 +21,11 @@ class Voucher(Base, TimestampMixin):  # pragma: no cover
     voucher_config = relationship("VoucherConfig", back_populates="vouchers")
     updates = relationship("VoucherUpdate", back_populates="voucher")
 
-    __table_args__ = (UniqueConstraint("voucher_code", "retailer_slug", name="voucher_code_retailer_slug_unq"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "voucher_code", "retailer_slug", "voucher_config_id", name="voucher_code_retailer_slug_voucher_config_unq"
+        ),
+    )
     __mapper_args__ = {"eager_defaults": True}
 
     def __str__(self) -> str:

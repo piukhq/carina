@@ -19,6 +19,7 @@ from retry_tasks_lib.enums import RetryTaskStatuses
 from retry_tasks_lib.utils.synchronous import enqueue_many_retry_tasks, sync_create_many_tasks
 from sqlalchemy import update
 from sqlalchemy.future import select
+from sqlalchemy.sql import and_, not_, or_
 
 from app.core.config import redis, settings
 from app.db.base_class import sync_run_query
@@ -259,7 +260,15 @@ class VoucherImportAgent(BlobFileAgent):
         db_voucher_codes = sync_run_query(
             lambda: db_session.execute(
                 select(Voucher.voucher_code).where(
-                    Voucher.voucher_code.in_(row_nums_by_code.keys()), Voucher.retailer_slug == retailer_slug
+                    or_(
+                        and_(
+                            Voucher.voucher_code.in_(row_nums_by_code.keys()),
+                            Voucher.retailer_slug == retailer_slug,
+                            Voucher.voucher_config_id == voucher_config.id,
+                        ),
+                        and_(Voucher.voucher_config_id != voucher_config.id, not_(Voucher.deleted)),
+                        and_(Voucher.voucher_config_id == voucher_config.id, Voucher.deleted),
+                    )
                 )
             )
             .scalars()
