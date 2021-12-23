@@ -7,4 +7,6 @@ branch = True
 
 [report]
 fail_under = 85
-exclude_lines = pragma: no cover
+exclude_lines =
+        pragma: no cover
+        pragma: coverage bug 1012
