@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 from uuid import uuid4
 
 import pytest
@@ -157,7 +157,7 @@ def adjustment_expected_payload(voucher_status_adjustment_retry_task: RetryTask)
 
 @pytest.fixture(scope="function")
 def adjustment_url(voucher_status_adjustment_task_params: dict) -> str:
-    return "{base_url}/bpl/loyalty/{retailer_slug}/vouchers/{voucher_id}/status".format(
+    return "{base_url}/bpl/loyalty/{retailer_slug}/rewards/{voucher_id}/status".format(
         base_url=settings.POLARIS_URL,
         retailer_slug=voucher_status_adjustment_task_params["retailer_slug"],
         voucher_id=voucher_status_adjustment_task_params["voucher_id"],
@@ -198,7 +198,7 @@ def cancel_vouchers_retry_task(
 
 @pytest.fixture(scope="function")
 def create_voucher_config(db_session: "Session") -> Callable:
-    def _create_voucher_config(**voucher_config_params) -> VoucherConfig:
+    def _create_voucher_config(**voucher_config_params: Any) -> VoucherConfig:
         mock_voucher_config_params = {
             "voucher_type_slug": "test-voucher",
             "validity_days": 15,
