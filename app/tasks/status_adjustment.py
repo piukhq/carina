@@ -17,7 +17,7 @@ def _process_status_adjustment(task_params: dict) -> dict:
 
     resp = send_request_with_metrics(
         "PATCH",
-        "{base_url}/bpl/loyalty/{retailer_slug}/vouchers/{voucher_id}/status".format(
+        "{base_url}/bpl/loyalty/{retailer_slug}/rewards/{voucher_id}/status".format(
             base_url=settings.POLARIS_URL,
             retailer_slug=task_params["retailer_slug"],
             voucher_id=task_params["voucher_id"],
