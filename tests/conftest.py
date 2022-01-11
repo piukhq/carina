@@ -234,9 +234,9 @@ def voucher_deletion_task_type(db_session: "Session") -> TaskType:
 
 
 @pytest.fixture(scope="function")
-def voucher_cancellation_task_type(db_session: "Session") -> TaskType:
+def reward_cancellation_task_type(db_session: "Session") -> TaskType:
     task = TaskType(
-        name=settings.CANCEL_VOUCHERS_TASK_NAME,
+        name=settings.CANCEL_REWARDS_TASK_NAME,
         path=_get_path(issue_voucher),
         queue_name="carina:default",
         error_handler_path=_get_path(handle_retry_task_request_error),
@@ -248,7 +248,7 @@ def voucher_cancellation_task_type(db_session: "Session") -> TaskType:
         [
             TaskTypeKey(task_type_id=task.task_type_id, name=key_name, type=key_type)
             for key_name, key_type in (
-                ("voucher_type_slug", "STRING"),
+                ("reward_slug", "STRING"),
                 ("retailer_slug", "STRING"),
             )
         ]

@@ -110,7 +110,7 @@ async def create_delete_and_cancel_vouchers_tasks(
         )
         cancel_task: Optional[RetryTask] = (
             await async_create_task(
-                db_session=db_session, task_type_name=settings.CANCEL_VOUCHERS_TASK_NAME, params=task_params
+                db_session=db_session, task_type_name=settings.CANCEL_REWARDS_TASK_NAME, params=task_params
             )
             if create_cancel_task is True
             else None
