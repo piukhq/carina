@@ -11,23 +11,23 @@ from .prometheus import tasks_run_total
 
 
 def _process_rewards_cancellation(task_params: dict) -> dict:
-    logger.info(f"Processing rewards' cancellation for voucher type: {task_params['reward_type_slug']}")
+    logger.info(f"Processing rewards' cancellation for voucher type: {task_params['reward_slug']}")
     timestamp = datetime.utcnow()
     response_audit: dict = {"timestamp": timestamp.isoformat()}
 
     resp = send_request_with_metrics(
         "POST",
-        "{base_url}/bpl/loyalty/{retailer_slug}/rewards/{reward_type_slug}/cancel".format(
+        "{base_url}/bpl/loyalty/{retailer_slug}/rewards/{reward_slug}/cancel".format(
             base_url=settings.POLARIS_URL,
             retailer_slug=task_params["retailer_slug"],
-            reward_type_slug=task_params["reward_type_slug"],
+            reward_slug=task_params["reward_slug"],
         ),
         headers={"Authorization": f"Token {settings.POLARIS_AUTH_TOKEN}"},
         timeout=(3.03, 10),
     )
     resp.raise_for_status()
     response_audit["response"] = {"status": resp.status_code, "body": resp.text}
-    logger.info(f"Rewards' cancellation succeeded for voucher type: {task_params['reward_type_slug']}")
+    logger.info(f"Rewards' cancellation succeeded for voucher type: {task_params['reward_slug']}")
 
     return response_audit
 
