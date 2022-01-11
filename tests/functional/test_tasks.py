@@ -20,7 +20,7 @@ from app.enums import VoucherTypeStatuses
 from app.models import Voucher, VoucherConfig
 from app.tasks.issuance import _process_issuance, issue_voucher
 from app.tasks.status_adjustment import _process_status_adjustment, status_adjustment
-from app.tasks.voucher_cancellation import cancel_vouchers
+from app.tasks.reward_cancellation import cancel_rewards
 from app.tasks.voucher_deletion import delete_unallocated_vouchers
 
 fake_now = datetime.utcnow()
@@ -372,27 +372,27 @@ def test_delete_unallocated_vouchers(
 
 
 @httpretty.activate
-@mock.patch("app.tasks.voucher_cancellation.datetime")
-def test_cancel_vouchers(mock_datetime: mock.Mock, db_session: Session, cancel_vouchers_retry_task: RetryTask) -> None:
+@mock.patch("app.tasks.reward_cancellation.datetime")
+def test_cancel_vouchers(mock_datetime: mock.Mock, db_session: Session, cancel_rewards_retry_task: RetryTask) -> None:
     mock_datetime.utcnow.return_value = fake_now
-    task_params = cancel_vouchers_retry_task.get_params()
-    url = "{base_url}/bpl/loyalty/{retailer_slug}/rewards/{voucher_type_slug}/cancel".format(
+    task_params = cancel_rewards_retry_task.get_params()
+    url = "{base_url}/bpl/loyalty/{retailer_slug}/rewards/{reward_slug}/cancel".format(
         base_url=settings.POLARIS_URL,
         retailer_slug=task_params["retailer_slug"],
-        voucher_type_slug=task_params["voucher_type_slug"],
+        reward_slug=task_params["reward_slug"],
     )
 
     httpretty.register_uri("POST", url, body="OK", status=202)
-    cancel_vouchers(cancel_vouchers_retry_task.retry_task_id)
-    db_session.refresh(cancel_vouchers_retry_task)
+    cancel_rewards(cancel_rewards_retry_task.retry_task_id)
+    db_session.refresh(cancel_rewards_retry_task)
 
     last_request = httpretty.last_request()
     assert last_request.method == "POST"
     assert last_request.url == url
     assert last_request.body == b""
-    assert cancel_vouchers_retry_task.next_attempt_time is None
-    assert cancel_vouchers_retry_task.attempts == 1
-    assert cancel_vouchers_retry_task.audit_data[0] == {
+    assert cancel_rewards_retry_task.next_attempt_time is None
+    assert cancel_rewards_retry_task.attempts == 1
+    assert cancel_rewards_retry_task.audit_data[0] == {
         "timestamp": fake_now.isoformat(),
         "response": {
             "status": 202,

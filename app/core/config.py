@@ -194,7 +194,7 @@ class Settings(BaseSettings):
     REDIS_KEY_PREFIX = "carinavouchers"
 
     VOUCHER_ISSUANCE_TASK_NAME = "voucher-issuance"
-    CANCEL_VOUCHERS_TASK_NAME = "cancel-vouchers"
+    CANCEL_REWARDS_TASK_NAME = "cancel-rewards"
     DELETE_UNALLOCATED_VOUCHERS_TASK_NAME = "delete-unallocated-vouchers"
 
     VOUCHER_ISSUANCE_REQUEUE_BACKOFF_SECONDS: int = 60 * 60 * 12  # 12 hours
