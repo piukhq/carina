@@ -5,7 +5,7 @@ BPL Voucher Management API
 ## configurations
 
 - create a `local.env` file in the root directory
-- add your configurations based on the environmental variables required in `app.core.config.Settings`
+- add your configurations based on the environmental variables required in `app.core.config.Settings` or use the file in `local/local.env.example` as template.
 
 ## running
 
