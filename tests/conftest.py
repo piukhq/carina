@@ -12,7 +12,7 @@ from testfixtures import LogCapture
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import SyncSessionMaker, sync_engine
-from app.enums import VoucherTypeStatuses
+from app.enums import RewardTypeStatuses
 from app.models import Voucher, VoucherConfig
 from app.tasks.error_handlers import default_handler, handle_retry_task_request_error
 from app.tasks.issuance import issue_voucher
@@ -80,10 +80,10 @@ def setup(db_session: "Session", voucher_config: VoucherConfig, voucher: Voucher
 @pytest.fixture(scope="function")
 def voucher_config(db_session: "Session") -> VoucherConfig:
     config = VoucherConfig(
-        voucher_type_slug="test-voucher",
+        voucher_type_slug="test-reward",
         validity_days=15,
         retailer_slug="test-retailer",
-        status=VoucherTypeStatuses.ACTIVE,
+        status=RewardTypeStatuses.ACTIVE,
     )
     db_session.add(config)
     db_session.commit()
@@ -129,14 +129,14 @@ def create_voucher(db_session: "Session", voucher_config: VoucherConfig) -> Call
 @pytest.fixture()
 def create_vouchers(db_session: "Session", voucher_config: VoucherConfig) -> Callable:
     def fn(override_datas: list[dict]) -> dict[str, Voucher]:
-        voucher_data = {
+        reward_data = {
             "voucher_code": str(uuid.uuid4()),
             "deleted": False,
             "allocated": False,
             "voucher_config_id": voucher_config.id,
             "retailer_slug": voucher_config.retailer_slug,
         }
-        vouchers = [Voucher(**voucher_data | override_data) for override_data in override_datas]
+        vouchers = [Voucher(**reward_data | override_data) for override_data in override_datas]
         db_session.add_all(vouchers)
         db_session.commit()
         return {voucher.voucher_code: voucher for voucher in vouchers}
@@ -184,7 +184,7 @@ def voucher_issuance_task_type(db_session: "Session") -> TaskType:
 @pytest.fixture(scope="function")
 def voucher_status_adjustment_task_type(db_session: "Session") -> TaskType:
     task = TaskType(
-        name=settings.VOUCHER_STATUS_ADJUSTMENT_TASK_NAME,
+        name=settings.REWARD_STATUS_ADJUSTMENT_TASK_NAME,
         path=_get_path(status_adjustment),
         queue_name="carina:default",
         error_handler_path=_get_path(handle_retry_task_request_error),

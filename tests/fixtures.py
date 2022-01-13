@@ -23,7 +23,7 @@ class HttpErrors(Enum):
     )
     UNKNOWN_VOUCHER_TYPE = HttpError(
         detail={
-            "display_message": "Voucher Type Slug does not exist.",
+            "display_message": "Reward Slug does not exist.",
             "code": "UNKNOWN_VOUCHER_TYPE",
         },
         status_code=status.HTTP_404_NOT_FOUND,

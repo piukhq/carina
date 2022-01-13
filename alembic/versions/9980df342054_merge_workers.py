@@ -8,7 +8,6 @@ Create Date: 2021-11-03 12:21:17.037014
 import sqlalchemy as sa
 
 from alembic import op
-from app.core.config import settings
 from app.tasks.error_handlers import handle_retry_task_request_error
 
 # revision identifiers, used by Alembic.
@@ -27,7 +26,7 @@ def _get_table_and_connection() -> tuple[sa.engine.Connection, sa.Table]:
 
 def set_error_handler_path_and_update_queue_name() -> None:
     conn, task_type = _get_table_and_connection()
-    task_names = (settings.VOUCHER_ISSUANCE_TASK_NAME, settings.VOUCHER_STATUS_ADJUSTMENT_TASK_NAME)
+    task_names = ("voucher-issuance", "voucher-status-adjustment")
     conn.execute(
         sa.update(task_type)
         .where(task_type.c.name.in_(task_names))
@@ -43,8 +42,8 @@ def set_error_handler_path_and_update_queue_name() -> None:
 def revert_queue_name_update() -> None:
     conn, task_type = _get_table_and_connection()
     for task_name, queue_name in (
-        (settings.VOUCHER_ISSUANCE_TASK_NAME, "bpl_voucher_issuance"),
-        (settings.VOUCHER_STATUS_ADJUSTMENT_TASK_NAME, "bpl_voucher_status_update"),
+        ("voucher-issuance", "bpl_voucher_issuance"),
+        ("voucher-status-adjustment", "bpl_voucher_status_update"),
     ):
         conn.execute(sa.update(task_type).where(task_type.c.name == task_name).values(queue_name=queue_name))
 
