@@ -17,7 +17,7 @@ def _process_vouchers_cancellation(task_params: dict) -> dict:
 
     resp = send_request_with_metrics(
         "POST",
-        "{base_url}/bpl/loyalty/{retailer_slug}/vouchers/{voucher_type_slug}/cancel".format(
+        "{base_url}/bpl/loyalty/{retailer_slug}/rewards/{voucher_type_slug}/cancel".format(
             base_url=settings.POLARIS_URL,
             retailer_slug=task_params["retailer_slug"],
             voucher_type_slug=task_params["voucher_type_slug"],
