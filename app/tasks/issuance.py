@@ -35,11 +35,11 @@ def _process_issuance(task_params: dict) -> dict:
         "POST",
         task_params["account_url"],
         json={
-            "voucher_code": task_params["voucher_code"],
+            "code": task_params["voucher_code"],
             "issued_date": task_params["issued_date"],
             "expiry_date": task_params["expiry_date"],
-            "voucher_type_slug": task_params["voucher_type_slug"],
-            "voucher_id": task_params["voucher_id"],
+            "reward_slug": task_params["voucher_type_slug"],
+            "reward_uuid": task_params["voucher_id"],
         },
         headers={
             "Authorization": f"Token {settings.POLARIS_AUTH_TOKEN}",
