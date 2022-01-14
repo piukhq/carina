@@ -93,11 +93,11 @@ def issuance_retry_task_no_voucher(
 @pytest.fixture(scope="function")
 def issuance_expected_payload(voucher_issuance_task_params: dict) -> dict:
     return {
-        "voucher_code": voucher_issuance_task_params["voucher_code"],
+        "code": voucher_issuance_task_params["voucher_code"],
         "issued_date": voucher_issuance_task_params["issued_date"],
         "expiry_date": voucher_issuance_task_params["expiry_date"],
-        "voucher_type_slug": voucher_issuance_task_params["voucher_type_slug"],
-        "voucher_id": voucher_issuance_task_params["voucher_id"],
+        "reward_slug": voucher_issuance_task_params["voucher_type_slug"],
+        "reward_uuid": voucher_issuance_task_params["voucher_id"],
     }
 
 
