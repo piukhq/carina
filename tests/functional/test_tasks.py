@@ -21,7 +21,7 @@ from app.models import Voucher, VoucherConfig
 from app.tasks.issuance import _process_issuance, issue_voucher
 from app.tasks.status_adjustment import _process_status_adjustment, status_adjustment
 from app.tasks.reward_cancellation import cancel_rewards
-from app.tasks.voucher_deletion import delete_unallocated_vouchers
+from app.tasks.reward_deletion import delete_unallocated_rewards
 
 fake_now = datetime.utcnow()
 
@@ -336,10 +336,10 @@ def test_status_adjustment_wrong_status(db_session: "Session", voucher_status_ad
     assert voucher_status_adjustment_retry_task.status == RetryTaskStatuses.FAILED
 
 
-def test_delete_unallocated_vouchers(
-    delete_vouchers_retry_task: RetryTask, db_session: Session, voucher: Voucher
+def test_delete_unallocated_rewards(
+    delete_rewards_retry_task: RetryTask, db_session: Session, voucher: Voucher
 ) -> None:
-    task_params = delete_vouchers_retry_task.get_params()
+    task_params = delete_rewards_retry_task.get_params()
 
     other_config = VoucherConfig(
         voucher_type_slug="other-config",
@@ -349,26 +349,26 @@ def test_delete_unallocated_vouchers(
     db_session.add(other_config)
     db_session.flush()
 
-    other_voucher = Voucher(
+    other_reward = Voucher(
         voucher_code="sample-other-code",
         voucher_config_id=other_config.id,
         retailer_slug=other_config.retailer_slug,
     )
-    db_session.add(other_voucher)
+    db_session.add(other_reward)
     db_session.commit()
 
     assert voucher.deleted is False
-    delete_unallocated_vouchers(delete_vouchers_retry_task.retry_task_id)
+    delete_unallocated_rewards(delete_rewards_retry_task.retry_task_id)
 
-    db_session.refresh(delete_vouchers_retry_task)
+    db_session.refresh(delete_rewards_retry_task)
     db_session.refresh(voucher)
-    db_session.refresh(other_voucher)
+    db_session.refresh(other_reward)
 
     assert voucher.deleted is True
-    assert other_voucher.deleted is False
-    assert delete_vouchers_retry_task.next_attempt_time is None
-    assert delete_vouchers_retry_task.attempts == 1
-    assert delete_vouchers_retry_task.audit_data == []
+    assert other_reward.deleted is False
+    assert delete_rewards_retry_task.next_attempt_time is None
+    assert delete_rewards_retry_task.attempts == 1
+    assert delete_rewards_retry_task.audit_data == []
 
 
 @httpretty.activate
