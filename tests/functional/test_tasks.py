@@ -19,9 +19,9 @@ from app.core.config import settings
 from app.enums import RewardTypeStatuses
 from app.models import Voucher, VoucherConfig
 from app.tasks.issuance import _process_issuance, issue_voucher
-from app.tasks.status_adjustment import _process_status_adjustment, status_adjustment
 from app.tasks.reward_cancellation import cancel_rewards
 from app.tasks.reward_deletion import delete_unallocated_rewards
+from app.tasks.status_adjustment import _process_status_adjustment, status_adjustment
 
 fake_now = datetime.utcnow()
 

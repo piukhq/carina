@@ -5,13 +5,13 @@ Revises: 9589c7115a36
 Create Date: 2022-01-13 16:55:42.361958
 
 """
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "64dadbdcd039"
-down_revision = "9589c7115a36"
+down_revision = "9812a07aad99"
 branch_labels = None
 depends_on = None
 
@@ -24,9 +24,9 @@ def upgrade():
     )
 
     # Update task_type_key.name for voucher_type_slug
-    op.execute("UPDATE task_type_key SET name = 'reward_slug' from task_type where task_type.name = 'cancel-rewards' and task_type_key.task_type_id = task_type.task_type_id")
-
-
+    op.execute(
+        "UPDATE task_type_key SET name = 'reward_slug' from task_type where task_type.name = 'cancel-rewards' and task_type_key.task_type_id = task_type.task_type_id and task_type_key.name = 'voucher_type_slug'"
+    )
 
 
 def downgrade():
@@ -37,5 +37,6 @@ def downgrade():
     )
 
     # # Revert task_type_key.name for reward_slug
-    op.execute("UPDATE task_type_key SET name = 'voucher_type_slug' from task_type where task_type.name = 'cancel-vouchers' and task_type_key.task_type_id = task_type.task_type_id")
-
+    op.execute(
+        "UPDATE task_type_key SET name = 'voucher_type_slug' from task_type where task_type.name = 'cancel-vouchers' and task_type_key.task_type_id = task_type.task_type_id and task_type_key.name = 'reward_slug'"
+    )
