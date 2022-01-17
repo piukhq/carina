@@ -17,7 +17,7 @@ depends_on = None
 
 
 def upgrade():
-    # Update task_type.name
+    # Update task_type.name to cancel-rewards
     op.execute(
         "UPDATE task_type SET path = 'app.tasks.reward_cancellation.cancel_rewards', name = 'cancel-rewards' "
         "WHERE name ='cancel-vouchers' AND path = 'app.tasks.voucher_cancellation.cancel_vouchers'"
@@ -30,7 +30,7 @@ def upgrade():
 
 
 def downgrade():
-    # Revert task_type.name
+    # Revert task_type.name to cancel-vouchers
     op.execute(
         "UPDATE task_type SET path = 'app.tasks.voucher_cancellation.cancel_vouchers', name = 'cancel-vouchers' "
         "WHERE name ='cancel-rewards' AND path = 'app.tasks.reward_cancellation.cancel_rewards'"
