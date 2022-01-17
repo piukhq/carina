@@ -13,7 +13,7 @@ from sqlalchemy.future import select
 from app.core.config import redis, settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
-from app.enums import VoucherTypeStatuses
+from app.enums import RewardTypeStatuses
 from app.models import Voucher, VoucherConfig
 
 from . import logger, send_request_with_metrics
@@ -54,8 +54,8 @@ def _process_issuance(task_params: dict) -> dict:
     return response_audit
 
 
-def _get_voucher_config_status(db_session: "Session", voucher_config_id: int) -> VoucherTypeStatuses:
-    voucher_config_status: VoucherTypeStatuses = sync_run_query(
+def _get_voucher_config_status(db_session: "Session", voucher_config_id: int) -> RewardTypeStatuses:
+    voucher_config_status: RewardTypeStatuses = sync_run_query(
         lambda: db_session.execute(
             select(VoucherConfig.status).where(VoucherConfig.id == voucher_config_id)
         ).scalar_one(),
@@ -128,7 +128,7 @@ def issue_voucher(retry_task_id: int) -> None:
         retry_task = get_retry_task(db_session, retry_task_id)
 
         voucher_config_status = _get_voucher_config_status(db_session, retry_task.get_params()["voucher_config_id"])
-        if voucher_config_status == VoucherTypeStatuses.CANCELLED:
+        if voucher_config_status == RewardTypeStatuses.CANCELLED:
             _cancel_task(db_session, retry_task)
             return
 

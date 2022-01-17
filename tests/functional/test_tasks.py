@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from testfixtures import LogCapture
 
 from app.core.config import settings
-from app.enums import VoucherTypeStatuses
+from app.enums import RewardTypeStatuses
 from app.models import Voucher, VoucherConfig
 from app.tasks.issuance import _process_issuance, issue_voucher
 from app.tasks.status_adjustment import _process_status_adjustment, status_adjustment
@@ -123,7 +123,7 @@ def test_voucher_issuance_campaign_is_cancelled(
     """
     issuance_retry_task.status = RetryTaskStatuses.IN_PROGRESS
     db_session.commit()
-    voucher_config.status = VoucherTypeStatuses.CANCELLED
+    voucher_config.status = RewardTypeStatuses.CANCELLED
     db_session.commit()
     import app.tasks.issuance as tasks_allocation
 
@@ -158,7 +158,7 @@ def test_voucher_issuance_no_voucher_campaign_is_cancelled(
     """
     issuance_retry_task_no_voucher.status = RetryTaskStatuses.IN_PROGRESS
     db_session.commit()
-    voucher_config.status = VoucherTypeStatuses.CANCELLED
+    voucher_config.status = RewardTypeStatuses.CANCELLED
     db_session.commit()
     import app.tasks.issuance as tasks_allocation
 

@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import AnyHttpUrl, BaseModel, validator
 
-from app.enums import VoucherTypeStatuses, VoucherUpdateStatuses
+from app.enums import RewardTypeStatuses, RewardUpdateStatuses
 
 
 class VoucherAllocationSchema(BaseModel):  # pragma: no cover
@@ -12,17 +12,17 @@ class VoucherAllocationSchema(BaseModel):  # pragma: no cover
 
 
 class VoucherStatusSchema(BaseModel):
-    status: Literal[VoucherTypeStatuses.CANCELLED, VoucherTypeStatuses.ENDED]
+    status: Literal[RewardTypeStatuses.CANCELLED, RewardTypeStatuses.ENDED]
 
     @validator("status")
-    def get_status(cls, v: str) -> VoucherTypeStatuses:
-        return VoucherTypeStatuses(v)
+    def get_status(cls, v: str) -> RewardTypeStatuses:
+        return RewardTypeStatuses(v)
 
 
-class VoucherUpdateSchema(BaseModel):  # pragma: no cover
-    voucher_code: str
+class RewardUpdateSchema(BaseModel):  # pragma: no cover
+    code: str
     date: str
-    status: VoucherUpdateStatuses
+    status: RewardUpdateStatuses
 
     @validator("date")
     def get_date(cls, v: str) -> datetime.date:
