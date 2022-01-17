@@ -15,7 +15,7 @@ from sqlalchemy import func
 from sqlalchemy.future import select
 from testfixtures import LogCapture
 
-from app.enums import FileAgentType, VoucherUpdateStatuses
+from app.enums import FileAgentType, RewardUpdateStatuses
 from app.imports.agents.file_agent import (
     BlobProcessingError,
     RewardImportAgent,
@@ -284,7 +284,7 @@ TEST87654322,2021-07-30,redeemed
                 RewardUpdateRow(
                     row_num=1,
                     data=RewardUpdateSchema(
-                        code="TEST12345678", date="2021-07-30", status=VoucherUpdateStatuses.CANCELLED
+                        code="TEST12345678", date="2021-07-30", status=RewardUpdateStatuses.CANCELLED
                     ),
                 )
             ],
@@ -292,7 +292,7 @@ TEST87654322,2021-07-30,redeemed
                 RewardUpdateRow(
                     row_num=2,
                     data=RewardUpdateSchema(
-                        code="TEST87654321", date="2021-07-21", status=VoucherUpdateStatuses.REDEEMED
+                        code="TEST87654321", date="2021-07-21", status=RewardUpdateStatuses.REDEEMED
                     ),
                 )
             ],
@@ -300,13 +300,13 @@ TEST87654322,2021-07-30,redeemed
                 RewardUpdateRow(
                     row_num=3,
                     data=RewardUpdateSchema(
-                        code="TEST87654322", date="2021-07-30", status=VoucherUpdateStatuses.CANCELLED
+                        code="TEST87654322", date="2021-07-30", status=RewardUpdateStatuses.CANCELLED
                     ),
                 ),
                 RewardUpdateRow(
                     row_num=4,
                     data=RewardUpdateSchema(
-                        code="TEST87654322", date="2021-07-30", status=VoucherUpdateStatuses.REDEEMED
+                        code="TEST87654322", date="2021-07-30", status=RewardUpdateStatuses.REDEEMED
                     ),
                 ),
             ],
@@ -358,7 +358,7 @@ TEST666666,2021-07-30,{bad_status}
     assert capture_message_spy.call_count == 1  # Errors should all be rolled up in to a single call
     expected_error_msg: str = capture_message_spy.call_args.args[0]
     assert f"time data '{bad_date}' does not match format '%Y-%m-%d'" in expected_error_msg
-    assert f"'{bad_status}' is not a valid VoucherUpdateStatuses" in expected_error_msg
+    assert f"'{bad_status}' is not a valid RewardUpdateStatuses" in expected_error_msg
 
 
 def test_updates_agent__process_csv_voucher_code_fails_malformed_csv_rows(
@@ -410,7 +410,7 @@ def test_updates_agent__process_updates(setup: SetupType, mocker: MockerFixture)
     data = RewardUpdateSchema(
         code=voucher.voucher_code,
         date="2021-07-30",
-        status=VoucherUpdateStatuses("redeemed"),
+        status=RewardUpdateStatuses("redeemed"),
     )
     reward_update_rows_by_code: DefaultDict[str, List[RewardUpdateRow]] = defaultdict(list[RewardUpdateRow])
     reward_update_rows_by_code[voucher.voucher_code].append(RewardUpdateRow(data=data, row_num=1))
@@ -426,7 +426,7 @@ def test_updates_agent__process_updates(setup: SetupType, mocker: MockerFixture)
 
     assert len(voucher_update_rows) == 1
     assert voucher_update_rows[0].voucher_id == voucher.id
-    assert voucher_update_rows[0].status == VoucherUpdateStatuses.REDEEMED
+    assert voucher_update_rows[0].status == RewardUpdateStatuses.REDEEMED
     assert isinstance(voucher_update_rows[0].date, datetime.date)
     assert str(voucher_update_rows[0].date) == "2021-07-30"
     assert capture_message_spy.call_count == 0  # Should be no errors
@@ -453,7 +453,7 @@ def test_updates_agent__process_updates_voucher_code_not_allocated(setup: SetupT
     data = RewardUpdateSchema(
         code=voucher.voucher_code,
         date="2021-07-30",
-        status=VoucherUpdateStatuses("redeemed"),
+        status=RewardUpdateStatuses("redeemed"),
     )
     reward_update_rows_by_code: DefaultDict[str, List[RewardUpdateRow]] = defaultdict(list[RewardUpdateRow])
     reward_update_rows_by_code[voucher.voucher_code].append(RewardUpdateRow(data=data, row_num=1))
@@ -493,7 +493,7 @@ def test_updates_agent__process_updates_voucher_code_does_not_exist(setup: Setup
     data = RewardUpdateSchema(
         code=bad_voucher_code,
         date="2021-07-30",
-        status=VoucherUpdateStatuses("cancelled"),
+        status=RewardUpdateStatuses("cancelled"),
     )
     reward_update_rows_by_code: DefaultDict[str, List[RewardUpdateRow]] = defaultdict(list[RewardUpdateRow])
     reward_update_rows_by_code[bad_voucher_code].append(RewardUpdateRow(data=data, row_num=1))
@@ -739,7 +739,7 @@ def test_enqueue_reward_updates(
     voucher_update = VoucherUpdate(
         voucher=voucher,
         date=today,
-        status=VoucherUpdateStatuses.REDEEMED,
+        status=RewardUpdateStatuses.REDEEMED,
     )
 
     RewardUpdatesAgent.enqueue_reward_updates(db_session, [voucher_update])
@@ -776,7 +776,7 @@ def test_enqueue_reward_updates_exception(
     voucher_update = VoucherUpdate(
         voucher=voucher,
         date=today,
-        status=VoucherUpdateStatuses.REDEEMED,
+        status=RewardUpdateStatuses.REDEEMED,
     )
 
     RewardUpdatesAgent.enqueue_reward_updates(db_session, [voucher_update])

@@ -24,7 +24,7 @@ from sqlalchemy.sql import and_, not_, or_
 from app.core.config import redis, settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
-from app.enums import FileAgentType, VoucherUpdateStatuses
+from app.enums import FileAgentType, RewardUpdateStatuses
 from app.models import Voucher, VoucherConfig, VoucherFileLog, VoucherUpdate
 from app.scheduler import CronScheduler
 from app.schemas import RewardUpdateSchema
@@ -208,7 +208,7 @@ class RewardImportAgent(BlobFileAgent):
         self.file_agent_type = FileAgentType.IMPORT
 
     @lru_cache()
-    def reward_configs_by_reward_type_slug(self, retailer_slug: str, db_session: "Session") -> dict[str, VoucherConfig]:
+    def reward_configs_by_reward_slug(self, retailer_slug: str, db_session: "Session") -> dict[str, VoucherConfig]:
         voucher_configs = sync_run_query(
             lambda: db_session.execute(select(VoucherConfig).where(VoucherConfig.retailer_slug == retailer_slug))
             .scalars()
@@ -241,7 +241,7 @@ class RewardImportAgent(BlobFileAgent):
             raise BlobProcessingError(f"No reward_slug path section found ({ex})")
 
         try:
-            voucher_config = self.reward_configs_by_reward_type_slug(retailer_slug, db_session)[reward_slug]
+            voucher_config = self.reward_configs_by_reward_slug(retailer_slug, db_session)[reward_slug]
         except KeyError:
             raise BlobProcessingError(f"No RewardConfig found for reward_slug {reward_slug}")
 
@@ -301,7 +301,7 @@ class RewardImportAgent(BlobFileAgent):
 
 class RewardUpdatesAgent(BlobFileAgent):
     blob_path_template = string.Template("$retailer_slug/reward-updates/")
-    scheduler_name = "carina-rewards-update-scheduler"
+    scheduler_name = "carina-reward-update-scheduler"
 
     def __init__(self) -> None:
         super().__init__()
@@ -318,7 +318,7 @@ class RewardUpdatesAgent(BlobFileAgent):
                 data = RewardUpdateSchema(
                     code=row[0].strip(),
                     date=row[1].strip(),
-                    status=VoucherUpdateStatuses(row[2].strip()),
+                    status=RewardUpdateStatuses(row[2].strip()),
                 )
             except (ValidationError, IndexError, ValueError) as e:
                 invalid_rows.append((row_num, e))
@@ -439,15 +439,15 @@ class RewardUpdatesAgent(BlobFileAgent):
         )
 
         reward_updates = []
-        for voucher_code, voucher_update_rows in reward_update_rows_by_code.items():
+        for code, reward_update_rows in reward_update_rows_by_code.items():
             reward_updates.extend(
                 [
                     VoucherUpdate(
-                        voucher_id=uuid.UUID(cast(str, db_reward_data_by_code[voucher_code]["id"])),
+                        voucher_id=uuid.UUID(cast(str, db_reward_data_by_code[code]["id"])),
                         date=reward_update_row.data.date,
                         status=reward_update_row.data.status,
                     )
-                    for reward_update_row in voucher_update_rows
+                    for reward_update_row in reward_update_rows
                 ]
             )
 

@@ -45,7 +45,7 @@ class RewardTypeStatuses(str, Enum):
     ENDED = "ended"
 
 
-class VoucherUpdateStatuses(Enum):
+class RewardUpdateStatuses(Enum):
     ISSUED = "issued"
     CANCELLED = "cancelled"
     REDEEMED = "redeemed"

@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import AnyHttpUrl, BaseModel, validator
 
-from app.enums import RewardTypeStatuses, VoucherUpdateStatuses
+from app.enums import RewardTypeStatuses, RewardUpdateStatuses
 
 
 class VoucherAllocationSchema(BaseModel):  # pragma: no cover
@@ -22,7 +22,7 @@ class VoucherStatusSchema(BaseModel):
 class RewardUpdateSchema(BaseModel):  # pragma: no cover
     code: str
     date: str
-    status: VoucherUpdateStatuses
+    status: RewardUpdateStatuses
 
     @validator("date")
     def get_date(cls, v: str) -> datetime.date:

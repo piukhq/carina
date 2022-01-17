@@ -8,7 +8,7 @@ from retry_tasks_lib.db.models import RetryTask, TaskType, TaskTypeKeyValue
 from retry_tasks_lib.utils.synchronous import sync_create_task
 
 from app.core.config import settings
-from app.enums import RewardTypeStatuses, VoucherUpdateStatuses
+from app.enums import RewardTypeStatuses, RewardUpdateStatuses
 from app.models import Voucher, VoucherUpdate
 from app.models.voucher import VoucherConfig
 
@@ -106,7 +106,7 @@ def voucher_update(db_session: "Session", voucher: Voucher) -> VoucherUpdate:
     adjustment = VoucherUpdate(
         voucher=voucher,
         date=datetime.utcnow().date(),
-        status=VoucherUpdateStatuses.REDEEMED,
+        status=RewardUpdateStatuses.REDEEMED,
     )
     db_session.add(adjustment)
     db_session.commit()
