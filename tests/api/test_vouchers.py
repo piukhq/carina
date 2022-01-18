@@ -130,8 +130,8 @@ def test_post_voucher_allocation_no_more_vouchers(
 def test_voucher_type_status_ok(
     setup: SetupType,
     mocker: MockerFixture,
-    voucher_deletion_task_type: TaskType,
-    voucher_cancellation_task_type: TaskType,
+    reward_deletion_task_type: TaskType,
+    reward_cancellation_task_type: TaskType,
 ) -> None:
     db_session, voucher_config, _ = setup
     mocker.patch("app.api.tasks.enqueue_many_retry_tasks")
@@ -153,7 +153,7 @@ def test_voucher_type_status_ok(
     assert (
         db_session.scalar(
             select(func.count(RetryTask.retry_task_id)).where(
-                RetryTask.task_type_id == voucher_deletion_task_type.task_type_id
+                RetryTask.task_type_id == reward_deletion_task_type.task_type_id
             )
         )
         == 2
@@ -161,7 +161,7 @@ def test_voucher_type_status_ok(
     assert (
         db_session.scalar(
             select(func.count(RetryTask.retry_task_id)).where(
-                RetryTask.task_type_id == voucher_cancellation_task_type.task_type_id
+                RetryTask.task_type_id == reward_cancellation_task_type.task_type_id
             )
         )
         == 1

@@ -102,15 +102,15 @@ async def create_voucher_issuance_retry_task(
 async def create_delete_and_cancel_vouchers_tasks(
     db_session: AsyncSession, *, retailer_slug: str, voucher_type_slug: str, create_cancel_task: bool
 ) -> list[int]:
-    task_params = {"retailer_slug": retailer_slug, "voucher_type_slug": voucher_type_slug}
+    task_params = {"retailer_slug": retailer_slug, "reward_slug": voucher_type_slug}
 
     async def _query() -> tuple[RetryTask, Optional[RetryTask]]:
         delete_task: RetryTask = await async_create_task(
-            db_session=db_session, task_type_name=settings.DELETE_UNALLOCATED_VOUCHERS_TASK_NAME, params=task_params
+            db_session=db_session, task_type_name=settings.DELETE_UNALLOCATED_REWARDS_TASK_NAME, params=task_params
         )
         cancel_task: Optional[RetryTask] = (
             await async_create_task(
-                db_session=db_session, task_type_name=settings.CANCEL_VOUCHERS_TASK_NAME, params=task_params
+                db_session=db_session, task_type_name=settings.CANCEL_REWARDS_TASK_NAME, params=task_params
             )
             if create_cancel_task is True
             else None

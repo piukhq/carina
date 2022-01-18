@@ -165,15 +165,15 @@ def adjustment_url(voucher_status_adjustment_task_params: dict) -> str:
 
 
 @pytest.fixture(scope="function")
-def delete_vouchers_retry_task(
-    db_session: "Session", voucher_deletion_task_type: TaskType, voucher_config: VoucherConfig
+def delete_rewards_retry_task(
+    db_session: "Session", reward_deletion_task_type: TaskType, voucher_config: VoucherConfig
 ) -> RetryTask:
     task = sync_create_task(
         db_session,
-        task_type_name=voucher_deletion_task_type.name,
+        task_type_name=reward_deletion_task_type.name,
         params={
             "retailer_slug": voucher_config.retailer_slug,
-            "voucher_type_slug": voucher_config.voucher_type_slug,
+            "reward_slug": voucher_config.voucher_type_slug,
         },
     )
     db_session.commit()
@@ -181,15 +181,15 @@ def delete_vouchers_retry_task(
 
 
 @pytest.fixture(scope="function")
-def cancel_vouchers_retry_task(
-    db_session: "Session", voucher_cancellation_task_type: TaskType, voucher_config: VoucherConfig
+def cancel_rewards_retry_task(
+    db_session: "Session", reward_cancellation_task_type: TaskType, voucher_config: VoucherConfig
 ) -> RetryTask:
     task = sync_create_task(
         db_session,
-        task_type_name=voucher_cancellation_task_type.name,
+        task_type_name=reward_cancellation_task_type.name,
         params={
             "retailer_slug": voucher_config.retailer_slug,
-            "voucher_type_slug": voucher_config.voucher_type_slug,
+            "reward_slug": voucher_config.voucher_type_slug,
         },
     )
     db_session.commit()
