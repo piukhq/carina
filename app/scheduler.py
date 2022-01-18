@@ -16,7 +16,7 @@ from app.core.config import redis, settings
 
 
 def is_leader(lock_name: str, *, hostname: str = None) -> bool:  # pragma: no cover
-    lock_key = f"{settings.carinarewards}:schedule-lock:{lock_name}"
+    lock_key = f"{settings.REDIS_KEY_PREFIX}:schedule-lock:{lock_name}"
     if hostname is None:
         hostname = f"{socket.gethostname()}-{uuid4()}"
     is_leader = False
