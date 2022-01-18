@@ -8,7 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.future import select
 
 from app.core.config import settings
-from app.enums import VoucherTypeStatuses
+from app.enums import RewardTypeStatuses
 from asgi import app
 from tests.conftest import SetupType
 from tests.fixtures import HttpErrors
@@ -130,14 +130,14 @@ def test_post_voucher_allocation_no_more_vouchers(
 def test_voucher_type_status_ok(
     setup: SetupType,
     mocker: MockerFixture,
-    voucher_deletion_task_type: TaskType,
-    voucher_cancellation_task_type: TaskType,
+    reward_deletion_task_type: TaskType,
+    reward_cancellation_task_type: TaskType,
 ) -> None:
     db_session, voucher_config, _ = setup
     mocker.patch("app.api.tasks.enqueue_many_retry_tasks")
 
     for transition_status in ("cancelled", "ended"):
-        voucher_config.status = VoucherTypeStatuses.ACTIVE
+        voucher_config.status = RewardTypeStatuses.ACTIVE
         db_session.commit()
 
         resp = client.patch(
@@ -148,12 +148,12 @@ def test_voucher_type_status_ok(
         assert resp.status_code == status.HTTP_202_ACCEPTED
         assert resp.json() == {}
         db_session.refresh(voucher_config)
-        assert voucher_config.status == VoucherTypeStatuses(transition_status)
+        assert voucher_config.status == RewardTypeStatuses(transition_status)
 
     assert (
         db_session.scalar(
             select(func.count(RetryTask.retry_task_id)).where(
-                RetryTask.task_type_id == voucher_deletion_task_type.task_type_id
+                RetryTask.task_type_id == reward_deletion_task_type.task_type_id
             )
         )
         == 2
@@ -161,7 +161,7 @@ def test_voucher_type_status_ok(
     assert (
         db_session.scalar(
             select(func.count(RetryTask.retry_task_id)).where(
-                RetryTask.task_type_id == voucher_cancellation_task_type.task_type_id
+                RetryTask.task_type_id == reward_cancellation_task_type.task_type_id
             )
         )
         == 1
@@ -178,7 +178,7 @@ def test_voucher_type_status_bad_status(setup: SetupType) -> None:
     )
     assert resp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
     db_session.refresh(voucher_config)
-    assert voucher_config.status == VoucherTypeStatuses.ACTIVE
+    assert voucher_config.status == RewardTypeStatuses.ACTIVE
 
 
 def test_voucher_type_status_invalid_retailer(setup: SetupType) -> None:
@@ -192,7 +192,7 @@ def test_voucher_type_status_invalid_retailer(setup: SetupType) -> None:
     assert resp.status_code == HttpErrors.INVALID_RETAILER.value.status_code
     assert resp.json() == HttpErrors.INVALID_RETAILER.value.detail
     db_session.refresh(voucher_config)
-    assert voucher_config.status == VoucherTypeStatuses.ACTIVE
+    assert voucher_config.status == RewardTypeStatuses.ACTIVE
 
 
 def test_voucher_type_status_voucher_type_not_found(setup: SetupType) -> None:
@@ -206,12 +206,12 @@ def test_voucher_type_status_voucher_type_not_found(setup: SetupType) -> None:
     assert resp.status_code == HttpErrors.UNKNOWN_VOUCHER_TYPE.value.status_code
     assert resp.json() == HttpErrors.UNKNOWN_VOUCHER_TYPE.value.detail
     db_session.refresh(voucher_config)
-    assert voucher_config.status == VoucherTypeStatuses.ACTIVE
+    assert voucher_config.status == RewardTypeStatuses.ACTIVE
 
 
 def test_voucher_type_status_wrong_voucher_config_status(setup: SetupType) -> None:
     db_session, voucher_config, _ = setup
-    voucher_config.status = VoucherTypeStatuses.CANCELLED
+    voucher_config.status = RewardTypeStatuses.CANCELLED
     db_session.commit()
 
     resp = client.patch(
@@ -222,4 +222,4 @@ def test_voucher_type_status_wrong_voucher_config_status(setup: SetupType) -> No
     assert resp.status_code == HttpErrors.STATUS_UPDATE_FAILED.value.status_code
     assert resp.json() == HttpErrors.STATUS_UPDATE_FAILED.value.detail
     db_session.refresh(voucher_config)
-    assert voucher_config.status == VoucherTypeStatuses.CANCELLED
+    assert voucher_config.status == RewardTypeStatuses.CANCELLED

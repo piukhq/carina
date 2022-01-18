@@ -9,7 +9,7 @@ from app import crud
 from app.api.deps import get_session, user_is_authorised
 from app.api.tasks import enqueue_many_tasks, enqueue_task
 from app.db.base_class import async_run_query
-from app.enums import HttpErrors, VoucherTypeStatuses
+from app.enums import HttpErrors, RewardTypeStatuses
 from app.fetch_voucher import get_allocable_voucher
 from app.schemas import VoucherAllocationSchema
 from app.schemas.voucher import VoucherStatusSchema
@@ -56,7 +56,7 @@ async def voucher_type_status(
 ) -> Any:
     voucher_config = await crud.get_voucher_config(db_session, retailer_slug, voucher_type_slug, for_update=True)
 
-    if voucher_config.status != VoucherTypeStatuses.ACTIVE:  # pragma: coverage bug 1012
+    if voucher_config.status != RewardTypeStatuses.ACTIVE:  # pragma: coverage bug 1012
         raise HttpErrors.STATUS_UPDATE_FAILED.value
 
     async def _query() -> None:  # pragma: coverage bug 1012
@@ -69,7 +69,7 @@ async def voucher_type_status(
         db_session,
         retailer_slug=retailer_slug,
         voucher_type_slug=voucher_type_slug,
-        create_cancel_task=payload.status == VoucherTypeStatuses.CANCELLED,
+        create_cancel_task=payload.status == RewardTypeStatuses.CANCELLED,
     )
 
     asyncio.create_task(enqueue_many_tasks(retry_tasks_ids=retry_tasks_ids))  # pragma: coverage bug 1012

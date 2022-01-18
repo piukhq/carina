@@ -5,7 +5,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.db.base_class import Base, TimestampMixin
-from app.enums import FileAgentType, VoucherFetchType, VoucherTypeStatuses, VoucherUpdateStatuses
+from app.enums import FileAgentType, RewardTypeStatuses, RewardUpdateStatuses, VoucherFetchType
 
 
 class Voucher(Base, TimestampMixin):  # pragma: no cover
@@ -40,7 +40,7 @@ class VoucherConfig(Base, TimestampMixin):  # pragma: no cover
     validity_days = Column(Integer, nullable=True)
     retailer_slug = Column(String(32), index=True, nullable=False)
     fetch_type = Column(Enum(VoucherFetchType), nullable=False, default=VoucherFetchType.PRE_LOADED)
-    status = Column(Enum(VoucherTypeStatuses), nullable=False, default=VoucherTypeStatuses.ACTIVE)
+    status = Column(Enum(RewardTypeStatuses), nullable=False, default=RewardTypeStatuses.ACTIVE)
 
     vouchers = relationship("Voucher", back_populates="voucher_config")
 
@@ -59,7 +59,7 @@ class VoucherUpdate(Base, TimestampMixin):  # pragma: no cover
     id = Column(Integer, primary_key=True)
     voucher_id = Column(UUID(as_uuid=True), ForeignKey("voucher.id", ondelete="CASCADE"), nullable=False)
     date = Column(Date, nullable=False)
-    status = Column(Enum(VoucherUpdateStatuses), nullable=False)
+    status = Column(Enum(RewardUpdateStatuses), nullable=False)
 
     voucher = relationship("Voucher", back_populates="updates")
 

@@ -191,14 +191,14 @@ class Settings(BaseSettings):
     BLOB_IMPORT_LOGGING_LEVEL = logging.WARNING
 
     # The prefix used on every Redis key.
-    REDIS_KEY_PREFIX = "carinavouchers"
+    REDIS_KEY_PREFIX = "carinarewards"
 
     VOUCHER_ISSUANCE_TASK_NAME = "voucher-issuance"
-    CANCEL_VOUCHERS_TASK_NAME = "cancel-vouchers"
-    DELETE_UNALLOCATED_VOUCHERS_TASK_NAME = "delete-unallocated-vouchers"
+    CANCEL_REWARDS_TASK_NAME = "cancel-rewards"
+    DELETE_UNALLOCATED_REWARDS_TASK_NAME = "delete-unallocated-rewards"
 
     VOUCHER_ISSUANCE_REQUEUE_BACKOFF_SECONDS: int = 60 * 60 * 12  # 12 hours
-    VOUCHER_STATUS_ADJUSTMENT_TASK_NAME = "voucher-status-adjustment"
+    REWARD_STATUS_ADJUSTMENT_TASK_NAME = "reward-status-adjustment"
 
     TASK_MAX_RETRIES: int = 6
     TASK_RETRY_BACKOFF_BASE: float = 3.0

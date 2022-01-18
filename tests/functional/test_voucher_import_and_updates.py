@@ -15,16 +15,16 @@ from sqlalchemy import func
 from sqlalchemy.future import select
 from testfixtures import LogCapture
 
-from app.enums import FileAgentType, VoucherUpdateStatuses
+from app.enums import FileAgentType, RewardUpdateStatuses
 from app.imports.agents.file_agent import (
     BlobProcessingError,
+    RewardImportAgent,
+    RewardUpdateRow,
+    RewardUpdatesAgent,
     VoucherFileLog,
-    VoucherImportAgent,
-    VoucherUpdateRow,
-    VoucherUpdatesAgent,
 )
 from app.models import Voucher, VoucherUpdate
-from app.schemas import VoucherUpdateSchema
+from app.schemas import RewardUpdateSchema
 from tests.conftest import SetupType
 
 if TYPE_CHECKING:
@@ -32,12 +32,12 @@ if TYPE_CHECKING:
 
 
 def _get_voucher_update_rows(db_session: "Session", voucher_codes: List[str]) -> List[VoucherUpdate]:
-    voucher_updates = (
+    reward_updates = (
         db_session.execute(select(VoucherUpdate).join(Voucher).where(Voucher.voucher_code.in_(voucher_codes)))
         .scalars()
         .all()
     )
-    return voucher_updates
+    return reward_updates
 
 
 def _get_voucher_rows(db_session: "Session") -> List[Voucher]:
@@ -57,7 +57,7 @@ def test_import_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> N
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
-    voucher_agent = VoucherImportAgent()
+    voucher_agent = RewardImportAgent()
     eligible_voucher_codes = ["voucher1", "voucher2", "voucher3"]
 
     vouchers = _get_voucher_rows(db_session)
@@ -70,7 +70,7 @@ def test_import_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> N
 
     voucher_agent.process_csv(
         retailer_slug=voucher_config.retailer_slug,
-        blob_name="test-retailer/available-vouchers/test-voucher/new-vouchers.csv",
+        blob_name="test-retailer/available-rewards/test-reward/new-reward.csv",
         blob_content=blob_content,
         db_session=db_session,
     )
@@ -81,11 +81,11 @@ def test_import_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> N
     # We should be sentry warned about the existing token
     assert capture_message_spy.call_count == 2  # Errors should all be rolled up in to one call per error category
     assert (
-        "Invalid rows found in test-retailer/available-vouchers/test-voucher/new-vouchers.csv:\nrows: 5, 6"
+        "Invalid rows found in test-retailer/available-rewards/test-reward/new-reward.csv:\nrows: 5, 6"
         == capture_message_spy.call_args_list[0][0][0]
     )
     assert (
-        "Pre-existing voucher codes found in test-retailer/available-vouchers/test-voucher/new-vouchers.csv:\nrows: 4"
+        "Pre-existing reward codes found in test-retailer/available-rewards/test-reward/new-reward.csv:\nrows: 4"
         == capture_message_spy.call_args_list[1][0][0]
     )
 
@@ -115,14 +115,14 @@ def test_import_agent__process_csv_soft_deleted(
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
-    voucher_agent = VoucherImportAgent()
+    voucher_agent = RewardImportAgent()
     eligible_voucher_codes = ["voucher1", "voucher2", "voucher3"]
 
     blob_content = "\n".join(eligible_voucher_codes + [pre_existing_voucher.voucher_code])
 
     voucher_agent.process_csv(
         retailer_slug=voucher_config.retailer_slug,
-        blob_name="test-retailer/available-vouchers/test-voucher/new-vouchers.csv",
+        blob_name="test-retailer/available-rewards/test-reward/new-reward.csv",
         blob_content=blob_content,
         db_session=db_session,
     )
@@ -157,14 +157,14 @@ def test_import_agent__process_csv_not_soft_deleted(
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
-    voucher_agent = VoucherImportAgent()
+    voucher_agent = RewardImportAgent()
     eligible_voucher_codes = ["voucher1", "voucher2", "voucher3"]
 
     blob_content = "\n".join(eligible_voucher_codes + [pre_existing_voucher.voucher_code])
 
     voucher_agent.process_csv(
         retailer_slug=voucher_config.retailer_slug,
-        blob_name="test-retailer/available-vouchers/test-voucher/new-vouchers.csv",
+        blob_name="test-retailer/available-rewards/test-reward/new-reward.csv",
         blob_content=blob_content,
         db_session=db_session,
     )
@@ -175,7 +175,7 @@ def test_import_agent__process_csv_not_soft_deleted(
     # We should be sentry warned about the existing token
     assert capture_message_spy.call_count == 1
     assert (
-        "Pre-existing voucher codes found in test-retailer/available-vouchers/test-voucher/new-vouchers.csv:\nrows: 4"
+        "Pre-existing reward codes found in test-retailer/available-rewards/test-reward/new-reward.csv:\nrows: 4"
         == capture_message_spy.call_args_list[0][0][0]
     )
 
@@ -201,14 +201,14 @@ def test_import_agent__process_csv_same_voucher_type_slug_not_soft_deleted(
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
-    voucher_agent = VoucherImportAgent()
+    voucher_agent = RewardImportAgent()
     eligible_voucher_codes = ["voucher1", "voucher2", "voucher3"]
 
     blob_content = "\n".join(eligible_voucher_codes + [pre_existing_voucher.voucher_code])
 
     voucher_agent.process_csv(
         retailer_slug=voucher_config.retailer_slug,
-        blob_name="test-retailer/available-vouchers/test-voucher/new-vouchers.csv",
+        blob_name="test-retailer/available-rewards/test-reward/new-reward.csv",
         blob_content=blob_content,
         db_session=db_session,
     )
@@ -219,7 +219,7 @@ def test_import_agent__process_csv_same_voucher_type_slug_not_soft_deleted(
     # We should be sentry warned about the existing token
     assert capture_message_spy.call_count == 1
     assert (
-        "Pre-existing voucher codes found in test-retailer/available-vouchers/test-voucher/new-vouchers.csv:\nrows: 4"
+        "Pre-existing reward codes found in test-retailer/available-rewards/test-reward/new-reward.csv:\nrows: 4"
         == capture_message_spy.call_args_list[0][0][0]
     )
 
@@ -228,31 +228,31 @@ def test_import_agent__process_csv_no_voucher_config(setup: SetupType, mocker: M
     db_session, voucher_config, _ = setup
 
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
-    voucher_agent = VoucherImportAgent()
+    voucher_agent = RewardImportAgent()
     with pytest.raises(BlobProcessingError) as exc_info:
         voucher_agent.process_csv(
             retailer_slug=voucher_config.retailer_slug,
-            blob_name="test-retailer/available-vouchers/incorrect-voucher-type/new-vouchers.csv",
+            blob_name="test-retailer/available-rewards/incorrect-voucher-type/new-vouchers.csv",
             blob_content="voucher1\nvoucher2\nvoucher3",
             db_session=db_session,
         )
-    assert exc_info.value.args == ("No VoucherConfig found for voucher_type_slug incorrect-voucher-type",)
+    assert exc_info.value.args == ("No RewardConfig found for reward_slug incorrect-voucher-type",)
 
 
 def test_import_agent__process_csv_no_voucher_type_in_path(setup: SetupType, mocker: MockerFixture) -> None:
     db_session, voucher_config, _ = setup
 
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
-    voucher_agent = VoucherImportAgent()
+    voucher_agent = RewardImportAgent()
     with pytest.raises(BlobProcessingError) as exc_info:
         voucher_agent.process_csv(
             retailer_slug=voucher_config.retailer_slug,
-            blob_name="test-retailer/available-vouchers/new-vouchers.csv",
+            blob_name="test-retailer/available-rewards/new-vouchers.csv",
             blob_content="voucher1\nvoucher2\nvoucher3",
             db_session=db_session,
         )
     assert exc_info.value.args == (
-        "No voucher_type_slug path section found (not enough values to unpack (expected 2, got 1))",
+        "No reward_slug path section found (not enough values to unpack (expected 2, got 1))",
     )
 
 
@@ -261,7 +261,7 @@ def test_updates_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> 
     db_session, voucher_config, _ = setup
 
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
-    voucher_agent = VoucherUpdatesAgent()
+    voucher_agent = RewardUpdatesAgent()
     mock__process_updates = mocker.patch.object(voucher_agent, "_process_updates")
     blob_name = "/test-retailer/voucher-updates/test.csv"
     content = """
@@ -277,36 +277,36 @@ TEST87654322,2021-07-30,redeemed
         blob_content=content,
         db_session=db_session,
     )
-    expected_voucher_update_rows_by_code = defaultdict(
-        list[VoucherUpdateRow],
+    expected_reward_update_rows_by_code = defaultdict(
+        list[RewardUpdateRow],
         {
             "TEST12345678": [
-                VoucherUpdateRow(
+                RewardUpdateRow(
                     row_num=1,
-                    data=VoucherUpdateSchema(
-                        voucher_code="TEST12345678", date="2021-07-30", status=VoucherUpdateStatuses.CANCELLED
+                    data=RewardUpdateSchema(
+                        code="TEST12345678", date="2021-07-30", status=RewardUpdateStatuses.CANCELLED
                     ),
                 )
             ],
             "TEST87654321": [
-                VoucherUpdateRow(
+                RewardUpdateRow(
                     row_num=2,
-                    data=VoucherUpdateSchema(
-                        voucher_code="TEST87654321", date="2021-07-21", status=VoucherUpdateStatuses.REDEEMED
+                    data=RewardUpdateSchema(
+                        code="TEST87654321", date="2021-07-21", status=RewardUpdateStatuses.REDEEMED
                     ),
                 )
             ],
             "TEST87654322": [
-                VoucherUpdateRow(
+                RewardUpdateRow(
                     row_num=3,
-                    data=VoucherUpdateSchema(
-                        voucher_code="TEST87654322", date="2021-07-30", status=VoucherUpdateStatuses.CANCELLED
+                    data=RewardUpdateSchema(
+                        code="TEST87654322", date="2021-07-30", status=RewardUpdateStatuses.CANCELLED
                     ),
                 ),
-                VoucherUpdateRow(
+                RewardUpdateRow(
                     row_num=4,
-                    data=VoucherUpdateSchema(
-                        voucher_code="TEST87654322", date="2021-07-30", status=VoucherUpdateStatuses.REDEEMED
+                    data=RewardUpdateSchema(
+                        code="TEST87654322", date="2021-07-30", status=RewardUpdateStatuses.REDEEMED
                     ),
                 ),
             ],
@@ -316,7 +316,7 @@ TEST87654322,2021-07-30,redeemed
         retailer_slug="test-retailer",
         blob_name=blob_name,
         db_session=db_session,
-        voucher_update_rows_by_code=expected_voucher_update_rows_by_code,
+        reward_update_rows_by_code=expected_reward_update_rows_by_code,
     )
 
 
@@ -333,10 +333,10 @@ def test_updates_agent__process_csv_voucher_code_fails_non_validating_rows(
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
-    mocker.patch.object(VoucherUpdatesAgent, "enqueue_voucher_updates")
+    mocker.patch.object(RewardUpdatesAgent, "enqueue_reward_updates")
     mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
-    voucher_agent = VoucherUpdatesAgent()
+    voucher_agent = RewardUpdatesAgent()
     blob_name = "/test-retailer/voucher-updates/test.csv"
     bad_date = "20210830"
     bad_status = "nosuchstatus"
@@ -358,7 +358,7 @@ TEST666666,2021-07-30,{bad_status}
     assert capture_message_spy.call_count == 1  # Errors should all be rolled up in to a single call
     expected_error_msg: str = capture_message_spy.call_args.args[0]
     assert f"time data '{bad_date}' does not match format '%Y-%m-%d'" in expected_error_msg
-    assert f"'{bad_status}' is not a valid VoucherUpdateStatuses" in expected_error_msg
+    assert f"'{bad_status}' is not a valid RewardUpdateStatuses" in expected_error_msg
 
 
 def test_updates_agent__process_csv_voucher_code_fails_malformed_csv_rows(
@@ -372,10 +372,10 @@ def test_updates_agent__process_csv_voucher_code_fails_malformed_csv_rows(
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
-    mocker.patch.object(VoucherUpdatesAgent, "enqueue_voucher_updates")
+    mocker.patch.object(RewardUpdatesAgent, "enqueue_reward_updates")
     mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
-    voucher_agent = VoucherUpdatesAgent()
+    voucher_agent = RewardUpdatesAgent()
     blob_name = "/test-retailer/voucher-updates/test.csv"
     content = "TEST87654321,2021-07-30\nTEST12345678,redeemed\n"
 
@@ -399,26 +399,26 @@ def test_updates_agent__process_updates(setup: SetupType, mocker: MockerFixture)
     voucher.allocated = True
     db_session.commit()
 
-    mock_enqueue = mocker.patch.object(VoucherUpdatesAgent, "enqueue_voucher_updates", autospec=True)
+    mock_enqueue = mocker.patch.object(RewardUpdatesAgent, "enqueue_reward_updates", autospec=True)
 
     from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
-    voucher_agent = VoucherUpdatesAgent()
+    voucher_agent = RewardUpdatesAgent()
     blob_name = "/test-retailer/voucher-updates/test.csv"
-    data = VoucherUpdateSchema(
-        voucher_code=voucher.voucher_code,
+    data = RewardUpdateSchema(
+        code=voucher.voucher_code,
         date="2021-07-30",
-        status=VoucherUpdateStatuses("redeemed"),
+        status=RewardUpdateStatuses("redeemed"),
     )
-    voucher_update_rows_by_code: DefaultDict[str, List[VoucherUpdateRow]] = defaultdict(list[VoucherUpdateRow])
-    voucher_update_rows_by_code[voucher.voucher_code].append(VoucherUpdateRow(data=data, row_num=1))
+    reward_update_rows_by_code: DefaultDict[str, List[RewardUpdateRow]] = defaultdict(list[RewardUpdateRow])
+    reward_update_rows_by_code[voucher.voucher_code].append(RewardUpdateRow(data=data, row_num=1))
 
     # WHEN
     voucher_agent._process_updates(
         retailer_slug=voucher_config.retailer_slug,
-        voucher_update_rows_by_code=voucher_update_rows_by_code,
+        reward_update_rows_by_code=reward_update_rows_by_code,
         blob_name=blob_name,
         db_session=db_session,
     )
@@ -426,7 +426,7 @@ def test_updates_agent__process_updates(setup: SetupType, mocker: MockerFixture)
 
     assert len(voucher_update_rows) == 1
     assert voucher_update_rows[0].voucher_id == voucher.id
-    assert voucher_update_rows[0].status == VoucherUpdateStatuses.REDEEMED
+    assert voucher_update_rows[0].status == RewardUpdateStatuses.REDEEMED
     assert isinstance(voucher_update_rows[0].date, datetime.date)
     assert str(voucher_update_rows[0].date) == "2021-07-30"
     assert capture_message_spy.call_count == 0  # Should be no errors
@@ -444,25 +444,25 @@ def test_updates_agent__process_updates_voucher_code_not_allocated(setup: SetupT
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
-    mocker.patch.object(VoucherUpdatesAgent, "enqueue_voucher_updates")
+    mocker.patch.object(RewardUpdatesAgent, "enqueue_reward_updates")
     mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
-    voucher_agent = VoucherUpdatesAgent()
+    voucher_agent = RewardUpdatesAgent()
     mocker.patch.object(voucher_agent, "_report_unknown_codes", autospec=True)
     blob_name = "/test-retailer/voucher-updates/test.csv"
-    data = VoucherUpdateSchema(
-        voucher_code=voucher.voucher_code,
+    data = RewardUpdateSchema(
+        code=voucher.voucher_code,
         date="2021-07-30",
-        status=VoucherUpdateStatuses("redeemed"),
+        status=RewardUpdateStatuses("redeemed"),
     )
-    voucher_update_rows_by_code: DefaultDict[str, List[VoucherUpdateRow]] = defaultdict(list[VoucherUpdateRow])
-    voucher_update_rows_by_code[voucher.voucher_code].append(VoucherUpdateRow(data=data, row_num=1))
+    reward_update_rows_by_code: DefaultDict[str, List[RewardUpdateRow]] = defaultdict(list[RewardUpdateRow])
+    reward_update_rows_by_code[voucher.voucher_code].append(RewardUpdateRow(data=data, row_num=1))
 
     # WHEN
     voucher_agent._process_updates(
         db_session=db_session,
         retailer_slug=voucher_config.retailer_slug,
-        voucher_update_rows_by_code=voucher_update_rows_by_code,
+        reward_update_rows_by_code=reward_update_rows_by_code,
         blob_name=blob_name,
     )
     voucher_update_rows = _get_voucher_update_rows(db_session, [voucher.voucher_code])
@@ -470,7 +470,7 @@ def test_updates_agent__process_updates_voucher_code_not_allocated(setup: SetupT
     # THEN
     assert capture_message_spy.call_count == 1  # Errors should all be rolled up in to a single call
     expected_error_msg: str = capture_message_spy.call_args.args[0]
-    assert "Unallocated voucher codes found" in expected_error_msg
+    assert "Unallocated reward codes found" in expected_error_msg
     assert len(voucher_update_rows) == 0
 
 
@@ -483,25 +483,25 @@ def test_updates_agent__process_updates_voucher_code_does_not_exist(setup: Setup
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
-    mocker.patch.object(VoucherUpdatesAgent, "enqueue_voucher_updates")
+    mocker.patch.object(RewardUpdatesAgent, "enqueue_reward_updates")
     mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
-    voucher_agent = VoucherUpdatesAgent()
+    voucher_agent = RewardUpdatesAgent()
     mocker.patch.object(voucher_agent, "_process_unallocated_codes", autospec=True)
     blob_name = "/test-retailer/voucher-updates/test.csv"
     bad_voucher_code = "IDONOTEXIST"
-    data = VoucherUpdateSchema(
-        voucher_code=bad_voucher_code,
+    data = RewardUpdateSchema(
+        code=bad_voucher_code,
         date="2021-07-30",
-        status=VoucherUpdateStatuses("cancelled"),
+        status=RewardUpdateStatuses("cancelled"),
     )
-    voucher_update_rows_by_code: DefaultDict[str, List[VoucherUpdateRow]] = defaultdict(list[VoucherUpdateRow])
-    voucher_update_rows_by_code[bad_voucher_code].append(VoucherUpdateRow(data=data, row_num=1))
+    reward_update_rows_by_code: DefaultDict[str, List[RewardUpdateRow]] = defaultdict(list[RewardUpdateRow])
+    reward_update_rows_by_code[bad_voucher_code].append(RewardUpdateRow(data=data, row_num=1))
 
     # WHEN
     voucher_agent._process_updates(
         retailer_slug=voucher_config.retailer_slug,
-        voucher_update_rows_by_code=voucher_update_rows_by_code,
+        reward_update_rows_by_code=reward_update_rows_by_code,
         blob_name=blob_name,
         db_session=db_session,
     )
@@ -511,7 +511,7 @@ def test_updates_agent__process_updates_voucher_code_does_not_exist(setup: Setup
     assert capture_message_spy.call_count == 1  # Errors should all be rolled up in to a single call
     expected_error_msg: str = capture_message_spy.call_args.args[0]
     assert (
-        "Unknown voucher codes found while processing /test-retailer/voucher-updates/test.csv, rows: 1"
+        "Unknown reward codes found while processing /test-retailer/voucher-updates/test.csv, rows: 1"
         in expected_error_msg
     )
     assert len(voucher_update_rows) == 0
@@ -528,7 +528,7 @@ def test_process_blobs(setup: SetupType, mocker: MockerFixture) -> None:
     mock_blob_service_client = mocker.MagicMock(spec=BlobServiceClient)
 
     MockBlobServiceClient.from_connection_string.return_value = mock_blob_service_client
-    voucher_agent = VoucherUpdatesAgent()
+    voucher_agent = RewardUpdatesAgent()
     container_client = mocker.patch.object(voucher_agent, "container_client", spec=ContainerClient)
     mock_process_csv = mocker.patch.object(voucher_agent, "process_csv")
     mock_move_blob = mocker.patch.object(voucher_agent, "move_blob")
@@ -559,7 +559,7 @@ def test_process_blobs_unicodedecodeerror(capture: LogCapture, setup: SetupType,
     mock_blob_service_client = mocker.MagicMock(spec=BlobServiceClient)
 
     MockBlobServiceClient.from_connection_string.return_value = mock_blob_service_client
-    voucher_agent = VoucherUpdatesAgent()
+    voucher_agent = RewardUpdatesAgent()
     container_client = mocker.patch.object(voucher_agent, "container_client", spec=ContainerClient)
     mock_process_csv = mocker.patch.object(voucher_agent, "process_csv")
     mock_move_blob = mocker.patch.object(voucher_agent, "move_blob")
@@ -590,7 +590,7 @@ def test_process_blobs_not_csv(setup: SetupType, mocker: MockerFixture) -> None:
 
     capture_message_spy = mocker.spy(sentry_sdk, "capture_message")
 
-    voucher_agent = VoucherUpdatesAgent()
+    voucher_agent = RewardUpdatesAgent()
     mock_process_csv = mocker.patch.object(voucher_agent, "process_csv")
     container_client = mocker.patch.object(voucher_agent, "container_client", spec=ContainerClient)
     mock_move_blob = mocker.patch.object(voucher_agent, "move_blob")
@@ -631,7 +631,7 @@ def test_process_blobs_filename_is_duplicate(setup: SetupType, mocker: MockerFix
 
     capture_message_spy = mocker.spy(sentry_sdk, "capture_message")
 
-    voucher_agent = VoucherUpdatesAgent()
+    voucher_agent = RewardUpdatesAgent()
     mock_process_csv = mocker.patch.object(voucher_agent, "process_csv")
     container_client = mocker.patch.object(voucher_agent, "container_client", spec=ContainerClient)
     mock_move_blob = mocker.patch.object(voucher_agent, "move_blob")
@@ -670,7 +670,7 @@ def test_process_blobs_filename_is_not_duplicate(setup: SetupType, mocker: Mocke
     mock_blob_service_client = mocker.MagicMock(spec=BlobServiceClient)
 
     MockBlobServiceClient.from_connection_string.return_value = mock_blob_service_client
-    voucher_agent = VoucherUpdatesAgent()
+    voucher_agent = RewardUpdatesAgent()
     container_client = mocker.patch.object(voucher_agent, "container_client", spec=ContainerClient)
     mock_process_csv = mocker.patch.object(voucher_agent, "process_csv")
     mock_move_blob = mocker.patch.object(voucher_agent, "move_blob")
@@ -703,7 +703,7 @@ def test_move_blob(mocker: MockerFixture) -> None:
     mock_src_blob_client.url = "https://a-blob-url"
     src_blob_lease_client = mocker.patch("app.imports.agents.file_agent.BlobLeaseClient", autospec=True)
 
-    voucher_agent = VoucherUpdatesAgent()
+    voucher_agent = RewardUpdatesAgent()
     mock_src_blob_client.blob_name = blob_name = "/test-retailer/voucher-updates/test.csv"
 
     blob_service_client = mocker.patch.object(voucher_agent, "blob_service_client")
@@ -725,7 +725,7 @@ def test_move_blob(mocker: MockerFixture) -> None:
     mock_src_blob_client.delete_blob.assert_called_once()
 
 
-def test_enqueue_voucher_updates(
+def test_enqueue_reward_updates(
     setup: SetupType, mocker: MockerFixture, voucher_status_adjustment_task_type: TaskType
 ) -> None:
     db_session, _, voucher = setup
@@ -739,10 +739,10 @@ def test_enqueue_voucher_updates(
     voucher_update = VoucherUpdate(
         voucher=voucher,
         date=today,
-        status=VoucherUpdateStatuses.REDEEMED,
+        status=RewardUpdateStatuses.REDEEMED,
     )
 
-    VoucherUpdatesAgent.enqueue_voucher_updates(db_session, [voucher_update])
+    RewardUpdatesAgent.enqueue_reward_updates(db_session, [voucher_update])
     mock_sync_create_many_tasks.assert_called_once_with(
         db_session,
         params_list=[
@@ -753,7 +753,7 @@ def test_enqueue_voucher_updates(
                 "voucher_id": voucher.id,
             }
         ],
-        task_type_name="voucher-status-adjustment",
+        task_type_name="reward-status-adjustment",
     )
     mock_enqueue_many_retry_tasks.assert_called_once_with(
         db_session,
@@ -762,7 +762,7 @@ def test_enqueue_voucher_updates(
     )
 
 
-def test_enqueue_voucher_updates_exception(
+def test_enqueue_reward_updates_exception(
     setup: SetupType, mocker: MockerFixture, voucher_status_adjustment_task_type: TaskType
 ) -> None:
     db_session, _, voucher = setup
@@ -776,10 +776,10 @@ def test_enqueue_voucher_updates_exception(
     voucher_update = VoucherUpdate(
         voucher=voucher,
         date=today,
-        status=VoucherUpdateStatuses.REDEEMED,
+        status=RewardUpdateStatuses.REDEEMED,
     )
 
-    VoucherUpdatesAgent.enqueue_voucher_updates(db_session, [voucher_update])
+    RewardUpdatesAgent.enqueue_reward_updates(db_session, [voucher_update])
 
     mock_sentry_sdk.capture_exception.assert_called_once_with(error)
     assert db_session.execute(select(func.count()).select_from(RetryTask)).scalar_one() == 0

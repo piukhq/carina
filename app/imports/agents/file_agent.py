@@ -24,19 +24,19 @@ from sqlalchemy.sql import and_, not_, or_
 from app.core.config import redis, settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
-from app.enums import FileAgentType, VoucherUpdateStatuses
+from app.enums import FileAgentType, RewardUpdateStatuses
 from app.models import Voucher, VoucherConfig, VoucherFileLog, VoucherUpdate
 from app.scheduler import CronScheduler
-from app.schemas import VoucherUpdateSchema
+from app.schemas import RewardUpdateSchema
 
-logger = logging.getLogger("voucher-import")
+logger = logging.getLogger("reward-import")
 
 if TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy.orm import Session
 
 
-class VoucherUpdateRow(NamedTuple):
-    data: VoucherUpdateSchema
+class RewardUpdateRow(NamedTuple):
+    data: RewardUpdateSchema
     row_num: int
 
 
@@ -187,7 +187,7 @@ class BlobFileAgent:
                 logger.debug(f"Archiving blob {blob.name}.")
                 self.move_blob(settings.BLOB_ARCHIVE_CONTAINER, blob_client, lease)
 
-                def add_voucher_file_log() -> None:
+                def add_reward_file_log() -> None:
                     db_session.add(
                         VoucherFileLog(
                             file_name=blob.name,
@@ -196,21 +196,19 @@ class BlobFileAgent:
                     )
                     db_session.commit()
 
-                sync_run_query(add_voucher_file_log, db_session)
+                sync_run_query(add_reward_file_log, db_session)
 
 
-class VoucherImportAgent(BlobFileAgent):
-    blob_path_template = string.Template("$retailer_slug/available-vouchers/")
-    scheduler_name = "carina-voucher-import-scheduler"
+class RewardImportAgent(BlobFileAgent):
+    blob_path_template = string.Template("$retailer_slug/available-rewards/")
+    scheduler_name = "carina-reward-import-scheduler"
 
     def __init__(self) -> None:
         super().__init__()
         self.file_agent_type = FileAgentType.IMPORT
 
     @lru_cache()
-    def voucher_configs_by_voucher_type_slug(
-        self, retailer_slug: str, db_session: "Session"
-    ) -> dict[str, VoucherConfig]:
+    def reward_configs_by_reward_slug(self, retailer_slug: str, db_session: "Session") -> dict[str, VoucherConfig]:
         voucher_configs = sync_run_query(
             lambda: db_session.execute(select(VoucherConfig).where(VoucherConfig.retailer_slug == retailer_slug))
             .scalars()
@@ -220,10 +218,10 @@ class VoucherImportAgent(BlobFileAgent):
         return {voucher_config.voucher_type_slug: voucher_config for voucher_config in voucher_configs}
 
     def _report_pre_existing_codes(
-        self, pre_existing_voucher_codes: list[str], row_nums_by_code: dict[str, list[int]], blob_name: str
+        self, pre_existing_reward_codes: list[str], row_nums_by_code: dict[str, list[int]], blob_name: str
     ) -> None:
-        msg = f"Pre-existing voucher codes found in {blob_name}:\n" + "\n".join(
-            [f"rows: {', '.join(map(str, row_nums_by_code[code]))}" for code in pre_existing_voucher_codes]
+        msg = f"Pre-existing reward codes found in {blob_name}:\n" + "\n".join(
+            [f"rows: {', '.join(map(str, row_nums_by_code[code]))}" for code in pre_existing_reward_codes]
         )
         logger.warning(msg)
         if settings.SENTRY_DSN:
@@ -238,14 +236,14 @@ class VoucherImportAgent(BlobFileAgent):
     def process_csv(self, retailer_slug: str, blob_name: str, blob_content: str, db_session: "Session") -> None:
         _base_path, sub_path = blob_name.split(self.blob_path_template.substitute(retailer_slug=retailer_slug))
         try:
-            voucher_type_slug, _path_remainder = sub_path.split("/", maxsplit=1)
+            reward_slug, _path_remainder = sub_path.split("/", maxsplit=1)
         except ValueError as ex:
-            raise BlobProcessingError(f"No voucher_type_slug path section found ({ex})")
+            raise BlobProcessingError(f"No reward_slug path section found ({ex})")
 
         try:
-            voucher_config = self.voucher_configs_by_voucher_type_slug(retailer_slug, db_session)[voucher_type_slug]
+            voucher_config = self.reward_configs_by_reward_slug(retailer_slug, db_session)[reward_slug]
         except KeyError:
-            raise BlobProcessingError(f"No VoucherConfig found for voucher_type_slug {voucher_type_slug}")
+            raise BlobProcessingError(f"No RewardConfig found for reward_slug {reward_slug}")
 
         content_reader = csv.reader(StringIO(blob_content), delimiter=",", quotechar="|")
         invalid_rows: list[int] = []
@@ -257,7 +255,7 @@ class VoucherImportAgent(BlobFileAgent):
             elif code := row[0].strip():
                 row_nums_by_code[code].append(row_num)
 
-        db_voucher_codes = sync_run_query(
+        db_reward_codes = sync_run_query(
             lambda: db_session.execute(
                 select(Voucher.voucher_code).where(
                     or_(
@@ -278,13 +276,13 @@ class VoucherImportAgent(BlobFileAgent):
 
         self._report_invalid_rows(invalid_rows, blob_name)
 
-        pre_existing_voucher_codes = list(set(db_voucher_codes) & set(row_nums_by_code.keys()))
-        if pre_existing_voucher_codes:
-            self._report_pre_existing_codes(pre_existing_voucher_codes, row_nums_by_code, blob_name)
-            for pre_existing_code in pre_existing_voucher_codes:
+        pre_existing_reward_codes = list(set(db_reward_codes) & set(row_nums_by_code.keys()))
+        if pre_existing_reward_codes:
+            self._report_pre_existing_codes(pre_existing_reward_codes, row_nums_by_code, blob_name)
+            for pre_existing_code in pre_existing_reward_codes:
                 row_nums_by_code.pop(pre_existing_code)
 
-        new_vouchers: list[Voucher] = [
+        new_rewards: list[Voucher] = [
             Voucher(
                 voucher_code=voucher_code,
                 voucher_config_id=voucher_config.id,
@@ -294,16 +292,16 @@ class VoucherImportAgent(BlobFileAgent):
             if voucher_code  # caters for blank lines
         ]
 
-        def add_new_vouchers() -> None:
-            db_session.add_all(new_vouchers)
+        def add_new_rewards() -> None:
+            db_session.add_all(new_rewards)
             db_session.commit()
 
-        sync_run_query(add_new_vouchers, db_session)
+        sync_run_query(add_new_rewards, db_session)
 
 
-class VoucherUpdatesAgent(BlobFileAgent):
-    blob_path_template = string.Template("$retailer_slug/voucher-updates/")
-    scheduler_name = "carina-voucher-update-scheduler"
+class RewardUpdatesAgent(BlobFileAgent):
+    blob_path_template = string.Template("$retailer_slug/reward-updates/")
+    scheduler_name = "carina-reward-update-scheduler"
 
     def __init__(self) -> None:
         super().__init__()
@@ -312,55 +310,55 @@ class VoucherUpdatesAgent(BlobFileAgent):
     def process_csv(self, retailer_slug: str, blob_name: str, blob_content: str, db_session: "Session") -> None:
         content_reader = csv.reader(StringIO(blob_content), delimiter=",", quotechar="|")
 
-        # This is a defaultdict(list) incase we encounter the voucher code twice in one file
-        voucher_update_rows_by_code: defaultdict = defaultdict(list[VoucherUpdateRow])
+        # This is a defaultdict(list) incase we encounter the reward code twice in one file
+        reward_update_rows_by_code: defaultdict = defaultdict(list[RewardUpdateRow])
         invalid_rows: list[tuple[int, Exception]] = []
         for row_num, row in enumerate(content_reader, start=1):
             try:
-                data = VoucherUpdateSchema(
-                    voucher_code=row[0].strip(),
+                data = RewardUpdateSchema(
+                    code=row[0].strip(),
                     date=row[1].strip(),
-                    status=VoucherUpdateStatuses(row[2].strip()),
+                    status=RewardUpdateStatuses(row[2].strip()),
                 )
             except (ValidationError, IndexError, ValueError) as e:
                 invalid_rows.append((row_num, e))
             else:
-                voucher_update_rows_by_code[data.dict()["voucher_code"]].append(VoucherUpdateRow(data, row_num=row_num))
+                reward_update_rows_by_code[data.dict()["code"]].append(RewardUpdateRow(data, row_num=row_num))
 
         if invalid_rows:
-            msg = f"Error validating VoucherUpdate from CSV file {blob_name}:\n" + "\n".join(
+            msg = f"Error validating RewardUpdate from CSV file {blob_name}:\n" + "\n".join(
                 [f"row {row_num}: {repr(e)}" for row_num, e in invalid_rows]
             )
             logger.warning(msg)
             if settings.SENTRY_DSN:
                 sentry_sdk.capture_message(msg)
 
-        if not voucher_update_rows_by_code:
-            logger.warning(f"No relevant voucher updates found in blob: {blob_name}")
+        if not reward_update_rows_by_code:
+            logger.warning(f"No relevant reward updates found in blob: {blob_name}")
 
         self._process_updates(
             db_session=db_session,
             retailer_slug=retailer_slug,
-            voucher_update_rows_by_code=voucher_update_rows_by_code,
+            reward_update_rows_by_code=reward_update_rows_by_code,
             blob_name=blob_name,
         )
 
     def _report_unknown_codes(
         self,
-        voucher_codes_in_file: list[str],
-        db_voucher_data_by_voucher_code: dict[str, dict[str, Union[str, bool]]],
-        voucher_update_rows_by_code: DefaultDict[str, list[VoucherUpdateRow]],
+        reward_codes_in_file: list[str],
+        db_reward_data_by_code: dict[str, dict[str, Union[str, bool]]],
+        reward_update_rows_by_code: DefaultDict[str, list[RewardUpdateRow]],
         blob_name: str,
     ) -> None:
-        unknown_voucher_codes = list(set(voucher_codes_in_file) - set(db_voucher_data_by_voucher_code.keys()))
-        voucher_update_row_datas: list[VoucherUpdateRow]
-        if unknown_voucher_codes:
+        unknown_reward_codes = list(set(reward_codes_in_file) - set(db_reward_data_by_code.keys()))
+        reward_update_row_datas: list[RewardUpdateRow]
+        if unknown_reward_codes:
             row_nums = []
-            for unknown_voucher_code in unknown_voucher_codes:
-                voucher_update_row_datas = voucher_update_rows_by_code.pop(unknown_voucher_code, [])
-                row_nums.extend([update_row.row_num for update_row in voucher_update_row_datas])
+            for unknown_reward_code in unknown_reward_codes:
+                reward_update_row_datas = reward_update_rows_by_code.pop(unknown_reward_code, [])
+                row_nums.extend([update_row.row_num for update_row in reward_update_row_datas])
 
-            msg = f"Unknown voucher codes found while processing {blob_name}, rows: {', '.join(map(str, row_nums))}"
+            msg = f"Unknown reward codes found while processing {blob_name}, rows: {', '.join(map(str, row_nums))}"
             logger.warning(msg)
             if settings.SENTRY_DSN:
                 sentry_sdk.capture_message(msg)
@@ -370,34 +368,30 @@ class VoucherUpdatesAgent(BlobFileAgent):
         db_session: "Session",
         retailer_slug: str,
         blob_name: str,
-        voucher_codes_in_file: list[str],
-        db_voucher_data_by_voucher_code: dict[str, dict[str, Union[str, bool]]],
-        voucher_update_rows_by_code: DefaultDict[str, list[VoucherUpdateRow]],
+        reward_codes_in_file: list[str],
+        db_reward_data_by_code: dict[str, dict[str, Union[str, bool]]],
+        reward_update_rows_by_code: DefaultDict[str, list[RewardUpdateRow]],
     ) -> None:
-        unallocated_voucher_codes = list(
-            set(voucher_codes_in_file)
-            & {
-                voucher_code
-                for voucher_code, voucher_data in db_voucher_data_by_voucher_code.items()
-                if voucher_data["allocated"] is False
-            }
+        unallocated_reward_codes = list(
+            set(reward_codes_in_file)
+            & {code for code, reward_data in db_reward_data_by_code.items() if reward_data["allocated"] is False}
         )
 
-        # Soft delete unallocated voucher codes
-        if unallocated_voucher_codes:
-            update_rows: list[VoucherUpdateRow] = []
-            for unallocated_voucher_code in unallocated_voucher_codes:
-                rows = voucher_update_rows_by_code.pop(unallocated_voucher_code, [])
+        # Soft delete unallocated reward codes
+        if unallocated_reward_codes:
+            update_rows: list[RewardUpdateRow] = []
+            for unallocated_reward_code in unallocated_reward_codes:
+                rows = reward_update_rows_by_code.pop(unallocated_reward_code, [])
                 update_rows.extend(rows)
 
             db_session.execute(
                 update(Voucher)
-                .where(Voucher.voucher_code.in_(unallocated_voucher_codes), Voucher.retailer_slug == retailer_slug)
+                .where(Voucher.voucher_code.in_(unallocated_reward_codes), Voucher.retailer_slug == retailer_slug)
                 .values(deleted=True)
             )
-            msg = f"Unallocated voucher codes found while processing {blob_name}:\n" + "\n".join(
+            msg = f"Unallocated reward codes found while processing {blob_name}:\n" + "\n".join(
                 [
-                    f"Voucher id: {db_voucher_data_by_voucher_code[row_data.data.voucher_code]['id']}"
+                    f"Reward id: {db_reward_data_by_code[row_data.data.code]['id']}"
                     f" row: {row_data.row_num}, status change: {row_data.data.status.value}"
                     for row_data in update_rows
                 ]
@@ -410,64 +404,62 @@ class VoucherUpdatesAgent(BlobFileAgent):
         self,
         db_session: "Session",
         retailer_slug: str,
-        voucher_update_rows_by_code: DefaultDict[str, list[VoucherUpdateRow]],
+        reward_update_rows_by_code: DefaultDict[str, list[RewardUpdateRow]],
         blob_name: str,
     ) -> None:
 
-        voucher_codes_in_file = list(voucher_update_rows_by_code.keys())
+        reward_codes_in_file = list(reward_update_rows_by_code.keys())
 
-        voucher_datas = sync_run_query(
+        reward_datas = sync_run_query(
             lambda: db_session.execute(
                 select(Voucher.id, Voucher.voucher_code, Voucher.allocated)
                 .with_for_update()
-                .where(Voucher.voucher_code.in_(voucher_codes_in_file), Voucher.retailer_slug == retailer_slug)
+                .where(Voucher.voucher_code.in_(reward_codes_in_file), Voucher.retailer_slug == retailer_slug)
             )
             .mappings()
             .all(),
             db_session,
         )
         # Provides a dict in the following format:
-        # {'<voucher-code>': {'id': 'f2c44cf7-9d0f-45d0-b199-44a3c8b72db3', 'allocated': True}}
-        db_voucher_data_by_voucher_code: dict[str, dict[str, Union[str, bool]]] = {
-            voucher_data["voucher_code"]: {"id": str(voucher_data["id"]), "allocated": voucher_data["allocated"]}
-            for voucher_data in voucher_datas
+        # {'<code>': {'id': 'f2c44cf7-9d0f-45d0-b199-44a3c8b72db3', 'allocated': True}}
+        db_reward_data_by_code: dict[str, dict[str, Union[str, bool]]] = {
+            reward_data["voucher_code"]: {"id": str(reward_data["id"]), "allocated": reward_data["allocated"]}
+            for reward_data in reward_datas
         }
 
-        self._report_unknown_codes(
-            voucher_codes_in_file, db_voucher_data_by_voucher_code, voucher_update_rows_by_code, blob_name
-        )
+        self._report_unknown_codes(reward_codes_in_file, db_reward_data_by_code, reward_update_rows_by_code, blob_name)
 
         self._process_unallocated_codes(
             db_session,
             retailer_slug,
             blob_name,
-            voucher_codes_in_file,
-            db_voucher_data_by_voucher_code,
-            voucher_update_rows_by_code,
+            reward_codes_in_file,
+            db_reward_data_by_code,
+            reward_update_rows_by_code,
         )
 
-        voucher_updates = []
-        for voucher_code, voucher_update_rows in voucher_update_rows_by_code.items():
-            voucher_updates.extend(
+        reward_updates = []
+        for code, reward_update_rows in reward_update_rows_by_code.items():
+            reward_updates.extend(
                 [
                     VoucherUpdate(
-                        voucher_id=uuid.UUID(cast(str, db_voucher_data_by_voucher_code[voucher_code]["id"])),
-                        date=voucher_update_row.data.date,
-                        status=voucher_update_row.data.status,
+                        voucher_id=uuid.UUID(cast(str, db_reward_data_by_code[code]["id"])),
+                        date=reward_update_row.data.date,
+                        status=reward_update_row.data.status,
                     )
-                    for voucher_update_row in voucher_update_rows
+                    for reward_update_row in reward_update_rows
                 ]
             )
 
-        def add_voucher_updates() -> None:
-            db_session.add_all(voucher_updates)
+        def add_reward_updates() -> None:
+            db_session.add_all(reward_updates)
             db_session.commit()
 
-        sync_run_query(add_voucher_updates, db_session)
-        self.enqueue_voucher_updates(db_session, voucher_updates)
+        sync_run_query(add_reward_updates, db_session)
+        self.enqueue_reward_updates(db_session, reward_updates)
 
     @staticmethod
-    def enqueue_voucher_updates(db_session: "Session", voucher_updates: list[VoucherUpdate]) -> None:
+    def enqueue_reward_updates(db_session: "Session", reward_updates: list[VoucherUpdate]) -> None:
         def _commit() -> None:
             db_session.commit()
 
@@ -476,15 +468,15 @@ class VoucherUpdatesAgent(BlobFileAgent):
 
         params_list = [
             {
-                "voucher_id": voucher_update.voucher.id,
-                "retailer_slug": voucher_update.voucher.retailer_slug,
-                "date": datetime.fromisoformat(voucher_update.date.isoformat()).timestamp(),
-                "status": voucher_update.status.value,
+                "voucher_id": reward_update.voucher.id,
+                "retailer_slug": reward_update.voucher.retailer_slug,
+                "date": datetime.fromisoformat(reward_update.date.isoformat()).timestamp(),
+                "status": reward_update.status.value,
             }
-            for voucher_update in voucher_updates
+            for reward_update in reward_updates
         ]
         tasks = sync_create_many_tasks(
-            db_session, task_type_name=settings.VOUCHER_STATUS_ADJUSTMENT_TASK_NAME, params_list=params_list
+            db_session, task_type_name=settings.REWARD_STATUS_ADJUSTMENT_TASK_NAME, params_list=params_list
         )
         try:
             enqueue_many_retry_tasks(
@@ -505,13 +497,13 @@ def cli() -> None:  # pragma: no cover
 
 
 @cli.command()
-def voucher_import_agent() -> None:  # pragma: no cover
-    VoucherImportAgent().run()
+def reward_import_agent() -> None:  # pragma: no cover
+    RewardImportAgent().run()
 
 
 @cli.command()
-def voucher_updates_agent() -> None:  # pragma: no cover
-    VoucherUpdatesAgent().run()
+def reward_updates_agent() -> None:  # pragma: no cover
+    RewardUpdatesAgent().run()
 
 
 if __name__ == "__main__":  # pragma: no cover
