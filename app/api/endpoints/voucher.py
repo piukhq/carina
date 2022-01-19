@@ -10,32 +10,32 @@ from app.api.deps import get_session, user_is_authorised
 from app.api.tasks import enqueue_many_tasks, enqueue_task
 from app.db.base_class import async_run_query
 from app.enums import HttpErrors, RewardTypeStatuses
-from app.fetch_voucher import get_allocable_voucher
-from app.schemas import VoucherAllocationSchema
+from app.fetch_voucher import get_allocable_reward
+from app.schemas import RewardAllocationSchema
 from app.schemas.voucher import VoucherStatusSchema
 
 router = APIRouter()
 
 
 @router.post(
-    path="/{retailer_slug}/vouchers/{voucher_type_slug}/allocation",
+    path="/{retailer_slug}/rewards/{reward_slug}/allocation",
     status_code=status.HTTP_202_ACCEPTED,
     dependencies=[Depends(user_is_authorised)],
 )
 async def allocation(
-    payload: VoucherAllocationSchema,
+    payload: RewardAllocationSchema,
     retailer_slug: str,
-    voucher_type_slug: str,
+    reward_slug: str,
     db_session: AsyncSession = Depends(get_session),
 ) -> Any:
-    voucher_config = await crud.get_voucher_config(db_session, retailer_slug, voucher_type_slug)
-    voucher, issued, expiry = await get_allocable_voucher(db_session, voucher_config)
-    retry_task = await crud.create_voucher_issuance_retry_task(
+    reward_config = await crud.get_reward_config(db_session, retailer_slug, reward_slug)
+    reward, issued, expiry = await get_allocable_reward(db_session, reward_config)
+    retry_task = await crud.create_reward_issuance_retry_task(
         db_session,
-        voucher=voucher,
+        reward=reward,
         issued_date=issued,
         expiry_date=expiry,
-        voucher_config=voucher_config,
+        reward_config=reward_config,
         account_url=payload.account_url,
     )
 
@@ -54,7 +54,7 @@ async def voucher_type_status(
     voucher_type_slug: str,
     db_session: AsyncSession = Depends(get_session),
 ) -> Any:
-    voucher_config = await crud.get_voucher_config(db_session, retailer_slug, voucher_type_slug, for_update=True)
+    voucher_config = await crud.get_reward_config(db_session, retailer_slug, voucher_type_slug, for_update=True)
 
     if voucher_config.status != RewardTypeStatuses.ACTIVE:  # pragma: coverage bug 1012
         raise HttpErrors.STATUS_UPDATE_FAILED.value

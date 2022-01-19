@@ -50,7 +50,7 @@ def test_post_voucher_allocation_happy_path(
     mocker.patch("app.api.tasks.enqueue_retry_task")
 
     resp = client.post(
-        f"/bpl/vouchers/{voucher_config.retailer_slug}/vouchers/{voucher_config.voucher_type_slug}/allocation",
+        f"/bpl/vouchers/{voucher_config.retailer_slug}/rewards/{voucher_config.voucher_type_slug}/allocation",
         json=payload,
         headers=auth_headers,
     )
@@ -72,7 +72,7 @@ def test_post_voucher_allocation_wrong_retailer(setup: SetupType, voucher_issuan
     db_session, voucher_config, _ = setup
 
     resp = client.post(
-        f"/bpl/vouchers/WRONG-RETAILER/vouchers/{voucher_config.voucher_type_slug}/allocation",
+        f"/bpl/vouchers/WRONG-RETAILER/rewards/{voucher_config.voucher_type_slug}/allocation",
         json=payload,
         headers=auth_headers,
     )
@@ -88,13 +88,13 @@ def test_post_voucher_allocation_wrong_voucher_type(setup: SetupType, voucher_is
     db_session, voucher_config, _ = setup
 
     resp = client.post(
-        f"/bpl/vouchers/{voucher_config.retailer_slug}/vouchers/WRONG-TYPE/allocation",
+        f"/bpl/vouchers/{voucher_config.retailer_slug}/rewards/WRONG-TYPE/allocation",
         json=payload,
         headers=auth_headers,
     )
 
-    assert resp.status_code == HttpErrors.UNKNOWN_VOUCHER_TYPE.value.status_code
-    assert resp.json() == HttpErrors.UNKNOWN_VOUCHER_TYPE.value.detail
+    assert resp.status_code == HttpErrors.UNKNOWN_REWARD_TYPE.value.status_code
+    assert resp.json() == HttpErrors.UNKNOWN_REWARD_TYPE.value.detail
 
     retry_task, _ = _get_retry_task_and_values(db_session, voucher_issuance_task_type.task_type_id, voucher_config.id)
     assert retry_task is None
@@ -110,7 +110,7 @@ def test_post_voucher_allocation_no_more_vouchers(
     mocker.patch("app.api.tasks.enqueue_retry_task")
 
     resp = client.post(
-        f"/bpl/vouchers/{voucher_config.retailer_slug}/vouchers/{voucher_config.voucher_type_slug}/allocation",
+        f"/bpl/vouchers/{voucher_config.retailer_slug}/rewards/{voucher_config.voucher_type_slug}/allocation",
         json=payload,
         headers=auth_headers,
     )
@@ -203,8 +203,8 @@ def test_voucher_type_status_voucher_type_not_found(setup: SetupType) -> None:
         json={"status": "cancelled"},
         headers=auth_headers,
     )
-    assert resp.status_code == HttpErrors.UNKNOWN_VOUCHER_TYPE.value.status_code
-    assert resp.json() == HttpErrors.UNKNOWN_VOUCHER_TYPE.value.detail
+    assert resp.status_code == HttpErrors.UNKNOWN_REWARD_TYPE.value.status_code
+    assert resp.json() == HttpErrors.UNKNOWN_REWARD_TYPE.value.detail
     db_session.refresh(voucher_config)
     assert voucher_config.status == RewardTypeStatuses.ACTIVE
 

@@ -7,7 +7,7 @@ from pydantic import AnyHttpUrl, BaseModel, validator
 from app.enums import RewardTypeStatuses, RewardUpdateStatuses
 
 
-class VoucherAllocationSchema(BaseModel):  # pragma: no cover
+class RewardAllocationSchema(BaseModel):  # pragma: no cover
     account_url: AnyHttpUrl
 
 
