@@ -141,7 +141,7 @@ def test_voucher_type_status_ok(
         db_session.commit()
 
         resp = client.patch(
-            f"/bpl/vouchers/{voucher_config.retailer_slug}/vouchers/{voucher_config.voucher_type_slug}/status",
+            f"/bpl/vouchers/{voucher_config.retailer_slug}/rewards/{voucher_config.voucher_type_slug}/status",
             json={"status": transition_status},
             headers=auth_headers,
         )
@@ -172,7 +172,7 @@ def test_voucher_type_status_bad_status(setup: SetupType) -> None:
     db_session, voucher_config, _ = setup
 
     resp = client.patch(
-        f"/bpl/vouchers/{voucher_config.retailer_slug}/vouchers/{voucher_config.voucher_type_slug}/status",
+        f"/bpl/vouchers/{voucher_config.retailer_slug}/rewards/{voucher_config.voucher_type_slug}/status",
         json={"status": "active"},
         headers=auth_headers,
     )
@@ -185,7 +185,7 @@ def test_voucher_type_status_invalid_retailer(setup: SetupType) -> None:
     db_session, voucher_config, _ = setup
 
     resp = client.patch(
-        f"/bpl/vouchers/unknown-retailer/vouchers/{voucher_config.voucher_type_slug}/status",
+        f"/bpl/vouchers/unknown-retailer/rewards/{voucher_config.voucher_type_slug}/status",
         json={"status": "cancelled"},
         headers=auth_headers,
     )
@@ -199,7 +199,7 @@ def test_voucher_type_status_voucher_type_not_found(setup: SetupType) -> None:
     db_session, voucher_config, _ = setup
 
     resp = client.patch(
-        f"/bpl/vouchers/{voucher_config.retailer_slug}/vouchers/invalid-voucher-type/status",
+        f"/bpl/vouchers/{voucher_config.retailer_slug}/rewards/invalid-voucher-type/status",
         json={"status": "cancelled"},
         headers=auth_headers,
     )
@@ -215,7 +215,7 @@ def test_voucher_type_status_wrong_voucher_config_status(setup: SetupType) -> No
     db_session.commit()
 
     resp = client.patch(
-        f"/bpl/vouchers/{voucher_config.retailer_slug}/vouchers/{voucher_config.voucher_type_slug}/status",
+        f"/bpl/vouchers/{voucher_config.retailer_slug}/rewards/{voucher_config.voucher_type_slug}/status",
         json={"status": "ended"},
         headers=auth_headers,
     )

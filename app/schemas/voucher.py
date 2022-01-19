@@ -11,7 +11,7 @@ class VoucherAllocationSchema(BaseModel):  # pragma: no cover
     account_url: AnyHttpUrl
 
 
-class VoucherStatusSchema(BaseModel):
+class RewardStatusSchema(BaseModel):
     status: Literal[RewardTypeStatuses.CANCELLED, RewardTypeStatuses.ENDED]
 
     @validator("status")
