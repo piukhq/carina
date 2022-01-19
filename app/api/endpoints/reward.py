@@ -39,8 +39,8 @@ async def allocation(
         account_url=payload.account_url,
     )
 
-    asyncio.create_task(enqueue_task(retry_task_id=retry_task.retry_task_id))  # pragma: coverage bug 1012
-    return {}  # pragma: coverage bug 1012
+    asyncio.create_task(enqueue_task(retry_task_id=retry_task.retry_task_id))
+    return {}
 
 
 @router.patch(
@@ -69,5 +69,5 @@ async def reward_type_status(
         create_cancel_task=payload.status == RewardTypeStatuses.CANCELLED,
     )
 
-    asyncio.create_task(enqueue_many_tasks(retry_tasks_ids=retry_tasks_ids))  # pragma: coverage bug 1012
-    return {}  # pragma: coverage bug 1012
+    asyncio.create_task(enqueue_many_tasks(retry_tasks_ids=retry_tasks_ids))
+    return {}
