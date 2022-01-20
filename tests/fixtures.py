@@ -24,7 +24,7 @@ class HttpErrors(Enum):
     UNKNOWN_REWARD_TYPE = HttpError(
         detail={
             "display_message": "Reward Slug does not exist.",
-            "code": "UNKNOWN_REWARD_TYPE",
+            "code": "UNKNOWN_REWARD_SLUG",
         },
         status_code=status.HTTP_404_NOT_FOUND,
     )
