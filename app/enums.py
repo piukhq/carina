@@ -23,10 +23,10 @@ class HttpErrors(Enum):
         },
         status_code=status.HTTP_403_FORBIDDEN,
     )
-    UNKNOWN_VOUCHER_TYPE = HTTPException(
+    UNKNOWN_REWARD_TYPE = HTTPException(
         detail={
             "display_message": "Reward Slug does not exist.",
-            "code": "UNKNOWN_VOUCHER_TYPE",
+            "code": "UNKNOWN_REWARD_TYPE",
         },
         status_code=status.HTTP_404_NOT_FOUND,
     )
