@@ -13,7 +13,10 @@ from app.models import Voucher, VoucherConfig
 
 
 async def get_reward_config(
-    db_session: AsyncSession, retailer_slug: str, reward_slug: str, for_update: bool = False
+    db_session: AsyncSession,
+    retailer_slug: str,
+    reward_slug: str,
+    for_update: bool = False,
 ) -> VoucherConfig:
     async def _query(by_reward_slug: bool = False) -> List[VoucherConfig]:
         stmt = select(VoucherConfig).where(VoucherConfig.retailer_slug == retailer_slug)
@@ -34,7 +37,7 @@ async def get_reward_config(
     return reward_config
 
 
-async def get_allocable_voucher(db_session: AsyncSession, voucher_config: VoucherConfig) -> Optional[Voucher]:
+async def get_allocable_reward(db_session: AsyncSession, reward_config: VoucherConfig) -> Optional[Voucher]:
     async def _query() -> Optional[Voucher]:
         return (
             (
@@ -42,7 +45,7 @@ async def get_allocable_voucher(db_session: AsyncSession, voucher_config: Vouche
                     select(Voucher)
                     .with_for_update()
                     .where(
-                        Voucher.voucher_config_id == voucher_config.id,
+                        Voucher.voucher_config_id == reward_config.id,
                         Voucher.allocated == False,  # noqa
                         Voucher.deleted == False,  # noqa
                     )
@@ -65,13 +68,13 @@ async def _create_retry_task(db_session: AsyncSession, task_type_name: str, task
     return await async_run_query(_query, db_session)
 
 
-async def create_voucher_issuance_retry_task(
+async def create_reward_issuance_retry_task(
     db_session: AsyncSession,
     *,
-    voucher: Optional[Voucher],
+    reward: Optional[Voucher],
     issued_date: float,
     expiry_date: float,
-    voucher_config: VoucherConfig,
+    reward_config: VoucherConfig,
     account_url: str,
 ) -> RetryTask:
 
@@ -79,17 +82,17 @@ async def create_voucher_issuance_retry_task(
         "account_url": account_url,
         "issued_date": issued_date,
         "expiry_date": expiry_date,
-        "voucher_config_id": voucher_config.id,
-        "voucher_type_slug": voucher_config.voucher_type_slug,
+        "voucher_config_id": reward_config.id,
+        "voucher_type_slug": reward_config.voucher_type_slug,
         "idempotency_token": uuid4(),
     }
 
-    if voucher is not None:
-        voucher.allocated = True
+    if reward is not None:
+        reward.allocated = True
         task_params.update(
             {
-                "voucher_id": voucher.id,
-                "voucher_code": voucher.voucher_code,
+                "voucher_id": reward.id,
+                "voucher_code": reward.voucher_code,
             }
         )
 
