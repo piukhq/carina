@@ -1,6 +1,6 @@
 import logging
 
-from typing import List, Tuple, Union
+from typing import Union, cast
 
 import sentry_sdk
 
@@ -13,7 +13,7 @@ from starlette.status import HTTP_400_BAD_REQUEST, HTTP_422_UNPROCESSABLE_ENTITY
 logger = logging.getLogger(__name__)
 
 
-def _format_validation_errors(payload: List[dict]) -> Tuple[int, Union[List[dict], dict]]:
+def _format_validation_errors(payload: list[dict]) -> tuple[int, Union[list[dict], dict]]:
     fields = []
     for error in payload:
         if error["type"] == "value_error.jsondecode":
@@ -36,7 +36,7 @@ def _format_validation_errors(payload: List[dict]) -> Tuple[int, Union[List[dict
 
 # customise Api RequestValidationError
 async def request_validation_handler(request: Request, exc: RequestValidationError) -> Response:
-    status_code, content = _format_validation_errors(exc.errors())
+    status_code, content = _format_validation_errors(cast(list[dict], exc.errors()))
     return UJSONResponse(status_code=status_code, content=content)
 
 
