@@ -9,7 +9,7 @@ from sqlalchemy.future import select
 from app.core.config import settings
 from app.db.base_class import async_run_query
 from app.enums import HttpErrors
-from app.models import Voucher, VoucherConfig
+from app.models import Reward, RewardConfig
 
 
 async def get_voucher_config(
@@ -17,11 +17,11 @@ async def get_voucher_config(
     retailer_slug: str,
     voucher_type_slug: str,
     for_update: bool = False,
-) -> VoucherConfig:
-    async def _query(by_voucher_type_slug: bool = False) -> List[VoucherConfig]:
-        stmt = select(VoucherConfig).where(VoucherConfig.retailer_slug == retailer_slug)
+) -> RewardConfig:
+    async def _query(by_voucher_type_slug: bool = False) -> List[RewardConfig]:
+        stmt = select(RewardConfig).where(RewardConfig.retailer_slug == retailer_slug)
         if by_voucher_type_slug:
-            stmt = stmt.where(VoucherConfig.voucher_type_slug == voucher_type_slug)
+            stmt = stmt.where(RewardConfig.reward_slug == voucher_type_slug)
             if for_update:
                 stmt = stmt.with_for_update()
         return await db_session.execute(stmt)
@@ -37,17 +37,17 @@ async def get_voucher_config(
     return voucher_config
 
 
-async def get_allocable_voucher(db_session: AsyncSession, voucher_config: VoucherConfig) -> Optional[Voucher]:
-    async def _query() -> Optional[Voucher]:
+async def get_allocable_voucher(db_session: AsyncSession, voucher_config: RewardConfig) -> Optional[Reward]:
+    async def _query() -> Optional[Reward]:
         return (
             (
                 await db_session.execute(
-                    select(Voucher)
+                    select(Reward)
                     .with_for_update()
                     .where(
-                        Voucher.voucher_config_id == voucher_config.id,
-                        Voucher.allocated == False,  # noqa
-                        Voucher.deleted == False,  # noqa
+                        Reward.reward_config_id == voucher_config.id,
+                        Reward.allocated == False,  # noqa
+                        Reward.deleted == False,  # noqa
                     )
                     .limit(1)
                 )
@@ -71,10 +71,10 @@ async def _create_retry_task(db_session: AsyncSession, task_type_name: str, task
 async def create_voucher_issuance_retry_task(
     db_session: AsyncSession,
     *,
-    voucher: Optional[Voucher],
+    voucher: Optional[Reward],
     issued_date: float,
     expiry_date: float,
-    voucher_config: VoucherConfig,
+    voucher_config: RewardConfig,
     account_url: str,
 ) -> RetryTask:
 
@@ -83,7 +83,7 @@ async def create_voucher_issuance_retry_task(
         "issued_date": issued_date,
         "expiry_date": expiry_date,
         "voucher_config_id": voucher_config.id,
-        "voucher_type_slug": voucher_config.voucher_type_slug,
+        "voucher_type_slug": voucher_config.reward_slug,
         "idempotency_token": uuid4(),
     }
 
@@ -92,7 +92,7 @@ async def create_voucher_issuance_retry_task(
         task_params.update(
             {
                 "voucher_id": voucher.id,
-                "voucher_code": voucher.voucher_code,
+                "voucher_code": voucher.code,
             }
         )
 

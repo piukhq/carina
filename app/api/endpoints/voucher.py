@@ -10,9 +10,9 @@ from app.api.deps import get_session, user_is_authorised
 from app.api.tasks import enqueue_many_tasks, enqueue_task
 from app.db.base_class import async_run_query
 from app.enums import HttpErrors, RewardTypeStatuses
-from app.fetch_voucher import get_allocable_voucher
-from app.schemas import VoucherAllocationSchema
-from app.schemas.voucher import VoucherStatusSchema
+from app.fetch_voucher import get_allocable_reward
+from app.schemas import RewardAllocationSchema
+from app.schemas.voucher import RewardStatusSchema
 
 router = APIRouter()
 
@@ -23,13 +23,13 @@ router = APIRouter()
     dependencies=[Depends(user_is_authorised)],
 )
 async def allocation(
-    payload: VoucherAllocationSchema,
+    payload: RewardAllocationSchema,
     retailer_slug: str,
     voucher_type_slug: str,
     db_session: AsyncSession = Depends(get_session),
 ) -> Any:
     voucher_config = await crud.get_voucher_config(db_session, retailer_slug, voucher_type_slug)
-    voucher, issued, expiry = await get_allocable_voucher(db_session, voucher_config)
+    voucher, issued, expiry = await get_allocable_reward(db_session, voucher_config)
     retry_task = await crud.create_voucher_issuance_retry_task(
         db_session,
         voucher=voucher,
@@ -49,7 +49,7 @@ async def allocation(
     dependencies=[Depends(user_is_authorised)],
 )
 async def voucher_type_status(
-    payload: VoucherStatusSchema,
+    payload: RewardStatusSchema,
     retailer_slug: str,
     voucher_type_slug: str,
     db_session: AsyncSession = Depends(get_session),

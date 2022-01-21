@@ -17,7 +17,7 @@ from testfixtures import LogCapture
 
 from app.core.config import settings
 from app.enums import RewardTypeStatuses
-from app.models import Voucher, VoucherConfig
+from app.models import Reward, RewardConfig
 from app.tasks.issuance import _process_issuance, issue_voucher
 from app.tasks.reward_cancellation import cancel_rewards
 from app.tasks.reward_deletion import delete_unallocated_rewards
@@ -116,14 +116,14 @@ def test_voucher_issuance_wrong_status(db_session: "Session", issuance_retry_tas
 
 @httpretty.activate
 def test_voucher_issuance_campaign_is_cancelled(
-    db_session: "Session", issuance_retry_task: RetryTask, voucher_config: VoucherConfig, mocker: MockerFixture
+    db_session: "Session", issuance_retry_task: RetryTask, reward_config: RewardConfig, mocker: MockerFixture
 ) -> None:
     """
     Test that, if the campaign has been cancelled by the time we get to issue a voucher, the issuance is also cancelled
     """
     issuance_retry_task.status = RetryTaskStatuses.IN_PROGRESS
     db_session.commit()
-    voucher_config.status = RewardTypeStatuses.CANCELLED
+    reward_config.status = RewardTypeStatuses.CANCELLED
     db_session.commit()
     import app.tasks.issuance as tasks_allocation
 
@@ -138,7 +138,7 @@ def test_voucher_issuance_campaign_is_cancelled(
     assert issuance_retry_task.status == RetryTaskStatuses.CANCELLED
     assert spy.call_count == 0
     voucher = db_session.execute(
-        select(Voucher).where(Voucher.id == issuance_retry_task.get_params()["voucher_id"])
+        select(Reward).where(Reward.id == issuance_retry_task.get_params()["voucher_id"])
     ).scalar_one()
     db_session.refresh(voucher)
     assert not voucher.allocated
@@ -149,7 +149,7 @@ def test_voucher_issuance_campaign_is_cancelled(
 def test_voucher_issuance_no_voucher_campaign_is_cancelled(
     db_session: "Session",
     issuance_retry_task_no_voucher: RetryTask,
-    voucher_config: VoucherConfig,
+    reward_config: RewardConfig,
     mocker: MockerFixture,
 ) -> None:
     """
@@ -158,7 +158,7 @@ def test_voucher_issuance_no_voucher_campaign_is_cancelled(
     """
     issuance_retry_task_no_voucher.status = RetryTaskStatuses.IN_PROGRESS
     db_session.commit()
-    voucher_config.status = RewardTypeStatuses.CANCELLED
+    reward_config.status = RewardTypeStatuses.CANCELLED
     db_session.commit()
     import app.tasks.issuance as tasks_allocation
 
@@ -176,7 +176,7 @@ def test_voucher_issuance_no_voucher_campaign_is_cancelled(
 
 @httpretty.activate
 def test_voucher_issuance_no_voucher_but_one_available(
-    db_session: "Session", issuance_retry_task_no_voucher: RetryTask, mocker: MockerFixture, voucher: Voucher
+    db_session: "Session", issuance_retry_task_no_voucher: RetryTask, mocker: MockerFixture, voucher: Reward
 ) -> None:
     """test that an allocable voucher (the pytest 'voucher' fixture) is allocated, resulting in success"""
     mock_queue = mocker.patch("app.tasks.issuance.enqueue_retry_task_delay")
@@ -201,7 +201,7 @@ def test_voucher_issuance_no_voucher_and_allocation_is_requeued(
     issuance_retry_task_no_voucher: RetryTask,
     capture: LogCapture,
     mocker: MockerFixture,
-    create_voucher: Callable,
+    create_reward: Callable,
 ) -> None:
     """test that no allocable voucher results in the allocation being requeued"""
     mock_queue = mocker.patch("app.tasks.issuance.enqueue_retry_task_delay")
@@ -225,19 +225,19 @@ def test_voucher_issuance_no_voucher_and_allocation_is_requeued(
     assert any("Next attempt time at" in record.msg for record in capture.records)
 
     # Add new voucher and check that it's allocated and marked as allocated
-    voucher = create_voucher()  # The defaults will be correct for this test
+    reward = create_reward()  # The defaults will be correct for this test
 
     # call allocate_voucher again
     issue_voucher(issuance_retry_task_no_voucher.retry_task_id)
 
     db_session.refresh(issuance_retry_task_no_voucher)
-    db_session.refresh(voucher)
+    db_session.refresh(reward)
     mock_queue.assert_called_once()  # should not have been called again
     assert issuance_retry_task_no_voucher.attempts == 2
     assert issuance_retry_task_no_voucher.next_attempt_time is None
     assert issuance_retry_task_no_voucher.status == RetryTaskStatuses.SUCCESS
-    assert issuance_retry_task_no_voucher.get_params()["voucher_id"] == str(voucher.id)
-    assert voucher.allocated
+    assert issuance_retry_task_no_voucher.get_params()["voucher_id"] == str(reward.id)
+    assert reward.allocated
 
 
 @httpretty.activate
@@ -337,34 +337,34 @@ def test_status_adjustment_wrong_status(db_session: "Session", voucher_status_ad
 
 
 def test_delete_unallocated_rewards(
-    delete_rewards_retry_task: RetryTask, db_session: Session, voucher: Voucher
+    delete_rewards_retry_task: RetryTask, db_session: Session, reward: Reward
 ) -> None:
     task_params = delete_rewards_retry_task.get_params()
 
-    other_config = VoucherConfig(
-        voucher_type_slug="other-config",
+    other_config = RewardConfig(
+        reward_slug="other-config",
         validity_days=15,
         retailer_slug=task_params["retailer_slug"],
     )
     db_session.add(other_config)
     db_session.flush()
 
-    other_reward = Voucher(
-        voucher_code="sample-other-code",
-        voucher_config_id=other_config.id,
+    other_reward = Reward(
+        code="sample-other-code",
+        reward_config_id=other_config.id,
         retailer_slug=other_config.retailer_slug,
     )
     db_session.add(other_reward)
     db_session.commit()
 
-    assert voucher.deleted is False
+    assert reward.deleted is False
     delete_unallocated_rewards(delete_rewards_retry_task.retry_task_id)
 
     db_session.refresh(delete_rewards_retry_task)
-    db_session.refresh(voucher)
+    db_session.refresh(reward)
     db_session.refresh(other_reward)
 
-    assert voucher.deleted is True
+    assert reward.deleted is True
     assert other_reward.deleted is False
     assert delete_rewards_retry_task.next_attempt_time is None
     assert delete_rewards_retry_task.attempts == 1
@@ -403,15 +403,15 @@ def test_cancel_vouchers(mock_datetime: mock.Mock, db_session: Session, cancel_r
 
 @httpretty.activate
 def test_voucher_issuance_409_from_polaris(
-    db_session: "Session", issuance_retry_task: RetryTask, create_voucher: Callable
+    db_session: "Session", issuance_retry_task: RetryTask, create_reward: Callable
 ) -> None:
     """Test voucher is deleted for the task (from the DB) and task retried on a 409 from Polaris"""
     issuance_retry_task.status = RetryTaskStatuses.IN_PROGRESS
     db_session.commit()
 
     # Get the associated voucher
-    voucher = db_session.execute(
-        select(Voucher).where(Voucher.id == issuance_retry_task.get_params()["voucher_id"])
+    reward = db_session.execute(
+        select(Reward).where(Reward.id == issuance_retry_task.get_params()["voucher_id"])
     ).scalar_one()
 
     httpretty.register_uri("POST", issuance_retry_task.get_params()["account_url"], body="Conflict", status=409)
@@ -423,31 +423,31 @@ def test_voucher_issuance_409_from_polaris(
     assert excinfo.value.response.status_code == 409
 
     db_session.refresh(issuance_retry_task)
-    db_session.refresh(voucher)
+    db_session.refresh(reward)
 
     assert "voucher_id" not in issuance_retry_task.get_params()
     assert issuance_retry_task.attempts == 1
     assert issuance_retry_task.next_attempt_time is None  # Will be set by error handler
     assert issuance_retry_task.status == RetryTaskStatuses.IN_PROGRESS
     # The voucher should also have been set to allocated: True
-    assert voucher.allocated
+    assert reward.allocated
 
     # Now simulate the job being run again, which should pick up and process a new voucher that will not cause a 409
     httpretty.register_uri("POST", issuance_retry_task.get_params()["account_url"], body="OK", status=200)
     # Add new voucher and check that it's allocated and marked as allocated
-    create_voucher(**{"voucher_code": "TSTCD5678"})
+    create_reward(**{"voucher_code": "TSTCD5678"})
     issue_voucher(issuance_retry_task.retry_task_id)
     db_session.refresh(issuance_retry_task)
-    db_session.refresh(voucher)
+    db_session.refresh(reward)
     assert issuance_retry_task.attempts == 2
     assert issuance_retry_task.next_attempt_time is None
     assert issuance_retry_task.status == RetryTaskStatuses.SUCCESS
-    assert voucher.allocated
+    assert reward.allocated
 
 
 @httpretty.activate
 def test_voucher_issuance_no_voucher_but_one_available_and_409(
-    db_session: "Session", issuance_retry_task_no_voucher: RetryTask, mocker: MockerFixture, voucher: Voucher
+    db_session: "Session", issuance_retry_task_no_voucher: RetryTask, mocker: MockerFixture, reward: Reward
 ) -> None:
     """Test voucher id is deleted for task (from the DB) and task is retried on a 409 from Polaris,
     if we don't initially have a voucher"""
@@ -467,7 +467,7 @@ def test_voucher_issuance_no_voucher_but_one_available_and_409(
     assert excinfo.value.response.status_code == 409
 
     db_session.refresh(issuance_retry_task_no_voucher)
-    db_session.refresh(voucher)
+    db_session.refresh(reward)
 
     assert not mock_queue.return_value.enqueue_at.called
     assert "voucher_id" not in issuance_retry_task_no_voucher.get_params()
@@ -475,4 +475,4 @@ def test_voucher_issuance_no_voucher_but_one_available_and_409(
     assert issuance_retry_task_no_voucher.next_attempt_time is None
     assert issuance_retry_task_no_voucher.status == RetryTaskStatuses.IN_PROGRESS
     # The voucher should also have been set to allocated: True
-    assert voucher.allocated
+    assert reward.allocated

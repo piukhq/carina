@@ -1,1 +1,1 @@
-from .voucher import RewardUpdateSchema, VoucherAllocationSchema
+from .voucher import RewardUpdateSchema, RewardAllocationSchema

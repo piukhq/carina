@@ -14,7 +14,7 @@ from app.core.config import redis, settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
 from app.enums import RewardTypeStatuses
-from app.models import Voucher, VoucherConfig
+from app.models import Reward, RewardConfig
 
 from . import logger, send_request_with_metrics
 
@@ -57,7 +57,7 @@ def _process_issuance(task_params: dict) -> dict:
 def _get_voucher_config_status(db_session: "Session", voucher_config_id: int) -> RewardTypeStatuses:
     voucher_config_status: RewardTypeStatuses = sync_run_query(
         lambda: db_session.execute(
-            select(VoucherConfig.status).where(VoucherConfig.id == voucher_config_id)
+            select(RewardConfig.status).where(RewardConfig.id == voucher_config_id)
         ).scalar_one(),
         db_session,
     )
@@ -65,9 +65,9 @@ def _get_voucher_config_status(db_session: "Session", voucher_config_id: int) ->
     return voucher_config_status
 
 
-def _get_voucher(db_session: "Session", voucher_id: str) -> Voucher:
-    voucher: Voucher = sync_run_query(
-        lambda: db_session.execute(select(Voucher).where(Voucher.id == voucher_id)).scalar_one(),
+def _get_voucher(db_session: "Session", voucher_id: str) -> Reward:
+    voucher: Reward = sync_run_query(
+        lambda: db_session.execute(select(Reward).where(Reward.id == voucher_id)).scalar_one(),
         db_session,
     )
 
@@ -80,7 +80,7 @@ def _cancel_task(db_session: "Session", retry_task: RetryTask) -> None:
     task_params = retry_task.get_params()
 
     if task_params.get("voucher_id"):
-        voucher: Voucher = _get_voucher(db_session, task_params.get("voucher_id"))
+        voucher: Reward = _get_voucher(db_session, task_params.get("voucher_id"))
         voucher.deleted = True
         db_session.commit()
 
@@ -90,7 +90,7 @@ def _set_voucher_and_delete_from_task(db_session: "Session", retry_task: RetryTa
     set voucher allocated and clear the retry task's voucher id to force a complete retry
     of the task with a new voucher
     """
-    voucher: Voucher = _get_voucher(db_session, voucher_id)
+    voucher: Reward = _get_voucher(db_session, voucher_id)
     voucher.allocated = True
     # Now delete the associated voucher id and voucher code in the DB
     values_to_delete: dict[str, TaskTypeKeyValue] = {
@@ -137,15 +137,15 @@ def issue_voucher(retry_task_id: int) -> None:
             _process_and_issue_voucher(db_session, retry_task)
         else:
 
-            def _get_allocable_voucher() -> Optional[Voucher]:
+            def _get_allocable_voucher() -> Optional[Reward]:
                 allocable_voucher = (
                     db_session.execute(
-                        select(Voucher)
+                        select(Reward)
                         .with_for_update()
                         .where(
-                            Voucher.voucher_config_id == retry_task.get_params()["voucher_config_id"],
-                            Voucher.allocated == False,  # noqa
-                            Voucher.deleted == False,  # noqa
+                            Reward.reward_config_id == retry_task.get_params()["voucher_config_id"],
+                            Reward.allocated == False,  # noqa
+                            Reward.deleted == False,  # noqa
                         )
                         .limit(1)
                     )
@@ -155,7 +155,7 @@ def issue_voucher(retry_task_id: int) -> None:
 
                 return allocable_voucher
 
-            allocable_voucher: Voucher = sync_run_query(_get_allocable_voucher, db_session)
+            allocable_voucher: Reward = sync_run_query(_get_allocable_voucher, db_session)
             if allocable_voucher:
                 key_ids = retry_task.task_type.get_key_ids_by_name()
 
@@ -165,7 +165,7 @@ def issue_voucher(retry_task_id: int) -> None:
                         retry_task.get_task_type_key_values(
                             [
                                 (key_ids[VOUCHER_ID], str(allocable_voucher.id)),
-                                (key_ids[VOUCHER_CODE], allocable_voucher.voucher_code),
+                                (key_ids[VOUCHER_CODE], allocable_voucher.code),
                             ]
                         )
                     )

@@ -5,7 +5,7 @@ from sqlalchemy import update
 from app.core.config import settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
-from app.models import Voucher, VoucherConfig
+from app.models import Reward, RewardConfig
 
 from . import logger
 from .prometheus import tasks_run_total
@@ -23,11 +23,11 @@ def delete_unallocated_rewards(retry_task_id: int) -> None:
 
         def _delete_rewards() -> int:
             result = db_session.execute(
-                update(Voucher)
+                update(Reward)
                 .where(
-                    Voucher.retailer_slug == task_params["retailer_slug"],
-                    Voucher.voucher_config_id == VoucherConfig.id,
-                    VoucherConfig.voucher_type_slug == task_params["reward_slug"],
+                    Reward.retailer_slug == task_params["retailer_slug"],
+                    Reward.reward_config_id == RewardConfig.id,
+                    RewardConfig.reward_slug == task_params["reward_slug"],
                 )
                 .values(deleted=True)
                 .execution_options(synchronize_session=False)

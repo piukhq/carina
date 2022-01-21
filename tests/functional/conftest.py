@@ -9,37 +9,37 @@ from retry_tasks_lib.utils.synchronous import sync_create_task
 
 from app.core.config import settings
 from app.enums import RewardTypeStatuses, RewardUpdateStatuses
-from app.models import Voucher, VoucherUpdate
-from app.models.voucher import VoucherConfig
+from app.models import Reward, RewardUpdate
+from app.models.reward import RewardConfig
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 
 @pytest.fixture(scope="function")
-def voucher_issuance_task_params(voucher: Voucher) -> dict:
+def voucher_issuance_task_params(voucher: Reward) -> dict:
     now = datetime.utcnow()
     return {
         "account_url": "http://test.url/",
         "voucher_id": str(voucher.id),
-        "voucher_code": voucher.voucher_code,
+        "voucher_code": voucher.code,
         "issued_date": str(now.timestamp()),
-        "expiry_date": str((now + timedelta(days=voucher.voucher_config.validity_days)).timestamp()),
-        "voucher_config_id": str(voucher.voucher_config_id),
-        "voucher_type_slug": voucher.voucher_config.voucher_type_slug,
+        "expiry_date": str((now + timedelta(days=voucher.reward_config.validity_days)).timestamp()),
+        "voucher_config_id": str(voucher.reward_config_id),
+        "voucher_type_slug": voucher.reward_config.voucher_type_slug,
         "idempotency_token": str(uuid4()),
     }
 
 
 @pytest.fixture(scope="function")
-def voucher_issuance_task_params_no_voucher(voucher_config: VoucherConfig) -> dict:
+def voucher_issuance_task_params_no_voucher(voucher_config: RewardConfig) -> dict:
     now = datetime.utcnow()
     return {
         "account_url": "http://test.url/",
         "issued_date": str(now.timestamp()),
         "expiry_date": str((now + timedelta(days=voucher_config.validity_days)).timestamp()),
         "voucher_config_id": str(voucher_config.id),
-        "voucher_type_slug": voucher_config.voucher_type_slug,
+        "voucher_type_slug": voucher_config.reward_slug,
         "idempotency_token": str(uuid4()),
     }
 
@@ -102,8 +102,8 @@ def issuance_expected_payload(voucher_issuance_task_params: dict) -> dict:
 
 
 @pytest.fixture(scope="function")
-def voucher_update(db_session: "Session", voucher: Voucher) -> VoucherUpdate:
-    adjustment = VoucherUpdate(
+def voucher_update(db_session: "Session", voucher: Reward) -> RewardUpdate:
+    adjustment = RewardUpdate(
         voucher=voucher,
         date=datetime.utcnow().date(),
         status=RewardUpdateStatuses.REDEEMED,
@@ -114,10 +114,10 @@ def voucher_update(db_session: "Session", voucher: Voucher) -> VoucherUpdate:
 
 
 @pytest.fixture(scope="function")
-def voucher_status_adjustment_task_params(voucher_update: VoucherUpdate) -> dict:
+def voucher_status_adjustment_task_params(voucher_update: RewardUpdate) -> dict:
     return {
-        "voucher_id": str(voucher_update.voucher_id),
-        "retailer_slug": voucher_update.voucher.retailer_slug,
+        "voucher_id": str(voucher_update.reward_uuid),
+        "retailer_slug": voucher_update.reward.retailer_slug,
         "date": str(datetime.fromisoformat(voucher_update.date.isoformat()).timestamp()),
         "status": voucher_update.status.name,
     }
@@ -166,14 +166,14 @@ def adjustment_url(voucher_status_adjustment_task_params: dict) -> str:
 
 @pytest.fixture(scope="function")
 def delete_rewards_retry_task(
-    db_session: "Session", reward_deletion_task_type: TaskType, voucher_config: VoucherConfig
+    db_session: "Session", reward_deletion_task_type: TaskType, reward_config: RewardConfig
 ) -> RetryTask:
     task = sync_create_task(
         db_session,
         task_type_name=reward_deletion_task_type.name,
         params={
-            "retailer_slug": voucher_config.retailer_slug,
-            "reward_slug": voucher_config.voucher_type_slug,
+            "retailer_slug": reward_config.retailer_slug,
+            "reward_slug": reward_config.reward_slug,
         },
     )
     db_session.commit()
@@ -182,14 +182,14 @@ def delete_rewards_retry_task(
 
 @pytest.fixture(scope="function")
 def cancel_rewards_retry_task(
-    db_session: "Session", reward_cancellation_task_type: TaskType, voucher_config: VoucherConfig
+    db_session: "Session", reward_cancellation_task_type: TaskType, reward_config: RewardConfig
 ) -> RetryTask:
     task = sync_create_task(
         db_session,
         task_type_name=reward_cancellation_task_type.name,
         params={
-            "retailer_slug": voucher_config.retailer_slug,
-            "reward_slug": voucher_config.voucher_type_slug,
+            "retailer_slug": reward_config.retailer_slug,
+            "reward_slug": reward_config.reward_slug,
         },
     )
     db_session.commit()
@@ -198,19 +198,19 @@ def cancel_rewards_retry_task(
 
 @pytest.fixture(scope="function")
 def create_voucher_config(db_session: "Session") -> Callable:
-    def _create_voucher_config(**voucher_config_params: Any) -> VoucherConfig:
-        mock_voucher_config_params = {
+    def _create_reward_config(**reward_config_params: Any) -> RewardConfig:
+        mock_reward_config_params = {
             "voucher_type_slug": "test-reward",
             "validity_days": 15,
             "retailer_slug": "test-retailer",
             "status": RewardTypeStatuses.ACTIVE,
         }
 
-        mock_voucher_config_params.update(voucher_config_params)
-        voucher_config = VoucherConfig(**mock_voucher_config_params)
-        db_session.add(voucher_config)
+        mock_reward_config_params.update(reward_config_params)
+        reward_config = RewardConfig(**mock_reward_config_params)
+        db_session.add(reward_config)
         db_session.commit()
 
-        return voucher_config
+        return reward_config
 
-    return _create_voucher_config
+    return _create_reward_config

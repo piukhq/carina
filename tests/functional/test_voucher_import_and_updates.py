@@ -21,9 +21,9 @@ from app.imports.agents.file_agent import (
     RewardImportAgent,
     RewardUpdateRow,
     RewardUpdatesAgent,
-    VoucherFileLog,
+    RewardFileLog,
 )
-from app.models import Voucher, VoucherUpdate
+from app.models import Reward, RewardUpdate
 from app.schemas import RewardUpdateSchema
 from tests.conftest import SetupType
 
@@ -31,17 +31,17 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 
-def _get_voucher_update_rows(db_session: "Session", voucher_codes: List[str]) -> List[VoucherUpdate]:
+def _get_voucher_update_rows(db_session: "Session", voucher_codes: List[str]) -> List[RewardUpdate]:
     reward_updates = (
-        db_session.execute(select(VoucherUpdate).join(Voucher).where(Voucher.voucher_code.in_(voucher_codes)))
+        db_session.execute(select(RewardUpdate).join(Reward).where(Reward.code.in_(voucher_codes)))
         .scalars()
         .all()
     )
     return reward_updates
 
 
-def _get_voucher_rows(db_session: "Session") -> List[Voucher]:
-    return db_session.execute(select(Voucher)).scalars().all()
+def _get_voucher_rows(db_session: "Session") -> List[Reward]:
+    return db_session.execute(select(Reward)).scalars().all()
 
 
 def test_import_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> None:
@@ -77,7 +77,7 @@ def test_import_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> N
 
     vouchers = _get_voucher_rows(db_session)
     assert len(vouchers) == 4
-    assert all(v in [voucher.voucher_code for voucher in vouchers] for v in eligible_voucher_codes)
+    assert all(v in [voucher.code for voucher in vouchers] for v in eligible_voucher_codes)
     # We should be sentry warned about the existing token
     assert capture_message_spy.call_count == 2  # Errors should all be rolled up in to one call per error category
     assert (
@@ -129,7 +129,7 @@ def test_import_agent__process_csv_soft_deleted(
 
     vouchers = _get_voucher_rows(db_session)
     assert len(vouchers) == 5
-    assert all(v in [voucher.voucher_code for voucher in vouchers] for v in eligible_voucher_codes)
+    assert all(v in [voucher.code for voucher in vouchers] for v in eligible_voucher_codes)
     assert capture_message_spy.call_count == 0  # All vouchers should import OK
 
 
@@ -171,7 +171,7 @@ def test_import_agent__process_csv_not_soft_deleted(
 
     vouchers = _get_voucher_rows(db_session)
     assert len(vouchers) == 4
-    assert all(v in [voucher.voucher_code for voucher in vouchers] for v in eligible_voucher_codes)
+    assert all(v in [voucher.code for voucher in vouchers] for v in eligible_voucher_codes)
     # We should be sentry warned about the existing token
     assert capture_message_spy.call_count == 1
     assert (
@@ -215,7 +215,7 @@ def test_import_agent__process_csv_same_voucher_type_slug_not_soft_deleted(
 
     vouchers = _get_voucher_rows(db_session)
     assert len(vouchers) == 4
-    assert all(v in [voucher.voucher_code for voucher in vouchers] for v in eligible_voucher_codes)
+    assert all(v in [voucher.code for voucher in vouchers] for v in eligible_voucher_codes)
     # We should be sentry warned about the existing token
     assert capture_message_spy.call_count == 1
     assert (
@@ -425,7 +425,7 @@ def test_updates_agent__process_updates(setup: SetupType, mocker: MockerFixture)
     voucher_update_rows = _get_voucher_update_rows(db_session, [voucher.voucher_code])
 
     assert len(voucher_update_rows) == 1
-    assert voucher_update_rows[0].voucher_id == voucher.id
+    assert voucher_update_rows[0].reward_uuid == voucher.id
     assert voucher_update_rows[0].status == RewardUpdateStatuses.REDEEMED
     assert isinstance(voucher_update_rows[0].date, datetime.date)
     assert str(voucher_update_rows[0].date) == "2021-07-30"
@@ -543,8 +543,8 @@ def test_process_blobs(setup: SetupType, mocker: MockerFixture) -> None:
     voucher_agent.process_blobs("test-retailer", db_session=db_session)
 
     voucher_file_log_row = db_session.execute(
-        select(VoucherFileLog).where(
-            VoucherFileLog.file_name == file_name, VoucherFileLog.file_agent_type == FileAgentType.UPDATE
+        select(RewardFileLog).where(
+            RewardFileLog.file_name == file_name, RewardFileLog.file_agent_type == FileAgentType.UPDATE
         )
     ).scalar_one_or_none()
 
@@ -618,7 +618,7 @@ def test_process_blobs_filename_is_duplicate(setup: SetupType, mocker: MockerFix
     db_session, _, _ = setup
     file_name = "test-retailer/voucher-updates/update.csv"
     db_session.add(
-        VoucherFileLog(
+        RewardFileLog(
             file_name=file_name,
             file_agent_type=FileAgentType.UPDATE,
         )
@@ -660,7 +660,7 @@ def test_process_blobs_filename_is_not_duplicate(setup: SetupType, mocker: Mocke
     db_session, _, _ = setup
     file_name = "test-retailer/voucher-updates/update.csv"
     db_session.add(
-        VoucherFileLog(
+        RewardFileLog(
             file_name=file_name,
             file_agent_type=FileAgentType.IMPORT,
         )
@@ -685,8 +685,8 @@ def test_process_blobs_filename_is_not_duplicate(setup: SetupType, mocker: Mocke
     voucher_agent.process_blobs("test-retailer", db_session=db_session)
 
     voucher_file_log_row = db_session.execute(
-        select(VoucherFileLog).where(
-            VoucherFileLog.file_name == file_name, VoucherFileLog.file_agent_type == FileAgentType.UPDATE
+        select(RewardFileLog).where(
+            RewardFileLog.file_name == file_name, RewardFileLog.file_agent_type == FileAgentType.UPDATE
         )
     ).scalar_one_or_none()
 
@@ -736,7 +736,7 @@ def test_enqueue_reward_updates(
     mock_redis = mocker.patch("app.imports.agents.file_agent.redis")
 
     today = datetime.date.today()
-    voucher_update = VoucherUpdate(
+    voucher_update = RewardUpdate(
         voucher=voucher,
         date=today,
         status=RewardUpdateStatuses.REDEEMED,
@@ -773,7 +773,7 @@ def test_enqueue_reward_updates_exception(
     mock_enqueue_many_retry_tasks.side_effect = error
     today = datetime.date.today()
 
-    voucher_update = VoucherUpdate(
+    voucher_update = RewardUpdate(
         voucher=voucher,
         date=today,
         status=RewardUpdateStatuses.REDEEMED,
