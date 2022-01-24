@@ -19,7 +19,7 @@ from testfixtures import LogCapture
 from app.core.config import settings
 from app.enums import RewardTypeStatuses
 from app.models import Voucher, VoucherConfig
-from app.tasks.issuance import _process_issuance, issue_voucher
+from app.tasks.issuance import _process_issuance, issue_reward
 from app.tasks.reward_cancellation import cancel_rewards
 from app.tasks.reward_deletion import delete_unallocated_rewards
 from app.tasks.status_adjustment import _process_status_adjustment, status_adjustment
@@ -90,7 +90,7 @@ def test_voucher_issuance(db_session: "Session", issuance_retry_task: RetryTask)
 
     httpretty.register_uri("POST", issuance_retry_task.get_params()["account_url"], body="OK", status=200)
 
-    issue_voucher(issuance_retry_task.retry_task_id)
+    issue_reward(issuance_retry_task.retry_task_id)
 
     db_session.refresh(issuance_retry_task)
 
@@ -104,7 +104,7 @@ def test_voucher_issuance_wrong_status(db_session: "Session", issuance_retry_tas
     db_session.commit()
 
     with pytest.raises(IncorrectRetryTaskStatusError):
-        issue_voucher(issuance_retry_task.retry_task_id)
+        issue_reward(issuance_retry_task.retry_task_id)
 
     db_session.refresh(issuance_retry_task)
 
@@ -126,7 +126,7 @@ def test_voucher_issuance_campaign_is_cancelled(
 
     spy = mocker.spy(tasks_allocation, "_process_issuance")
 
-    issue_voucher(issuance_retry_task.retry_task_id)
+    issue_reward(issuance_retry_task.retry_task_id)
 
     db_session.refresh(issuance_retry_task)
 
@@ -159,7 +159,7 @@ def test_voucher_issuance_no_voucher_campaign_is_cancelled(
 
     spy = mocker.spy(tasks_allocation, "_process_issuance")
 
-    issue_voucher(issuance_retry_task_no_voucher.retry_task_id)
+    issue_reward(issuance_retry_task_no_voucher.retry_task_id)
 
     db_session.refresh(issuance_retry_task_no_voucher)
 
@@ -178,7 +178,7 @@ def test_voucher_issuance_no_voucher_but_one_available(
 
     httpretty.register_uri("POST", issuance_retry_task_no_voucher.get_params()["account_url"], body="OK", status=200)
 
-    issue_voucher(issuance_retry_task_no_voucher.retry_task_id)
+    issue_reward(issuance_retry_task_no_voucher.retry_task_id)
 
     db_session.refresh(issuance_retry_task_no_voucher)
 
@@ -205,7 +205,7 @@ def test_voucher_issuance_no_voucher_and_allocation_is_requeued(
 
     httpretty.register_uri("POST", issuance_retry_task_no_voucher.get_params()["account_url"], body="OK", status=200)
 
-    issue_voucher(issuance_retry_task_no_voucher.retry_task_id)
+    issue_reward(issuance_retry_task_no_voucher.retry_task_id)
 
     db_session.refresh(issuance_retry_task_no_voucher)
     mock_queue.assert_called_once()
@@ -219,7 +219,7 @@ def test_voucher_issuance_no_voucher_and_allocation_is_requeued(
     voucher = create_voucher()  # The defaults will be correct for this test
 
     # call allocate_voucher again
-    issue_voucher(issuance_retry_task_no_voucher.retry_task_id)
+    issue_reward(issuance_retry_task_no_voucher.retry_task_id)
 
     db_session.refresh(issuance_retry_task_no_voucher)
     db_session.refresh(voucher)
@@ -403,7 +403,7 @@ def test_voucher_issuance_409_from_polaris(
     httpretty.register_uri("POST", issuance_retry_task.get_params()["account_url"], body="Conflict", status=409)
 
     with pytest.raises(requests.RequestException) as excinfo:
-        issue_voucher(issuance_retry_task.retry_task_id)
+        issue_reward(issuance_retry_task.retry_task_id)
 
     db_session.refresh(issuance_retry_task)
 
@@ -428,7 +428,7 @@ def test_voucher_issuance_409_from_polaris(
     httpretty.register_uri("POST", issuance_retry_task.get_params()["account_url"], body="OK", status=200)
     # Add new voucher and check that it's allocated and marked as allocated
     create_voucher(**{"voucher_code": "TSTCD5678"})
-    issue_voucher(issuance_retry_task.retry_task_id)
+    issue_reward(issuance_retry_task.retry_task_id)
     db_session.refresh(issuance_retry_task)
     db_session.refresh(voucher)
     assert issuance_retry_task.attempts == 2
@@ -451,7 +451,7 @@ def test_voucher_issuance_no_voucher_but_one_available_and_409(
     )
 
     with pytest.raises(requests.RequestException) as excinfo:
-        issue_voucher(issuance_retry_task_no_voucher.retry_task_id)
+        issue_reward(issuance_retry_task_no_voucher.retry_task_id)
 
     assert isinstance(excinfo.value, requests.RequestException)
     assert excinfo.value.response.status_code == 409

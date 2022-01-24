@@ -96,7 +96,7 @@ async def create_reward_issuance_retry_task(
             }
         )
 
-    return await _create_retry_task(db_session, settings.VOUCHER_ISSUANCE_TASK_NAME, task_params)
+    return await _create_retry_task(db_session, settings.REWARD_ISSUANCE_TASK_NAME, task_params)
 
 
 async def create_delete_and_cancel_rewards_tasks(

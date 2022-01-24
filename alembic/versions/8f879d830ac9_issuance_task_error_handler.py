@@ -8,7 +8,6 @@ Create Date: 2021-12-08 12:06:47.992602
 import sqlalchemy as sa
 
 from alembic import op
-from app.core.config import settings
 
 # revision identifiers, used by Alembic.
 revision = "8f879d830ac9"
@@ -22,7 +21,7 @@ def upgrade() -> None:
     task_type = sa.Table("task_type", sa.MetaData(), autoload_with=conn)
     conn.execute(
         sa.update(task_type)
-        .where(task_type.c.name == settings.VOUCHER_ISSUANCE_TASK_NAME)
+        .where(task_type.c.name == "voucher-issuance")
         .values(error_handler_path="app.tasks.error_handlers.handle_issue_voucher_request_error")
     )
 
@@ -32,6 +31,6 @@ def downgrade() -> None:
     task_type = sa.Table("task_type", sa.MetaData(), autoload_with=conn)
     conn.execute(
         sa.update(task_type)
-        .where(task_type.c.name == settings.VOUCHER_ISSUANCE_TASK_NAME)
+        .where(task_type.c.name == "voucher-issuance")
         .values(error_handler_path="app.tasks.error_handlers.handle_retry_task_request_error")
     )
