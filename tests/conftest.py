@@ -93,7 +93,7 @@ def reward_config(db_session: "Session") -> RewardConfig:
 @pytest.fixture(scope="function")
 def reward(db_session: "Session", reward_config: RewardConfig) -> Reward:
     rc = Reward(
-        voucher_code="TSTCD1234",
+        code="TSTCD1234",
         retailer_slug=reward_config.retailer_slug,
         reward_config=reward_config,
     )
@@ -111,7 +111,7 @@ def create_reward(db_session: "Session", reward_config: RewardConfig) -> Callabl
         :return: Callable function
         """
         mock_reward_params = {
-            "voucher_code": "TSTCD1234",
+            "code": "TSTCD1234",
             "retailer_slug": reward_config.retailer_slug,
             "voucher_config": reward_config,
         }
@@ -130,10 +130,10 @@ def create_reward(db_session: "Session", reward_config: RewardConfig) -> Callabl
 def create_rewards(db_session: "Session", reward_config: RewardConfig) -> Callable:
     def fn(override_datas: list[dict]) -> dict[str, Reward]:
         reward_data = {
-            "voucher_code": str(uuid.uuid4()),
+            "code": str(uuid.uuid4()),
             "deleted": False,
             "allocated": False,
-            "voucher_config_id": reward_config.id,
+            "reward_config_id": reward_config.id,
             "retailer_slug": reward_config.retailer_slug,
         }
         rewards = [Reward(**reward_data | override_data) for override_data in override_datas]
@@ -182,7 +182,7 @@ def voucher_issuance_task_type(db_session: "Session") -> TaskType:
 
 
 @pytest.fixture(scope="function")
-def voucher_status_adjustment_task_type(db_session: "Session") -> TaskType:
+def reward_status_adjustment_task_type(db_session: "Session") -> TaskType:
     task = TaskType(
         name=settings.REWARD_STATUS_ADJUSTMENT_TASK_NAME,
         path=_get_path(status_adjustment),
@@ -196,7 +196,7 @@ def voucher_status_adjustment_task_type(db_session: "Session") -> TaskType:
         [
             TaskTypeKey(task_type_id=task.task_type_id, name=key_name, type=key_type)
             for key_name, key_type in (
-                ("voucher_id", "STRING"),
+                ("reward_uuid", "STRING"),
                 ("retailer_slug", "STRING"),
                 ("date", "FLOAT"),
                 ("status", "STRING"),

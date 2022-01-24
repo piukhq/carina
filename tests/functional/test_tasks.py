@@ -29,17 +29,17 @@ fake_now = datetime.utcnow()
 @httpretty.activate
 @mock.patch("app.tasks.issuance.datetime")
 def test__process_issuance_ok(
-    mock_datetime: mock.Mock, voucher_issuance_task_params: dict, issuance_expected_payload: dict
+    mock_datetime: mock.Mock, reward_issuance_task_params: dict, issuance_expected_payload: dict
 ) -> None:
 
     mock_datetime.utcnow.return_value = fake_now
-    httpretty.register_uri("POST", voucher_issuance_task_params["account_url"], body="OK", status=200)
+    httpretty.register_uri("POST", reward_issuance_task_params["account_url"], body="OK", status=200)
 
-    response_audit = _process_issuance(voucher_issuance_task_params)
+    response_audit = _process_issuance(reward_issuance_task_params)
 
     last_request = httpretty.last_request()
     assert last_request.method == "POST"
-    assert last_request.url == voucher_issuance_task_params["account_url"]
+    assert last_request.url == reward_issuance_task_params["account_url"]
     assert json.loads(last_request.body) == issuance_expected_payload
     assert response_audit == {
         "timestamp": fake_now.isoformat(),
@@ -51,16 +51,16 @@ def test__process_issuance_ok(
 
 
 @httpretty.activate
-def test__process_issuance_http_errors(voucher_issuance_task_params: dict, issuance_expected_payload: dict) -> None:
+def test__process_issuance_http_errors(reward_issuance_task_params: dict, issuance_expected_payload: dict) -> None:
 
     for status, body in [
         (401, "Unauthorized"),
         (500, "Internal Server Error"),
     ]:
-        httpretty.register_uri("POST", voucher_issuance_task_params["account_url"], body=body, status=status)
+        httpretty.register_uri("POST", reward_issuance_task_params["account_url"], body=body, status=status)
 
         with pytest.raises(requests.RequestException) as excinfo:
-            _process_issuance(voucher_issuance_task_params)
+            _process_issuance(reward_issuance_task_params)
 
         assert isinstance(excinfo.value, requests.RequestException)
         assert excinfo.value.response.status_code == status
@@ -72,13 +72,13 @@ def test__process_issuance_http_errors(voucher_issuance_task_params: dict, issua
 
 @mock.patch("app.tasks.issuance.send_request_with_metrics")
 def test__process_issuance_connection_error(
-    mock_send_request_with_metrics: mock.MagicMock, voucher_issuance_task_params: dict
+    mock_send_request_with_metrics: mock.MagicMock, reward_issuance_task_params: dict
 ) -> None:
 
     mock_send_request_with_metrics.side_effect = requests.Timeout("Request timed out")
 
     with pytest.raises(requests.RequestException) as excinfo:
-        _process_issuance(voucher_issuance_task_params)
+        _process_issuance(reward_issuance_task_params)
 
     assert isinstance(excinfo.value, requests.Timeout)
     assert excinfo.value.response is None

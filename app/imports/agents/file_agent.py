@@ -209,13 +209,13 @@ class RewardImportAgent(BlobFileAgent):
 
     @lru_cache()
     def reward_configs_by_reward_slug(self, retailer_slug: str, db_session: "Session") -> dict[str, RewardConfig]:
-        voucher_configs = sync_run_query(
+        reward_configs = sync_run_query(
             lambda: db_session.execute(select(RewardConfig).where(RewardConfig.retailer_slug == retailer_slug))
             .scalars()
             .all(),
             db_session,
         )
-        return {voucher_config.voucher_type_slug: voucher_config for voucher_config in voucher_configs}
+        return {reward_config.reward_slug: reward_config for reward_config in reward_configs}
 
     def _report_pre_existing_codes(
         self, pre_existing_reward_codes: list[str], row_nums_by_code: dict[str, list[int]], blob_name: str
