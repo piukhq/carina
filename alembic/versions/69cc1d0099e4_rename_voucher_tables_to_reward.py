@@ -160,6 +160,30 @@ def upgrade():
     # Alter sequence
     op.execute(f"ALTER SEQUENCE {old_voucher_file_log_table}_id_seq RENAME TO {new_reward_file_log_table}_id_seq;")
 
+    # Update reward-issuance task fields, this depends on the task params being changed so putting it here
+    op.execute(
+        "UPDATE task_type_key SET name = 'reward_config_id' from task_type where task_type.name = 'reward-issuance' and task_type_key.task_type_id = task_type.task_type_id and task_type_key.name = 'voucher_config_id'"
+    )
+    op.execute(
+        "UPDATE task_type_key SET name = 'reward_slug' from task_type where task_type.name = 'reward-issuance' and task_type_key.task_type_id = task_type.task_type_id and task_type_key.name = 'voucher_type_slug'"
+    )
+    op.execute(
+        "UPDATE task_type_key SET name = 'reward_uuid' from task_type where task_type.name = 'reward-issuance' and task_type_key.task_type_id = task_type.task_type_id and task_type_key.name = 'voucher_id'"
+    )
+    op.execute(
+        "UPDATE task_type_key SET name = 'code' from task_type where task_type.name = 'reward-issuance' and task_type_key.task_type_id = task_type.task_type_id and task_type_key.name = 'voucher_code'"
+    )
+
+    # Update reward-status-adjustment field
+    op.execute(
+        "UPDATE task_type_key SET name = 'reward_uuid' from task_type where task_type.name = 'reward-status-adjustment' and task_type_key.task_type_id = task_type.task_type_id and task_type_key.name = 'voucher_id'"
+    )
+
+    # Update error handler path
+    op.execute(
+        "UPDATE task_type SET error_handler_path = 'app.tasks.error_handlers.handle_issue_reward_request_error' WHERE error_handler_path = 'app.tasks.error_handlers.handle_issue_voucher_request_error'"
+    )
+
 
 def downgrade():
     conn = op.get_bind()
@@ -303,3 +327,27 @@ def downgrade():
 
     # Alter sequence
     op.execute(f"ALTER SEQUENCE {old_reward_file_log_table}_id_seq RENAME TO {new_voucher_file_log_table}_id_seq;")
+
+    # Update voucher-issuance task fields, this depends on the task params being changed so putting it here
+    op.execute(
+        "UPDATE task_type_key SET name = 'voucher_config_id' from task_type where task_type.name = 'reward-issuance' and task_type_key.task_type_id = task_type.task_type_id and task_type_key.name = 'reward_config_id'"
+    )
+    op.execute(
+        "UPDATE task_type_key SET name = 'voucher_type_slug' from task_type where task_type.name = 'reward-issuance' and task_type_key.task_type_id = task_type.task_type_id and task_type_key.name = 'reward_slug'"
+    )
+    op.execute(
+        "UPDATE task_type_key SET name = 'voucher_id' from task_type where task_type.name = 'reward-issuance' and task_type_key.task_type_id = task_type.task_type_id and task_type_key.name = 'reward_uuid'"
+    )
+    op.execute(
+        "UPDATE task_type_key SET name = 'voucher_code' from task_type where task_type.name = 'reward-issuance' and task_type_key.task_type_id = task_type.task_type_id and task_type_key.name = 'code'"
+    )
+
+    # Update voucher-status-adjustment field
+    op.execute(
+        "UPDATE task_type_key SET name = 'voucher_id' from task_type where task_type.name = 'reward-status-adjustment' and task_type_key.task_type_id = task_type.task_type_id and task_type_key.name = 'reward_uuid'"
+    )
+
+    # Update error handler path
+    op.execute(
+        "UPDATE task_type SET error_handler_path = 'app.tasks.error_handlers.handle_issue_voucher_request_error' WHERE error_handler_path = 'app.tasks.error_handlers.handle_issue_reward_request_error'"
+    )
