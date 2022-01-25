@@ -22,12 +22,12 @@ if TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy.orm import Session
 
 
-VOUCHER_ID = "voucher_id"
-VOUCHER_CODE = "voucher_code"
+REWARD_ID = "voucher_id"
+CODE = "voucher_code"
 
 
 def _process_issuance(task_params: dict) -> dict:
-    logger.info(f"Processing allocation for voucher: {task_params['voucher_id']}")
+    logger.info(f"Processing allocation for reward: {task_params['voucher_id']}")
     timestamp = datetime.utcnow()
     response_audit: dict = {"timestamp": timestamp.isoformat()}
 
@@ -49,50 +49,50 @@ def _process_issuance(task_params: dict) -> dict:
     )
     resp.raise_for_status()
     response_audit["response"] = {"status": resp.status_code, "body": resp.text}
-    logger.info(f"Allocation succeeded for voucher: {task_params['voucher_id']}")
+    logger.info(f"Allocation succeeded for reward: {task_params['voucher_id']}")
 
     return response_audit
 
 
-def _get_voucher_config_status(db_session: "Session", voucher_config_id: int) -> RewardTypeStatuses:
-    voucher_config_status: RewardTypeStatuses = sync_run_query(
+def _get_reward_config_status(db_session: "Session", voucher_config_id: int) -> RewardTypeStatuses:
+    reward_config_status: RewardTypeStatuses = sync_run_query(
         lambda: db_session.execute(
             select(RewardConfig.status).where(RewardConfig.id == voucher_config_id)
         ).scalar_one(),
         db_session,
     )
 
-    return voucher_config_status
+    return reward_config_status
 
 
-def _get_voucher(db_session: "Session", voucher_id: str) -> Reward:
-    voucher: Reward = sync_run_query(
+def _get_reward(db_session: "Session", voucher_id: str) -> Reward:
+    reward: Reward = sync_run_query(
         lambda: db_session.execute(select(Reward).where(Reward.id == voucher_id)).scalar_one(),
         db_session,
     )
 
-    return voucher
+    return reward
 
 
 def _cancel_task(db_session: "Session", retry_task: RetryTask) -> None:
-    """The campaign been cancelled: cancel the task and soft delete any associated voucher"""
+    """The campaign been cancelled: cancel the task and soft delete any associated reward"""
     retry_task.update_task(db_session, status=RetryTaskStatuses.CANCELLED, clear_next_attempt_time=True)
     task_params = retry_task.get_params()
 
     if task_params.get("voucher_id"):
-        voucher: Reward = _get_voucher(db_session, task_params.get("voucher_id"))
-        voucher.deleted = True
+        reward: Reward = _get_reward(db_session, task_params.get("voucher_id"))
+        reward.deleted = True
         db_session.commit()
 
 
-def _set_voucher_and_delete_from_task(db_session: "Session", retry_task: RetryTask, voucher_id: str) -> None:
+def _set_reward_and_delete_from_task(db_session: "Session", retry_task: RetryTask, voucher_id: str) -> None:
     """
-    set voucher allocated and clear the retry task's voucher id to force a complete retry
-    of the task with a new voucher
+    set reward allocated and clear the retry task's reward id to force a complete retry
+    of the task with a new reward
     """
-    voucher: Reward = _get_voucher(db_session, voucher_id)
-    voucher.allocated = True
-    # Now delete the associated voucher id and voucher code in the DB
+    reward: Reward = _get_reward(db_session, voucher_id)
+    reward.allocated = True
+    # Now delete the associated reward id and code in the DB
     values_to_delete: dict[str, TaskTypeKeyValue] = {
         value.task_type_key.name: value
         for value in retry_task.task_type_key_values
@@ -103,13 +103,13 @@ def _set_voucher_and_delete_from_task(db_session: "Session", retry_task: RetryTa
     db_session.commit()
 
 
-def _process_and_issue_voucher(db_session: "Session", retry_task: RetryTask) -> None:
+def _process_and_issue_reward(db_session: "Session", retry_task: RetryTask) -> None:
     task_params = retry_task.get_params()
     try:
         response_audit = _process_issuance(task_params)
     except HTTPError as e:
         if e.response.status_code == status.HTTP_409_CONFLICT:
-            _set_voucher_and_delete_from_task(
+            _set_reward_and_delete_from_task(
                 db_session=db_session, retry_task=retry_task, voucher_id=task_params.get("voucher_id")
             )
         raise
@@ -122,21 +122,21 @@ def _process_and_issue_voucher(db_session: "Session", retry_task: RetryTask) -> 
 # NOTE: Inter-dependency: If this function's name or module changes, ensure that
 # it is relevantly reflected in the TaskType table
 @retryable_task(db_session_factory=SyncSessionMaker)
-def issue_voucher(retry_task: RetryTask, db_session: "Session") -> None:
-    """Try to fetch and issue a voucher, unless the campaign has been cancelled"""
+def issue_reward(retry_task: RetryTask, db_session: "Session") -> None:
+    """Try to fetch and issue a reward, unless the campaign has been cancelled"""
 
-    voucher_config_status = _get_voucher_config_status(db_session, retry_task.get_params()["voucher_config_id"])
-    if voucher_config_status == RewardTypeStatuses.CANCELLED:
+    reward_config_status = _get_reward_config_status(db_session, retry_task.get_params()["voucher_config_id"])
+    if reward_config_status == RewardTypeStatuses.CANCELLED:
         _cancel_task(db_session, retry_task)
         return
 
-    # Process the allocation if it has a voucher, else try to get a voucher - requeue that if necessary
+    # Process the allocation if it has a reward, else try to get a reward - requeue that if necessary
     if "voucher_id" in retry_task.get_params():
-        _process_and_issue_voucher(db_session, retry_task)
+        _process_and_issue_reward(db_session, retry_task)
     else:
 
-        def _get_allocable_voucher() -> Optional[Reward]:
-            allocable_voucher = (
+        def _get_allocable_reward() -> Optional[Reward]:
+            allocable_reward = (
                 db_session.execute(
                     select(Reward)
                     .with_for_update()
@@ -151,37 +151,37 @@ def issue_voucher(retry_task: RetryTask, db_session: "Session") -> None:
                 .first()
             )
 
-            return allocable_voucher
+            return allocable_reward
 
-        allocable_voucher: Reward = sync_run_query(_get_allocable_voucher, db_session)
-        if allocable_voucher:
+        allocable_reward: Reward = sync_run_query(_get_allocable_reward, db_session)
+        if allocable_reward:
             key_ids = retry_task.task_type.get_key_ids_by_name()
 
-            def _add_voucher_to_task_values_and_set_allocated() -> None:
-                allocable_voucher.allocated = True
+            def _add_reward_to_task_values_and_set_allocated() -> None:
+                allocable_reward.allocated = True
                 db_session.add_all(
                     retry_task.get_task_type_key_values(
                         [
-                            (key_ids[VOUCHER_ID], str(allocable_voucher.id)),
-                            (key_ids[VOUCHER_CODE], allocable_voucher.code),
+                            (key_ids[REWARD_ID], str(allocable_reward.id)),
+                            (key_ids[CODE], allocable_reward.code),
                         ]
                     )
                 )
 
                 db_session.commit()
 
-            sync_run_query(_add_voucher_to_task_values_and_set_allocated, db_session)
+            sync_run_query(_add_reward_to_task_values_and_set_allocated, db_session)
             db_session.refresh(retry_task)  # Ensure retry_task represents latest DB changes
-            _process_and_issue_voucher(db_session, retry_task)
+            _process_and_issue_reward(db_session, retry_task)
         else:  # requeue the allocation attempt
             if retry_task.status != RetryTaskStatuses.WAITING:
                 # Only do a Sentry alert for the first allocation failure (when status is changing to WAITING)
                 with sentry_sdk.push_scope() as scope:
                     scope.fingerprint = ["{{ default }}", "{{ message }}"]
                     event_id = sentry_sdk.capture_message(
-                        f"No Voucher Codes Available for VoucherConfig: "
+                        f"No Reward Codes Available for RewardConfig: "
                         f"{retry_task.get_params()['voucher_config_id']}, "
-                        f"voucher type slug: {retry_task.get_params()['voucher_type_slug']} "
+                        f"reward slug: {retry_task.get_params()['voucher_type_slug']} "
                         f"on {datetime.utcnow().strftime('%Y-%m-%d')}"
                     )
                     logger.info(f"Sentry event ID: {event_id}")
@@ -195,7 +195,7 @@ def issue_voucher(retry_task: RetryTask, db_session: "Session") -> None:
             next_attempt_time = enqueue_retry_task_delay(
                 connection=redis,
                 retry_task=retry_task,
-                delay_seconds=settings.VOUCHER_ISSUANCE_REQUEUE_BACKOFF_SECONDS,
+                delay_seconds=settings.REWARD_ISSUANCE_REQUEUE_BACKOFF_SECONDS,
             )
             logger.info(f"Next attempt time at {next_attempt_time}")
             retry_task.update_task(db_session, next_attempt_time=next_attempt_time)
