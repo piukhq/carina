@@ -5,7 +5,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.db.base_class import Base, TimestampMixin
-from app.enums import FileAgentType, RewardTypeStatuses, RewardUpdateStatuses, RewardFetchType
+from app.enums import FileAgentType, RewardFetchType, RewardTypeStatuses, RewardUpdateStatuses
 
 
 class Reward(Base, TimestampMixin):  # pragma: no cover
@@ -22,9 +22,7 @@ class Reward(Base, TimestampMixin):  # pragma: no cover
     updates = relationship("RewardUpdate", back_populates="reward")
 
     __table_args__ = (
-        UniqueConstraint(
-            "code", "retailer_slug", "reward_config_id", name="code_retailer_slug_reward_config_unq"
-        ),
+        UniqueConstraint("code", "retailer_slug", "reward_config_id", name="code_retailer_slug_reward_config_unq"),
     )
     __mapper_args__ = {"eager_defaults": True}
 
@@ -45,9 +43,7 @@ class RewardConfig(Base, TimestampMixin):  # pragma: no cover
     rewards = relationship("Reward", back_populates="reward_config")
 
     __mapper_args__ = {"eager_defaults": True}
-    __table_args__ = (
-        UniqueConstraint("reward_slug", "retailer_slug", name="reward_slug_retailer_slug_unq"),
-    )
+    __table_args__ = (UniqueConstraint("reward_slug", "retailer_slug", name="reward_slug_retailer_slug_unq"),)
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}({self.retailer_slug}, " f"{self.reward_slug}, {self.validity_days})"

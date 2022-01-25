@@ -18,10 +18,10 @@ from testfixtures import LogCapture
 from app.enums import FileAgentType, RewardUpdateStatuses
 from app.imports.agents.file_agent import (
     BlobProcessingError,
+    RewardFileLog,
     RewardImportAgent,
     RewardUpdateRow,
     RewardUpdatesAgent,
-    RewardFileLog,
 )
 from app.models import Reward, RewardUpdate
 from app.schemas import RewardUpdateSchema
@@ -33,9 +33,7 @@ if TYPE_CHECKING:
 
 def _get_reward_update_rows(db_session: "Session", reward_codes: List[str]) -> List[RewardUpdate]:
     reward_updates = (
-        db_session.execute(select(RewardUpdate).join(Reward).where(Reward.code.in_(reward_codes)))
-        .scalars()
-        .all()
+        db_session.execute(select(RewardUpdate).join(Reward).where(Reward.code.in_(reward_codes))).scalars().all()
     )
     return reward_updates
 
@@ -180,9 +178,7 @@ def test_import_agent__process_csv_not_soft_deleted(
     )
 
 
-def test_import_agent__process_csv_same_reward_slug_not_soft_deleted(
-    setup: SetupType, mocker: MockerFixture
-) -> None:
+def test_import_agent__process_csv_same_reward_slug_not_soft_deleted(setup: SetupType, mocker: MockerFixture) -> None:
     """
     Test that a reward code imported for the same reward slug, where that existing reward code HAS
     been soft-deleted, will cause an error to be reported and will not be imported

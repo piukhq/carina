@@ -56,9 +56,7 @@ def _process_issuance(task_params: dict) -> dict:
 
 def _get_reward_config_status(db_session: "Session", reward_config_id: int) -> RewardTypeStatuses:
     reward_config_status: RewardTypeStatuses = sync_run_query(
-        lambda: db_session.execute(
-            select(RewardConfig.status).where(RewardConfig.id == reward_config_id)
-        ).scalar_one(),
+        lambda: db_session.execute(select(RewardConfig.status).where(RewardConfig.id == reward_config_id)).scalar_one(),
         db_session,
     )
 

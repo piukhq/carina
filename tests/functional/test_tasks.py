@@ -325,9 +325,7 @@ def test_status_adjustment_wrong_status(db_session: "Session", reward_status_adj
     assert reward_status_adjustment_retry_task.status == RetryTaskStatuses.FAILED
 
 
-def test_delete_unallocated_rewards(
-    delete_rewards_retry_task: RetryTask, db_session: Session, reward: Reward
-) -> None:
+def test_delete_unallocated_rewards(delete_rewards_retry_task: RetryTask, db_session: Session, reward: Reward) -> None:
     task_params = delete_rewards_retry_task.get_params()
 
     other_config = RewardConfig(
