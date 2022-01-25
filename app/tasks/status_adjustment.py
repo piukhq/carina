@@ -16,16 +16,16 @@ if TYPE_CHECKING:
 
 
 def _process_status_adjustment(task_params: dict) -> dict:
-    logger.info(f"Processing status adjustment for voucher: {task_params['voucher_id']}")
+    logger.info(f"Processing status adjustment for reward: {task_params['reward_uuid']}")
     timestamp = datetime.utcnow()
     response_audit: dict = {"timestamp": timestamp.isoformat()}
 
     resp = send_request_with_metrics(
         "PATCH",
-        "{base_url}/bpl/loyalty/{retailer_slug}/rewards/{voucher_id}/status".format(
+        "{base_url}/bpl/loyalty/{retailer_slug}/rewards/{reward_uuid}/status".format(
             base_url=settings.POLARIS_URL,
             retailer_slug=task_params["retailer_slug"],
-            voucher_id=task_params["voucher_id"],
+            reward_uuid=task_params["reward_uuid"],
         ),
         json={
             "status": task_params["status"],
@@ -36,7 +36,7 @@ def _process_status_adjustment(task_params: dict) -> dict:
     )
     resp.raise_for_status()
     response_audit["response"] = {"status": resp.status_code, "body": resp.text}
-    logger.info(f"Status adjustment succeeded for voucher: {task_params['voucher_id']}")
+    logger.info(f"Status adjustment succeeded for reward: {task_params['reward_uuid']}")
 
     return response_audit
 

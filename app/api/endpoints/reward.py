@@ -10,9 +10,9 @@ from app.api.deps import get_session, user_is_authorised
 from app.api.tasks import enqueue_many_tasks, enqueue_task
 from app.db.base_class import async_run_query
 from app.enums import HttpErrors, RewardTypeStatuses
-from app.fetch_voucher import get_allocable_reward
+from app.fetch_reward import get_allocable_reward
 from app.schemas import RewardAllocationSchema
-from app.schemas.voucher import RewardStatusSchema
+from app.schemas.reward import RewardStatusSchema
 
 router = APIRouter()
 
