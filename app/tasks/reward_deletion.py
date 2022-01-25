@@ -29,7 +29,7 @@ def delete_unallocated_rewards(retry_task: RetryTask, db_session: "Session") -> 
             update(Reward)
             .where(
                 Reward.retailer_slug == task_params["retailer_slug"],
-                Reward.voucher_config_id == RewardConfig.id,
+                Reward.reward_config_id == RewardConfig.id,
                 RewardConfig.reward_slug == task_params["reward_slug"],
             )
             .values(deleted=True)

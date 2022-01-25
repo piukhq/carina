@@ -21,7 +21,7 @@ async def get_reward_config(
     async def _query(by_reward_slug: bool = False) -> List[RewardConfig]:
         stmt = select(RewardConfig).where(RewardConfig.retailer_slug == retailer_slug)
         if by_reward_slug:
-            stmt = stmt.where(RewardConfig.voucher_type_slug == reward_slug)
+            stmt = stmt.where(RewardConfig.reward_slug == reward_slug)
             if for_update:
                 stmt = stmt.with_for_update()
         return await db_session.execute(stmt)
@@ -45,7 +45,7 @@ async def get_allocable_reward(db_session: AsyncSession, reward_config: RewardCo
                     select(Reward)
                     .with_for_update()
                     .where(
-                        Reward.voucher_config_id == reward_config.id,
+                        Reward.reward_config_id == reward_config.id,
                         Reward.allocated == False,  # noqa
                         Reward.deleted == False,  # noqa
                     )
@@ -82,8 +82,8 @@ async def create_reward_issuance_retry_task(
         "account_url": account_url,
         "issued_date": issued_date,
         "expiry_date": expiry_date,
-        "voucher_config_id": reward_config.id,
-        "voucher_type_slug": reward_config.reward_slug,
+        "reward_config_id": reward_config.id,
+        "reward_slug": reward_config.reward_slug,
         "idempotency_token": uuid4(),
     }
 
@@ -91,8 +91,8 @@ async def create_reward_issuance_retry_task(
         reward.allocated = True
         task_params.update(
             {
-                "voucher_id": reward.id,
-                "voucher_code": reward.code,
+                "reward_uuid": reward.id,
+                "code": reward.code,
             }
         )
 

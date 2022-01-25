@@ -113,7 +113,7 @@ def create_reward(db_session: "Session", reward_config: RewardConfig) -> Callabl
         mock_reward_params = {
             "code": "TSTCD1234",
             "retailer_slug": reward_config.retailer_slug,
-            "voucher_config": reward_config,
+            "reward_config": reward_config,
         }
 
         mock_reward_params.update(reward_params)
@@ -168,10 +168,10 @@ def voucher_issuance_task_type(db_session: "Session") -> TaskType:
                 ("account_url", "STRING"),
                 ("issued_date", "FLOAT"),
                 ("expiry_date", "FLOAT"),
-                ("voucher_config_id", "INTEGER"),
-                ("voucher_type_slug", "STRING"),
-                ("voucher_id", "STRING"),
-                ("voucher_code", "STRING"),
+                ("reward_config_id", "INTEGER"),
+                ("reward_slug", "STRING"),
+                ("reward_uuid", "STRING"),
+                ("code", "STRING"),
                 ("idempotency_token", "STRING"),
             )
         ]
