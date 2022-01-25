@@ -50,7 +50,7 @@ def test_post_reward_allocation_happy_path(
     mocker.patch("app.api.tasks.enqueue_retry_task")
 
     resp = client.post(
-        f"/bpl/vouchers/{reward_config.retailer_slug}/vouchers/{reward_config.reward_slug}/allocation",
+        f"/bpl/vouchers/{reward_config.retailer_slug}/rewards/{reward_config.reward_slug}/allocation",
         json=payload,
         headers=auth_headers,
     )
@@ -72,7 +72,7 @@ def test_post_reward_allocation_wrong_retailer(setup: SetupType, voucher_issuanc
     db_session, reward_config, _ = setup
 
     resp = client.post(
-        f"/bpl/vouchers/WRONG-RETAILER/vouchers/{reward_config.reward_slug}/allocation",
+        f"/bpl/vouchers/WRONG-RETAILER/rewards/{reward_config.reward_slug}/allocation",
         json=payload,
         headers=auth_headers,
     )
@@ -88,13 +88,13 @@ def test_post_reward_allocation_wrong_reward_type(setup: SetupType, voucher_issu
     db_session, reward_config, _ = setup
 
     resp = client.post(
-        f"/bpl/vouchers/{reward_config.retailer_slug}/vouchers/WRONG-TYPE/allocation",
+        f"/bpl/vouchers/{reward_config.retailer_slug}/rewards/WRONG-TYPE/allocation",
         json=payload,
         headers=auth_headers,
     )
 
-    assert resp.status_code == HttpErrors.UNKNOWN_VOUCHER_TYPE.value.status_code
-    assert resp.json() == HttpErrors.UNKNOWN_VOUCHER_TYPE.value.detail
+    assert resp.status_code == HttpErrors.UNKNOWN_REWARD_TYPE.value.status_code
+    assert resp.json() == HttpErrors.UNKNOWN_REWARD_TYPE.value.detail
 
     retry_task, _ = _get_retry_task_and_values(db_session, voucher_issuance_task_type.task_type_id, reward_config.id)
     assert retry_task is None
@@ -110,7 +110,7 @@ def test_post_reward_allocation_no_more_rewards(
     mocker.patch("app.api.tasks.enqueue_retry_task")
 
     resp = client.post(
-        f"/bpl/vouchers/{reward_config.retailer_slug}/vouchers/{reward_config.reward_slug}/allocation",
+        f"/bpl/vouchers/{reward_config.retailer_slug}/rewards/{reward_config.reward_slug}/allocation",
         json=payload,
         headers=auth_headers,
     )
@@ -141,7 +141,7 @@ def test_reward_type_status_ok(
         db_session.commit()
 
         resp = client.patch(
-            f"/bpl/vouchers/{reward_config.retailer_slug}/vouchers/{reward_config.reward_slug}/status",
+            f"/bpl/vouchers/{reward_config.retailer_slug}/rewards/{reward_config.reward_slug}/status",
             json={"status": transition_status},
             headers=auth_headers,
         )
@@ -172,7 +172,7 @@ def test_reward_type_status_bad_status(setup: SetupType) -> None:
     db_session, reward_config, _ = setup
 
     resp = client.patch(
-        f"/bpl/vouchers/{reward_config.retailer_slug}/vouchers/{reward_config.reward_slug}/status",
+        f"/bpl/vouchers/{reward_config.retailer_slug}/rewards/{reward_config.reward_slug}/status",
         json={"status": "active"},
         headers=auth_headers,
     )
@@ -185,7 +185,7 @@ def test_reward_type_status_invalid_retailer(setup: SetupType) -> None:
     db_session, reward_config, _ = setup
 
     resp = client.patch(
-        f"/bpl/vouchers/unknown-retailer/vouchers/{reward_config.reward_slug}/status",
+        f"/bpl/vouchers/unknown-retailer/rewards/{reward_config.reward_slug}/status",
         json={"status": "cancelled"},
         headers=auth_headers,
     )
@@ -199,12 +199,12 @@ def test_reward_type_status_reward_type_not_found(setup: SetupType) -> None:
     db_session, reward_config, _ = setup
 
     resp = client.patch(
-        f"/bpl/vouchers/{reward_config.retailer_slug}/vouchers/invalid-voucher-type/status",
+        f"/bpl/vouchers/{reward_config.retailer_slug}/rewards/invalid-reward-type/status",
         json={"status": "cancelled"},
         headers=auth_headers,
     )
-    assert resp.status_code == HttpErrors.UNKNOWN_VOUCHER_TYPE.value.status_code
-    assert resp.json() == HttpErrors.UNKNOWN_VOUCHER_TYPE.value.detail
+    assert resp.status_code == HttpErrors.UNKNOWN_REWARD_TYPE.value.status_code
+    assert resp.json() == HttpErrors.UNKNOWN_REWARD_TYPE.value.detail
     db_session.refresh(reward_config)
     assert reward_config.status == RewardTypeStatuses.ACTIVE
 
@@ -215,7 +215,7 @@ def test_reward_type_status_wrong_reward_config_status(setup: SetupType) -> None
     db_session.commit()
 
     resp = client.patch(
-        f"/bpl/vouchers/{reward_config.retailer_slug}/vouchers/{reward_config.reward_slug}/status",
+        f"/bpl/vouchers/{reward_config.retailer_slug}/rewards/{reward_config.reward_slug}/status",
         json={"status": "ended"},
         headers=auth_headers,
     )

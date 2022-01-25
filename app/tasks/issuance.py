@@ -7,7 +7,7 @@ from fastapi import status
 from requests.exceptions import HTTPError
 from retry_tasks_lib.db.models import RetryTask, TaskTypeKeyValue
 from retry_tasks_lib.enums import RetryTaskStatuses
-from retry_tasks_lib.utils.synchronous import enqueue_retry_task_delay, get_retry_task
+from retry_tasks_lib.utils.synchronous import enqueue_retry_task_delay, retryable_task
 from sqlalchemy.future import select
 
 from app.core.config import redis, settings
@@ -104,7 +104,6 @@ def _set_voucher_and_delete_from_task(db_session: "Session", retry_task: RetryTa
 
 
 def _process_and_issue_voucher(db_session: "Session", retry_task: RetryTask) -> None:
-    retry_task.update_task(db_session, increase_attempts=True)
     task_params = retry_task.get_params()
     try:
         response_audit = _process_issuance(task_params)
@@ -122,82 +121,81 @@ def _process_and_issue_voucher(db_session: "Session", retry_task: RetryTask) -> 
 
 # NOTE: Inter-dependency: If this function's name or module changes, ensure that
 # it is relevantly reflected in the TaskType table
-def issue_voucher(retry_task_id: int) -> None:
+@retryable_task(db_session_factory=SyncSessionMaker)
+def issue_voucher(retry_task: RetryTask, db_session: "Session") -> None:
     """Try to fetch and issue a voucher, unless the campaign has been cancelled"""
-    with SyncSessionMaker() as db_session:
-        retry_task = get_retry_task(db_session, retry_task_id)
 
-        voucher_config_status = _get_voucher_config_status(db_session, retry_task.get_params()["voucher_config_id"])
-        if voucher_config_status == RewardTypeStatuses.CANCELLED:
-            _cancel_task(db_session, retry_task)
-            return
+    voucher_config_status = _get_voucher_config_status(db_session, retry_task.get_params()["voucher_config_id"])
+    if voucher_config_status == RewardTypeStatuses.CANCELLED:
+        _cancel_task(db_session, retry_task)
+        return
 
-        # Process the allocation if it has a voucher, else try to get a voucher - requeue that if necessary
-        if "voucher_id" in retry_task.get_params():
-            _process_and_issue_voucher(db_session, retry_task)
-        else:
+    # Process the allocation if it has a voucher, else try to get a voucher - requeue that if necessary
+    if "voucher_id" in retry_task.get_params():
+        _process_and_issue_voucher(db_session, retry_task)
+    else:
 
-            def _get_allocable_voucher() -> Optional[Reward]:
-                allocable_voucher = (
-                    db_session.execute(
-                        select(Reward)
-                        .with_for_update()
-                        .where(
-                            Reward.reward_config_id == retry_task.get_params()["voucher_config_id"],
-                            Reward.allocated == False,  # noqa
-                            Reward.deleted == False,  # noqa
-                        )
-                        .limit(1)
+        def _get_allocable_voucher() -> Optional[Reward]:
+            allocable_voucher = (
+                db_session.execute(
+                    select(Reward)
+                    .with_for_update()
+                    .where(
+                        Reward.reward_config_id == retry_task.get_params()["voucher_config_id"],
+                        Reward.allocated == False,  # noqa
+                        Reward.deleted == False,  # noqa
                     )
-                    .scalars()
-                    .first()
+                    .limit(1)
+                )
+                .scalars()
+                .first()
+            )
+
+            return allocable_voucher
+
+        allocable_voucher: Reward = sync_run_query(_get_allocable_voucher, db_session)
+        if allocable_voucher:
+            key_ids = retry_task.task_type.get_key_ids_by_name()
+
+            def _add_voucher_to_task_values_and_set_allocated() -> None:
+                allocable_voucher.allocated = True
+                db_session.add_all(
+                    retry_task.get_task_type_key_values(
+                        [
+                            (key_ids[VOUCHER_ID], str(allocable_voucher.id)),
+                            (key_ids[VOUCHER_CODE], allocable_voucher.code),
+                        ]
+                    )
                 )
 
-                return allocable_voucher
+                db_session.commit()
 
-            allocable_voucher: Reward = sync_run_query(_get_allocable_voucher, db_session)
-            if allocable_voucher:
-                key_ids = retry_task.task_type.get_key_ids_by_name()
-
-                def _add_voucher_to_task_values_and_set_allocated() -> None:
-                    allocable_voucher.allocated = True
-                    db_session.add_all(
-                        retry_task.get_task_type_key_values(
-                            [
-                                (key_ids[VOUCHER_ID], str(allocable_voucher.id)),
-                                (key_ids[VOUCHER_CODE], allocable_voucher.code),
-                            ]
-                        )
+            sync_run_query(_add_voucher_to_task_values_and_set_allocated, db_session)
+            db_session.refresh(retry_task)  # Ensure retry_task represents latest DB changes
+            _process_and_issue_voucher(db_session, retry_task)
+        else:  # requeue the allocation attempt
+            if retry_task.status != RetryTaskStatuses.WAITING:
+                # Only do a Sentry alert for the first allocation failure (when status is changing to WAITING)
+                with sentry_sdk.push_scope() as scope:
+                    scope.fingerprint = ["{{ default }}", "{{ message }}"]
+                    event_id = sentry_sdk.capture_message(
+                        f"No Voucher Codes Available for VoucherConfig: "
+                        f"{retry_task.get_params()['voucher_config_id']}, "
+                        f"voucher type slug: {retry_task.get_params()['voucher_type_slug']} "
+                        f"on {datetime.utcnow().strftime('%Y-%m-%d')}"
                     )
+                    logger.info(f"Sentry event ID: {event_id}")
 
+                def _set_waiting() -> None:
+                    retry_task.status = RetryTaskStatuses.WAITING.name
                     db_session.commit()
 
-                sync_run_query(_add_voucher_to_task_values_and_set_allocated, db_session)
-                db_session.refresh(retry_task)  # Ensure retry_task represents latest DB changes
-                _process_and_issue_voucher(db_session, retry_task)
-            else:  # requeue the allocation attempt
-                if retry_task.status != RetryTaskStatuses.WAITING:
-                    # Only do a Sentry alert for the first allocation failure (when status is changing to WAITING)
-                    with sentry_sdk.push_scope() as scope:
-                        scope.fingerprint = ["{{ default }}", "{{ message }}"]
-                        event_id = sentry_sdk.capture_message(
-                            f"No Voucher Codes Available for VoucherConfig: "
-                            f"{retry_task.get_params()['voucher_config_id']}, "
-                            f"voucher type slug: {retry_task.get_params()['voucher_type_slug']} "
-                            f"on {datetime.utcnow().strftime('%Y-%m-%d')}"
-                        )
-                        logger.info(f"Sentry event ID: {event_id}")
+                sync_run_query(_set_waiting, db_session)
 
-                    def _set_waiting() -> None:
-                        retry_task.status = RetryTaskStatuses.WAITING.name
-                        db_session.commit()
-
-                    sync_run_query(_set_waiting, db_session)
-
-                next_attempt_time = enqueue_retry_task_delay(
-                    connection=redis,
-                    retry_task=retry_task,
-                    delay_seconds=settings.VOUCHER_ISSUANCE_REQUEUE_BACKOFF_SECONDS,
-                )
-                logger.info(f"Next attempt time at {next_attempt_time}")
-                retry_task.update_task(db_session, next_attempt_time=next_attempt_time, increase_attempts=True)
+            next_attempt_time = enqueue_retry_task_delay(
+                connection=redis,
+                retry_task=retry_task,
+                delay_seconds=settings.VOUCHER_ISSUANCE_REQUEUE_BACKOFF_SECONDS,
+            )
+            logger.info(f"Next attempt time at {next_attempt_time}")
+            retry_task.update_task(db_session, next_attempt_time=next_attempt_time)

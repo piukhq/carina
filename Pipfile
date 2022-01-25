@@ -32,7 +32,7 @@ azure-keyvault = "*"
 azure-storage-blob = "!=12.9.0"  # version 12.9.0 has bad type annotations
 apscheduler = "*"
 testfixtures = "*"
-retry-tasks-lib = {version=">=1.9.1", index="pypi-cloud"}
+retry-tasks-lib = {version=">=1.10.2", index="pypi-cloud"}
 fastapi-prometheus-metrics = {version=">=0.1.0", index="pypi-cloud"}
 
 [dev-packages]
