@@ -44,7 +44,7 @@ def _get_retry_task_and_values(
 
 
 def test_post_reward_allocation_happy_path(
-    setup: SetupType, mocker: MockerFixture, voucher_issuance_task_type: TaskType
+    setup: SetupType, mocker: MockerFixture, reward_issuance_task_type: TaskType
 ) -> None:
     db_session, reward_config, reward = setup
     mocker.patch("app.api.tasks.enqueue_retry_task")
@@ -59,7 +59,7 @@ def test_post_reward_allocation_happy_path(
     assert resp.json() == {}
 
     retry_task, task_params_values = _get_retry_task_and_values(
-        db_session, voucher_issuance_task_type.task_type_id, reward_config.id
+        db_session, reward_issuance_task_type.task_type_id, reward_config.id
     )
 
     assert retry_task is not None
@@ -68,7 +68,7 @@ def test_post_reward_allocation_happy_path(
     assert str(reward.id) in task_params_values
 
 
-def test_post_reward_allocation_wrong_retailer(setup: SetupType, voucher_issuance_task_type: TaskType) -> None:
+def test_post_reward_allocation_wrong_retailer(setup: SetupType, reward_issuance_task_type: TaskType) -> None:
     db_session, reward_config, _ = setup
 
     resp = client.post(
@@ -80,11 +80,11 @@ def test_post_reward_allocation_wrong_retailer(setup: SetupType, voucher_issuanc
     assert resp.status_code == HttpErrors.INVALID_RETAILER.value.status_code
     assert resp.json() == HttpErrors.INVALID_RETAILER.value.detail
 
-    retry_task, _ = _get_retry_task_and_values(db_session, voucher_issuance_task_type.task_type_id, reward_config.id)
+    retry_task, _ = _get_retry_task_and_values(db_session, reward_issuance_task_type.task_type_id, reward_config.id)
     assert retry_task is None
 
 
-def test_post_reward_allocation_wrong_reward_type(setup: SetupType, voucher_issuance_task_type: TaskType) -> None:
+def test_post_reward_allocation_wrong_reward_type(setup: SetupType, reward_issuance_task_type: TaskType) -> None:
     db_session, reward_config, _ = setup
 
     resp = client.post(
@@ -96,12 +96,12 @@ def test_post_reward_allocation_wrong_reward_type(setup: SetupType, voucher_issu
     assert resp.status_code == HttpErrors.UNKNOWN_REWARD_TYPE.value.status_code
     assert resp.json() == HttpErrors.UNKNOWN_REWARD_TYPE.value.detail
 
-    retry_task, _ = _get_retry_task_and_values(db_session, voucher_issuance_task_type.task_type_id, reward_config.id)
+    retry_task, _ = _get_retry_task_and_values(db_session, reward_issuance_task_type.task_type_id, reward_config.id)
     assert retry_task is None
 
 
 def test_post_reward_allocation_no_more_rewards(
-    setup: SetupType, mocker: MockerFixture, voucher_issuance_task_type: TaskType
+    setup: SetupType, mocker: MockerFixture, reward_issuance_task_type: TaskType
 ) -> None:
     db_session, reward_config, reward = setup
     reward.allocated = True
@@ -119,7 +119,7 @@ def test_post_reward_allocation_no_more_rewards(
     assert resp.json() == {}
 
     retry_task, task_params_values = _get_retry_task_and_values(
-        db_session, voucher_issuance_task_type.task_type_id, reward_config.id
+        db_session, reward_issuance_task_type.task_type_id, reward_config.id
     )
 
     assert retry_task is not None
