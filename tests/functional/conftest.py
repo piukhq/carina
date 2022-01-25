@@ -32,13 +32,13 @@ def reward_issuance_task_params(reward: Reward) -> dict:
 
 
 @pytest.fixture(scope="function")
-def voucher_issuance_task_params_no_voucher(reward_config: RewardConfig) -> dict:
+def reward_issuance_task_params_no_reward(reward_config: RewardConfig) -> dict:
     now = datetime.utcnow()
     return {
         "account_url": "http://test.url/",
         "issued_date": str(now.timestamp()),
         "expiry_date": str((now + timedelta(days=reward_config.validity_days)).timestamp()),
-        "reward_id": str(reward_config.id),
+        "reward_config_id": str(reward_config.id),
         "reward_slug": reward_config.reward_slug,
         "idempotency_token": str(uuid4()),
     }
@@ -46,13 +46,13 @@ def voucher_issuance_task_params_no_voucher(reward_config: RewardConfig) -> dict
 
 @pytest.fixture(scope="function")
 def issuance_retry_task(
-    db_session: "Session", reward_issuance_task_params: dict, voucher_issuance_task_type: TaskType
+    db_session: "Session", reward_issuance_task_params: dict, reward_issuance_task_type: TaskType
 ) -> RetryTask:
-    task = RetryTask(task_type_id=voucher_issuance_task_type.task_type_id)
+    task = RetryTask(task_type_id=reward_issuance_task_type.task_type_id)
     db_session.add(task)
     db_session.flush()
 
-    key_ids = voucher_issuance_task_type.get_key_ids_by_name()
+    key_ids = reward_issuance_task_type.get_key_ids_by_name()
     db_session.add_all(
         [
             TaskTypeKeyValue(
@@ -68,14 +68,14 @@ def issuance_retry_task(
 
 
 @pytest.fixture(scope="function")
-def issuance_retry_task_no_voucher(
-    db_session: "Session", voucher_issuance_task_params_no_voucher: dict, voucher_issuance_task_type: TaskType
+def issuance_retry_task_no_reward(
+    db_session: "Session", reward_issuance_task_params_no_reward: dict, reward_issuance_task_type: TaskType
 ) -> RetryTask:
-    task = RetryTask(task_type_id=voucher_issuance_task_type.task_type_id)
+    task = RetryTask(task_type_id=reward_issuance_task_type.task_type_id)
     db_session.add(task)
     db_session.flush()
 
-    key_ids = voucher_issuance_task_type.get_key_ids_by_name()
+    key_ids = reward_issuance_task_type.get_key_ids_by_name()
     db_session.add_all(
         [
             TaskTypeKeyValue(
@@ -83,7 +83,7 @@ def issuance_retry_task_no_voucher(
                 value=value,
                 retry_task_id=task.retry_task_id,
             )
-            for key, value in voucher_issuance_task_params_no_voucher.items()
+            for key, value in reward_issuance_task_params_no_reward.items()
         ]
     )
     db_session.commit()
@@ -102,9 +102,9 @@ def issuance_expected_payload(reward_issuance_task_params: dict) -> dict:
 
 
 @pytest.fixture(scope="function")
-def voucher_update(db_session: "Session", voucher: Reward) -> RewardUpdate:
+def reward_update(db_session: "Session", reward: Reward) -> RewardUpdate:
     adjustment = RewardUpdate(
-        voucher=voucher,
+        reward=reward,
         date=datetime.utcnow().date(),
         status=RewardUpdateStatuses.REDEEMED,
     )
@@ -114,24 +114,24 @@ def voucher_update(db_session: "Session", voucher: Reward) -> RewardUpdate:
 
 
 @pytest.fixture(scope="function")
-def voucher_status_adjustment_task_params(voucher_update: RewardUpdate) -> dict:
+def reward_status_adjustment_task_params(reward_update: RewardUpdate) -> dict:
     return {
-        "voucher_id": str(voucher_update.reward_uuid),
-        "retailer_slug": voucher_update.reward.retailer_slug,
-        "date": str(datetime.fromisoformat(voucher_update.date.isoformat()).timestamp()),
-        "status": voucher_update.status.name,
+        "reward_uuid": str(reward_update.reward_uuid),
+        "retailer_slug": reward_update.reward.retailer_slug,
+        "date": str(datetime.fromisoformat(reward_update.date.isoformat()).timestamp()),
+        "status": reward_update.status.name,
     }
 
 
 @pytest.fixture(scope="function")
-def voucher_status_adjustment_retry_task(
-    db_session: "Session", voucher_status_adjustment_task_params: dict, voucher_status_adjustment_task_type: TaskType
+def reward_status_adjustment_retry_task(
+    db_session: "Session", reward_status_adjustment_task_params: dict, reward_status_adjustment_task_type: TaskType
 ) -> RetryTask:
-    task = RetryTask(task_type_id=voucher_status_adjustment_task_type.task_type_id)
+    task = RetryTask(task_type_id=reward_status_adjustment_task_type.task_type_id)
     db_session.add(task)
     db_session.flush()
 
-    key_ids = voucher_status_adjustment_task_type.get_key_ids_by_name()
+    key_ids = reward_status_adjustment_task_type.get_key_ids_by_name()
     db_session.add_all(
         [
             TaskTypeKeyValue(
@@ -139,7 +139,7 @@ def voucher_status_adjustment_retry_task(
                 value=value,
                 retry_task_id=task.retry_task_id,
             )
-            for key, value in voucher_status_adjustment_task_params.items()
+            for key, value in reward_status_adjustment_task_params.items()
         ]
     )
     db_session.commit()
@@ -147,8 +147,8 @@ def voucher_status_adjustment_retry_task(
 
 
 @pytest.fixture(scope="function")
-def adjustment_expected_payload(voucher_status_adjustment_retry_task: RetryTask) -> dict:
-    params = voucher_status_adjustment_retry_task.get_params()
+def adjustment_expected_payload(reward_status_adjustment_retry_task: RetryTask) -> dict:
+    params = reward_status_adjustment_retry_task.get_params()
     return {
         "status": params["status"],
         "date": params["date"],
@@ -156,11 +156,11 @@ def adjustment_expected_payload(voucher_status_adjustment_retry_task: RetryTask)
 
 
 @pytest.fixture(scope="function")
-def adjustment_url(voucher_status_adjustment_task_params: dict) -> str:
-    return "{base_url}/bpl/loyalty/{retailer_slug}/rewards/{voucher_id}/status".format(
+def adjustment_url(reward_status_adjustment_task_params: dict) -> str:
+    return "{base_url}/bpl/loyalty/{retailer_slug}/rewards/{reward_uuid}/status".format(
         base_url=settings.POLARIS_URL,
-        retailer_slug=voucher_status_adjustment_task_params["retailer_slug"],
-        voucher_id=voucher_status_adjustment_task_params["voucher_id"],
+        retailer_slug=reward_status_adjustment_task_params["retailer_slug"],
+        reward_uuid=reward_status_adjustment_task_params["reward_uuid"],
     )
 
 

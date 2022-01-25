@@ -151,7 +151,7 @@ def capture() -> Generator:
 
 
 @pytest.fixture(scope="function")
-def voucher_issuance_task_type(db_session: "Session") -> TaskType:
+def reward_issuance_task_type(db_session: "Session") -> TaskType:
     task = TaskType(
         name=settings.REWARD_ISSUANCE_TASK_NAME,
         path=_get_path(issue_reward),
