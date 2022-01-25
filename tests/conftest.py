@@ -15,7 +15,7 @@ from app.db.session import SyncSessionMaker, sync_engine
 from app.enums import RewardTypeStatuses
 from app.models import Voucher, VoucherConfig
 from app.tasks.error_handlers import default_handler, handle_retry_task_request_error
-from app.tasks.issuance import issue_voucher
+from app.tasks.issuance import issue_reward
 from app.tasks.status_adjustment import status_adjustment
 
 if TYPE_CHECKING:
@@ -153,8 +153,8 @@ def capture() -> Generator:
 @pytest.fixture(scope="function")
 def voucher_issuance_task_type(db_session: "Session") -> TaskType:
     task = TaskType(
-        name=settings.VOUCHER_ISSUANCE_TASK_NAME,
-        path=_get_path(issue_voucher),
+        name=settings.REWARD_ISSUANCE_TASK_NAME,
+        path=_get_path(issue_reward),
         queue_name="carina:default",
         error_handler_path=_get_path(handle_retry_task_request_error),
     )
@@ -212,7 +212,7 @@ def voucher_status_adjustment_task_type(db_session: "Session") -> TaskType:
 def reward_deletion_task_type(db_session: "Session") -> TaskType:
     task = TaskType(
         name=settings.DELETE_UNALLOCATED_REWARDS_TASK_NAME,
-        path=_get_path(issue_voucher),
+        path=_get_path(issue_reward),
         queue_name="carina:default",
         error_handler_path=_get_path(default_handler),
     )
@@ -237,7 +237,7 @@ def reward_deletion_task_type(db_session: "Session") -> TaskType:
 def reward_cancellation_task_type(db_session: "Session") -> TaskType:
     task = TaskType(
         name=settings.CANCEL_REWARDS_TASK_NAME,
-        path=_get_path(issue_voucher),
+        path=_get_path(issue_reward),
         queue_name="carina:default",
         error_handler_path=_get_path(handle_retry_task_request_error),
     )

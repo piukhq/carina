@@ -1,1 +1,1 @@
-from .voucher import *
+from .reward import *

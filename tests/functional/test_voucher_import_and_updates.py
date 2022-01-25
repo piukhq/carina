@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 
-def _get_voucher_update_rows(db_session: "Session", voucher_codes: List[str]) -> List[VoucherUpdate]:
+def _get_reward_update_rows(db_session: "Session", voucher_codes: List[str]) -> List[VoucherUpdate]:
     reward_updates = (
         db_session.execute(select(VoucherUpdate).join(Voucher).where(Voucher.voucher_code.in_(voucher_codes)))
         .scalars()
@@ -40,7 +40,7 @@ def _get_voucher_update_rows(db_session: "Session", voucher_codes: List[str]) ->
     return reward_updates
 
 
-def _get_voucher_rows(db_session: "Session") -> List[Voucher]:
+def _get_reward_rows(db_session: "Session") -> List[Voucher]:
     return db_session.execute(select(Voucher)).scalars().all()
 
 
@@ -60,7 +60,7 @@ def test_import_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> N
     voucher_agent = RewardImportAgent()
     eligible_voucher_codes = ["voucher1", "voucher2", "voucher3"]
 
-    vouchers = _get_voucher_rows(db_session)
+    vouchers = _get_reward_rows(db_session)
     assert len(vouchers) == 1
     assert vouchers[0] == pre_existing_voucher
 
@@ -75,7 +75,7 @@ def test_import_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> N
         db_session=db_session,
     )
 
-    vouchers = _get_voucher_rows(db_session)
+    vouchers = _get_reward_rows(db_session)
     assert len(vouchers) == 4
     assert all(v in [voucher.voucher_code for voucher in vouchers] for v in eligible_voucher_codes)
     # We should be sentry warned about the existing token
@@ -127,7 +127,7 @@ def test_import_agent__process_csv_soft_deleted(
         db_session=db_session,
     )
 
-    vouchers = _get_voucher_rows(db_session)
+    vouchers = _get_reward_rows(db_session)
     assert len(vouchers) == 5
     assert all(v in [voucher.voucher_code for voucher in vouchers] for v in eligible_voucher_codes)
     assert capture_message_spy.call_count == 0  # All vouchers should import OK
@@ -169,7 +169,7 @@ def test_import_agent__process_csv_not_soft_deleted(
         db_session=db_session,
     )
 
-    vouchers = _get_voucher_rows(db_session)
+    vouchers = _get_reward_rows(db_session)
     assert len(vouchers) == 4
     assert all(v in [voucher.voucher_code for voucher in vouchers] for v in eligible_voucher_codes)
     # We should be sentry warned about the existing token
@@ -213,7 +213,7 @@ def test_import_agent__process_csv_same_voucher_type_slug_not_soft_deleted(
         db_session=db_session,
     )
 
-    vouchers = _get_voucher_rows(db_session)
+    vouchers = _get_reward_rows(db_session)
     assert len(vouchers) == 4
     assert all(v in [voucher.voucher_code for voucher in vouchers] for v in eligible_voucher_codes)
     # We should be sentry warned about the existing token
@@ -422,7 +422,7 @@ def test_updates_agent__process_updates(setup: SetupType, mocker: MockerFixture)
         blob_name=blob_name,
         db_session=db_session,
     )
-    voucher_update_rows = _get_voucher_update_rows(db_session, [voucher.voucher_code])
+    voucher_update_rows = _get_reward_update_rows(db_session, [voucher.voucher_code])
 
     assert len(voucher_update_rows) == 1
     assert voucher_update_rows[0].voucher_id == voucher.id
@@ -465,7 +465,7 @@ def test_updates_agent__process_updates_voucher_code_not_allocated(setup: SetupT
         reward_update_rows_by_code=reward_update_rows_by_code,
         blob_name=blob_name,
     )
-    voucher_update_rows = _get_voucher_update_rows(db_session, [voucher.voucher_code])
+    voucher_update_rows = _get_reward_update_rows(db_session, [voucher.voucher_code])
 
     # THEN
     assert capture_message_spy.call_count == 1  # Errors should all be rolled up in to a single call
@@ -505,7 +505,7 @@ def test_updates_agent__process_updates_voucher_code_does_not_exist(setup: Setup
         blob_name=blob_name,
         db_session=db_session,
     )
-    voucher_update_rows = _get_voucher_update_rows(db_session, [bad_voucher_code])
+    voucher_update_rows = _get_reward_update_rows(db_session, [bad_voucher_code])
 
     # THEN
     assert capture_message_spy.call_count == 1  # Errors should all be rolled up in to a single call
