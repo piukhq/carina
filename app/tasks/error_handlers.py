@@ -54,7 +54,7 @@ def handle_retry_task_request_error(
 # NOTE: Inter-dependency: If this function's name or module changes, ensure that
 # it is relevantly reflected in the TaskType table
 @log_internal_exception
-def handle_issue_voucher_request_error(
+def handle_issue_reward_request_error(
     job: rq.job.Job, exc_type: type, exc_value: Exception, traceback: "Traceback"
 ) -> None:
     with SyncSessionMaker() as db_session:
