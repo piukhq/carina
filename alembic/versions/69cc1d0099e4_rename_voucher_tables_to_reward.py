@@ -16,6 +16,21 @@ branch_labels = None
 depends_on = None
 
 
+task_type_name = "reward-issuance"
+changes = [
+    ("voucher_config_id", "reward_config_id"),
+    ("voucher_type_slug", "reward_slug"),
+    ("voucher_id", "reward_uuid"),
+    ("voucher_code", "code"),
+]
+
+
+def update_naming(current, new_name):
+    op.execute(
+        f"UPDATE task_type_key SET name = '{new_name}' FROM task_type WHERE task_type.name = '{task_type_name}' AND task_type_key.task_type_id = task_type.task_type_id AND task_type_key.name = '{current}'"
+    )
+
+
 def upgrade():
     conn = op.get_bind()
     existing_metadata = sa.schema.MetaData()
@@ -161,18 +176,8 @@ def upgrade():
     op.execute(f"ALTER SEQUENCE {old_voucher_file_log_table}_id_seq RENAME TO {new_reward_file_log_table}_id_seq;")
 
     # Update reward-issuance task fields, this depends on the task params being changed so putting it here
-    op.execute(
-        "UPDATE task_type_key SET name = 'reward_config_id' from task_type where task_type.name = 'reward-issuance' and task_type_key.task_type_id = task_type.task_type_id and task_type_key.name = 'voucher_config_id'"
-    )
-    op.execute(
-        "UPDATE task_type_key SET name = 'reward_slug' from task_type where task_type.name = 'reward-issuance' and task_type_key.task_type_id = task_type.task_type_id and task_type_key.name = 'voucher_type_slug'"
-    )
-    op.execute(
-        "UPDATE task_type_key SET name = 'reward_uuid' from task_type where task_type.name = 'reward-issuance' and task_type_key.task_type_id = task_type.task_type_id and task_type_key.name = 'voucher_id'"
-    )
-    op.execute(
-        "UPDATE task_type_key SET name = 'code' from task_type where task_type.name = 'reward-issuance' and task_type_key.task_type_id = task_type.task_type_id and task_type_key.name = 'voucher_code'"
-    )
+    for old_key, new_key in changes:
+        update_naming(old_key, new_key)
 
     # Update reward-status-adjustment field
     op.execute(
@@ -329,18 +334,8 @@ def downgrade():
     op.execute(f"ALTER SEQUENCE {old_reward_file_log_table}_id_seq RENAME TO {new_voucher_file_log_table}_id_seq;")
 
     # Update voucher-issuance task fields, this depends on the task params being changed so putting it here
-    op.execute(
-        "UPDATE task_type_key SET name = 'voucher_config_id' from task_type where task_type.name = 'reward-issuance' and task_type_key.task_type_id = task_type.task_type_id and task_type_key.name = 'reward_config_id'"
-    )
-    op.execute(
-        "UPDATE task_type_key SET name = 'voucher_type_slug' from task_type where task_type.name = 'reward-issuance' and task_type_key.task_type_id = task_type.task_type_id and task_type_key.name = 'reward_slug'"
-    )
-    op.execute(
-        "UPDATE task_type_key SET name = 'voucher_id' from task_type where task_type.name = 'reward-issuance' and task_type_key.task_type_id = task_type.task_type_id and task_type_key.name = 'reward_uuid'"
-    )
-    op.execute(
-        "UPDATE task_type_key SET name = 'voucher_code' from task_type where task_type.name = 'reward-issuance' and task_type_key.task_type_id = task_type.task_type_id and task_type_key.name = 'code'"
-    )
+    for old_key, new_key in changes:
+        update_naming(new_key, old_key)
 
     # Update voucher-status-adjustment field
     op.execute(
