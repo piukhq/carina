@@ -25,7 +25,7 @@ changes = [
 ]
 
 
-def update_naming(current, new_name):
+def update_issuance_task_type_keys(current, new_name):
     op.execute(
         f"UPDATE task_type_key SET name = '{new_name}' FROM task_type WHERE task_type.name = '{task_type_name}' AND task_type_key.task_type_id = task_type.task_type_id AND task_type_key.name = '{current}'"
     )
@@ -177,7 +177,7 @@ def upgrade():
 
     # Update reward-issuance task fields, this depends on the task params being changed so putting it here
     for old_key, new_key in changes:
-        update_naming(old_key, new_key)
+        update_issuance_task_type_keys(old_key, new_key)
 
     # Update reward-status-adjustment field
     op.execute(
@@ -186,7 +186,7 @@ def upgrade():
 
     # Update error handler path
     op.execute(
-        "UPDATE task_type SET error_handler_path = 'app.tasks.error_handlers.handle_issue_reward_request_error' WHERE error_handler_path = 'app.tasks.error_handlers.handle_issue_voucher_request_error'"
+        "UPDATE task_type SET error_handler_path = 'app.tasks.error_handlers.handle_issue_reward_request_error' WHERE error_handler_path = 'app.tasks.error_handlers.handle_issue_voucher_request_error' AND name = 'reward-issuance'"
     )
 
 
@@ -335,7 +335,7 @@ def downgrade():
 
     # Update voucher-issuance task fields, this depends on the task params being changed so putting it here
     for old_key, new_key in changes:
-        update_naming(new_key, old_key)
+        update_issuance_task_type_keys(new_key, old_key)
 
     # Update voucher-status-adjustment field
     op.execute(
@@ -344,5 +344,5 @@ def downgrade():
 
     # Update error handler path
     op.execute(
-        "UPDATE task_type SET error_handler_path = 'app.tasks.error_handlers.handle_issue_voucher_request_error' WHERE error_handler_path = 'app.tasks.error_handlers.handle_issue_reward_request_error'"
+        "UPDATE task_type SET error_handler_path = 'app.tasks.error_handlers.handle_issue_voucher_request_error' WHERE error_handler_path = 'app.tasks.error_handlers.handle_issue_reward_request_error' AND name = 'reward-issuance'"
     )
