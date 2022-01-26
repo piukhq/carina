@@ -13,15 +13,15 @@ from app.core.config import settings
 from app.db.base import Base
 from app.db.session import SyncSessionMaker, sync_engine
 from app.enums import RewardTypeStatuses
-from app.models import Voucher, VoucherConfig
+from app.models import Reward, RewardConfig
 from app.tasks.error_handlers import default_handler, handle_retry_task_request_error
-from app.tasks.issuance import issue_voucher
+from app.tasks.issuance import issue_reward
 from app.tasks.status_adjustment import status_adjustment
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-SetupType = namedtuple("SetupType", ["db_session", "voucher_config", "voucher"])
+SetupType = namedtuple("SetupType", ["db_session", "reward_config", "reward"])
 
 # Top-level conftest for tests, doing things like setting up DB
 
@@ -73,14 +73,14 @@ def setup_tables() -> Generator:
 
 
 @pytest.fixture(scope="function")
-def setup(db_session: "Session", voucher_config: VoucherConfig, voucher: Voucher) -> Generator[SetupType, None, None]:
-    yield SetupType(db_session, voucher_config, voucher)
+def setup(db_session: "Session", reward_config: RewardConfig, reward: Reward) -> Generator[SetupType, None, None]:
+    yield SetupType(db_session, reward_config, reward)
 
 
 @pytest.fixture(scope="function")
-def voucher_config(db_session: "Session") -> VoucherConfig:
-    config = VoucherConfig(
-        voucher_type_slug="test-reward",
+def reward_config(db_session: "Session") -> RewardConfig:
+    config = RewardConfig(
+        reward_slug="test-reward",
         validity_days=15,
         retailer_slug="test-retailer",
         status=RewardTypeStatuses.ACTIVE,
@@ -91,55 +91,55 @@ def voucher_config(db_session: "Session") -> VoucherConfig:
 
 
 @pytest.fixture(scope="function")
-def voucher(db_session: "Session", voucher_config: VoucherConfig) -> Voucher:
-    vc = Voucher(
-        voucher_code="TSTCD1234",
-        retailer_slug=voucher_config.retailer_slug,
-        voucher_config=voucher_config,
+def reward(db_session: "Session", reward_config: RewardConfig) -> Reward:
+    rc = Reward(
+        code="TSTCD1234",
+        retailer_slug=reward_config.retailer_slug,
+        reward_config=reward_config,
     )
-    db_session.add(vc)
+    db_session.add(rc)
     db_session.commit()
-    return vc
+    return rc
 
 
 @pytest.fixture(scope="function")
-def create_voucher(db_session: "Session", voucher_config: VoucherConfig) -> Callable:
-    def _create_voucher(**voucher_params: dict) -> Voucher:
+def create_reward(db_session: "Session", reward_config: RewardConfig) -> Callable:
+    def _create_reward(**reward_params: dict) -> Reward:
         """
-        Create a voucher in the test DB
-        :param voucher_params: override any default values for the voucher
+        Create a reward in the test DB
+        :param reward_params: override any default values for the reward
         :return: Callable function
         """
-        mock_voucher_params = {
-            "voucher_code": "TSTCD1234",
-            "retailer_slug": voucher_config.retailer_slug,
-            "voucher_config": voucher_config,
+        mock_reward_params = {
+            "code": "TSTCD1234",
+            "retailer_slug": reward_config.retailer_slug,
+            "reward_config": reward_config,
         }
 
-        mock_voucher_params.update(voucher_params)
-        voucher = Voucher(**mock_voucher_params)
-        db_session.add(voucher)
+        mock_reward_params.update(reward_params)
+        reward = Reward(**mock_reward_params)
+        db_session.add(reward)
         db_session.commit()
 
-        return voucher
+        return reward
 
-    return _create_voucher
+    return _create_reward
 
 
 @pytest.fixture()
-def create_vouchers(db_session: "Session", voucher_config: VoucherConfig) -> Callable:
-    def fn(override_datas: list[dict]) -> dict[str, Voucher]:
+def create_rewards(db_session: "Session", reward_config: RewardConfig) -> Callable:
+    def fn(override_datas: list[dict]) -> dict[str, Reward]:
         reward_data = {
-            "voucher_code": str(uuid.uuid4()),
+            "code": str(uuid.uuid4()),
             "deleted": False,
             "allocated": False,
-            "voucher_config_id": voucher_config.id,
-            "retailer_slug": voucher_config.retailer_slug,
+            "reward_config_id": reward_config.id,
+            "retailer_slug": reward_config.retailer_slug,
         }
-        vouchers = [Voucher(**reward_data | override_data) for override_data in override_datas]
-        db_session.add_all(vouchers)
+        rewards = [Reward(**reward_data | override_data) for override_data in override_datas]
+        db_session.add_all(rewards)
         db_session.commit()
-        return {voucher.voucher_code: voucher for voucher in vouchers}
+        return {reward.code: reward for reward in rewards}
 
     return fn
 
@@ -151,10 +151,10 @@ def capture() -> Generator:
 
 
 @pytest.fixture(scope="function")
-def voucher_issuance_task_type(db_session: "Session") -> TaskType:
+def reward_issuance_task_type(db_session: "Session") -> TaskType:
     task = TaskType(
-        name=settings.VOUCHER_ISSUANCE_TASK_NAME,
-        path=_get_path(issue_voucher),
+        name=settings.REWARD_ISSUANCE_TASK_NAME,
+        path=_get_path(issue_reward),
         queue_name="carina:default",
         error_handler_path=_get_path(handle_retry_task_request_error),
     )
@@ -168,10 +168,10 @@ def voucher_issuance_task_type(db_session: "Session") -> TaskType:
                 ("account_url", "STRING"),
                 ("issued_date", "FLOAT"),
                 ("expiry_date", "FLOAT"),
-                ("voucher_config_id", "INTEGER"),
-                ("voucher_type_slug", "STRING"),
-                ("voucher_id", "STRING"),
-                ("voucher_code", "STRING"),
+                ("reward_config_id", "INTEGER"),
+                ("reward_slug", "STRING"),
+                ("reward_uuid", "STRING"),
+                ("code", "STRING"),
                 ("idempotency_token", "STRING"),
             )
         ]
@@ -182,7 +182,7 @@ def voucher_issuance_task_type(db_session: "Session") -> TaskType:
 
 
 @pytest.fixture(scope="function")
-def voucher_status_adjustment_task_type(db_session: "Session") -> TaskType:
+def reward_status_adjustment_task_type(db_session: "Session") -> TaskType:
     task = TaskType(
         name=settings.REWARD_STATUS_ADJUSTMENT_TASK_NAME,
         path=_get_path(status_adjustment),
@@ -196,7 +196,7 @@ def voucher_status_adjustment_task_type(db_session: "Session") -> TaskType:
         [
             TaskTypeKey(task_type_id=task.task_type_id, name=key_name, type=key_type)
             for key_name, key_type in (
-                ("voucher_id", "STRING"),
+                ("reward_uuid", "STRING"),
                 ("retailer_slug", "STRING"),
                 ("date", "FLOAT"),
                 ("status", "STRING"),
@@ -212,7 +212,7 @@ def voucher_status_adjustment_task_type(db_session: "Session") -> TaskType:
 def reward_deletion_task_type(db_session: "Session") -> TaskType:
     task = TaskType(
         name=settings.DELETE_UNALLOCATED_REWARDS_TASK_NAME,
-        path=_get_path(issue_voucher),
+        path=_get_path(issue_reward),
         queue_name="carina:default",
         error_handler_path=_get_path(default_handler),
     )
@@ -237,7 +237,7 @@ def reward_deletion_task_type(db_session: "Session") -> TaskType:
 def reward_cancellation_task_type(db_session: "Session") -> TaskType:
     task = TaskType(
         name=settings.CANCEL_REWARDS_TASK_NAME,
-        path=_get_path(issue_voucher),
+        path=_get_path(issue_reward),
         queue_name="carina:default",
         error_handler_path=_get_path(handle_retry_task_request_error),
     )

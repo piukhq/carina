@@ -9,7 +9,6 @@ import sqlalchemy as sa
 
 from alembic import op
 from app.core.config import settings
-from app.tasks.issuance import issue_voucher
 
 # revision identifiers, used by Alembic.
 revision = "be271e924073"
@@ -21,8 +20,8 @@ depends_on = None
 def upgrade() -> None:
     op.get_bind().execute(
         sa.text("UPDATE task_type SET path = :action_path WHERE name = :task_name"),
-        action_path=issue_voucher.__module__ + "." + issue_voucher.__name__,
-        task_name=settings.VOUCHER_ISSUANCE_TASK_NAME,
+        action_path="app.tasks.issuance.issue_voucher",
+        task_name="voucher-issuance",
     )
 
 
@@ -30,5 +29,5 @@ def downgrade() -> None:
     op.get_bind().execute(
         sa.text("UPDATE task_type SET path = :action_path WHERE name = :task_name"),
         action_path="app.tasks.allocation.issue_voucher",
-        task_name=settings.VOUCHER_ISSUANCE_TASK_NAME,
+        task_name="voucher-issuance",
     )

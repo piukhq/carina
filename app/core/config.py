@@ -40,7 +40,7 @@ class LogLevel(str):
 
 
 class Settings(BaseSettings):
-    API_PREFIX: str = "/bpl/rewards"
+    API_PREFIX: str = "/bpl/vouchers"
     TESTING: bool = False
     SQL_DEBUG: bool = False
     METRICS_DEBUG: bool = False
@@ -102,7 +102,7 @@ class Settings(BaseSettings):
             return KeyVault(
                 values["KEY_VAULT_URI"],
                 values["TESTING"] or values["MIGRATING"],
-            ).get_secret("bpl-voucher-mgmt-auth-token")
+            ).get_secret("bpl-reward-mgmt-auth-token")
         else:
             raise KeyError("required var KEY_VAULT_URI is not set.")
 
@@ -193,11 +193,11 @@ class Settings(BaseSettings):
     # The prefix used on every Redis key.
     REDIS_KEY_PREFIX = "carinarewards"
 
-    VOUCHER_ISSUANCE_TASK_NAME = "voucher-issuance"
+    REWARD_ISSUANCE_TASK_NAME = "reward-issuance"
     CANCEL_REWARDS_TASK_NAME = "cancel-rewards"
     DELETE_UNALLOCATED_REWARDS_TASK_NAME = "delete-unallocated-rewards"
 
-    VOUCHER_ISSUANCE_REQUEUE_BACKOFF_SECONDS: int = 60 * 60 * 12  # 12 hours
+    REWARD_ISSUANCE_REQUEUE_BACKOFF_SECONDS: int = 60 * 60 * 12  # 12 hours
     REWARD_STATUS_ADJUSTMENT_TASK_NAME = "reward-status-adjustment"
 
     TASK_MAX_RETRIES: int = 6

@@ -1,1 +1,1 @@
-from .voucher import Voucher, VoucherConfig, VoucherFileLog, VoucherUpdate
+from .reward import Reward, RewardConfig, RewardFileLog, RewardUpdate

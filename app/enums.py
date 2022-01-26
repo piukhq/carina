@@ -51,7 +51,7 @@ class RewardUpdateStatuses(Enum):
     REDEEMED = "redeemed"
 
 
-class VoucherFetchType(Enum):
+class RewardFetchType(Enum):
     PRE_LOADED = "pre_loaded"
 
 

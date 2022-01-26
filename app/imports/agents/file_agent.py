@@ -25,7 +25,7 @@ from app.core.config import redis, settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
 from app.enums import FileAgentType, RewardUpdateStatuses
-from app.models import Voucher, VoucherConfig, VoucherFileLog, VoucherUpdate
+from app.models import Reward, RewardConfig, RewardFileLog, RewardUpdate
 from app.scheduler import CronScheduler
 from app.schemas import RewardUpdateSchema
 
@@ -65,9 +65,9 @@ class BlobFileAgent:
     def _blob_name_is_duplicate(self, db_session: "Session", file_name: str) -> bool:
         file_name = sync_run_query(
             lambda: db_session.execute(
-                select(VoucherFileLog.file_name).where(
-                    VoucherFileLog.file_agent_type == self.file_agent_type,  # type: ignore
-                    VoucherFileLog.file_name == file_name,
+                select(RewardFileLog.file_name).where(
+                    RewardFileLog.file_agent_type == self.file_agent_type,  # type: ignore
+                    RewardFileLog.file_name == file_name,
                 )
             ).scalar_one_or_none(),
             db_session,
@@ -82,7 +82,7 @@ class BlobFileAgent:
 
     def retailer_slugs(self, db_session: "Session") -> list[str]:
         return sync_run_query(
-            lambda: db_session.execute(select(VoucherConfig.retailer_slug).distinct()).scalars().all(), db_session
+            lambda: db_session.execute(select(RewardConfig.retailer_slug).distinct()).scalars().all(), db_session
         )
 
     def process_csv(
@@ -189,7 +189,7 @@ class BlobFileAgent:
 
                 def add_reward_file_log() -> None:
                     db_session.add(
-                        VoucherFileLog(
+                        RewardFileLog(
                             file_name=blob.name,
                             file_agent_type=self.file_agent_type,  # type: ignore
                         )
@@ -208,14 +208,14 @@ class RewardImportAgent(BlobFileAgent):
         self.file_agent_type = FileAgentType.IMPORT
 
     @lru_cache()
-    def reward_configs_by_reward_slug(self, retailer_slug: str, db_session: "Session") -> dict[str, VoucherConfig]:
-        voucher_configs = sync_run_query(
-            lambda: db_session.execute(select(VoucherConfig).where(VoucherConfig.retailer_slug == retailer_slug))
+    def reward_configs_by_reward_slug(self, retailer_slug: str, db_session: "Session") -> dict[str, RewardConfig]:
+        reward_configs = sync_run_query(
+            lambda: db_session.execute(select(RewardConfig).where(RewardConfig.retailer_slug == retailer_slug))
             .scalars()
             .all(),
             db_session,
         )
-        return {voucher_config.voucher_type_slug: voucher_config for voucher_config in voucher_configs}
+        return {reward_config.reward_slug: reward_config for reward_config in reward_configs}
 
     def _report_pre_existing_codes(
         self, pre_existing_reward_codes: list[str], row_nums_by_code: dict[str, list[int]], blob_name: str
@@ -241,7 +241,7 @@ class RewardImportAgent(BlobFileAgent):
             raise BlobProcessingError(f"No reward_slug path section found ({ex})")
 
         try:
-            voucher_config = self.reward_configs_by_reward_slug(retailer_slug, db_session)[reward_slug]
+            reward_config = self.reward_configs_by_reward_slug(retailer_slug, db_session)[reward_slug]
         except KeyError:
             raise BlobProcessingError(f"No RewardConfig found for reward_slug {reward_slug}")
 
@@ -257,15 +257,15 @@ class RewardImportAgent(BlobFileAgent):
 
         db_reward_codes = sync_run_query(
             lambda: db_session.execute(
-                select(Voucher.voucher_code).where(
+                select(Reward.code).where(
                     or_(
                         and_(
-                            Voucher.voucher_code.in_(row_nums_by_code.keys()),
-                            Voucher.retailer_slug == retailer_slug,
-                            Voucher.voucher_config_id == voucher_config.id,
+                            Reward.code.in_(row_nums_by_code.keys()),
+                            Reward.retailer_slug == retailer_slug,
+                            Reward.reward_config_id == reward_config.id,
                         ),
-                        and_(Voucher.voucher_config_id != voucher_config.id, not_(Voucher.deleted)),
-                        and_(Voucher.voucher_config_id == voucher_config.id, Voucher.deleted),
+                        and_(Reward.reward_config_id != reward_config.id, not_(Reward.deleted)),
+                        and_(Reward.reward_config_id == reward_config.id, Reward.deleted),
                     )
                 )
             )
@@ -282,14 +282,14 @@ class RewardImportAgent(BlobFileAgent):
             for pre_existing_code in pre_existing_reward_codes:
                 row_nums_by_code.pop(pre_existing_code)
 
-        new_rewards: list[Voucher] = [
-            Voucher(
-                voucher_code=voucher_code,
-                voucher_config_id=voucher_config.id,
+        new_rewards: list[Reward] = [
+            Reward(
+                code=code,
+                reward_config_id=reward_config.id,
                 retailer_slug=retailer_slug,
             )
-            for voucher_code in set(row_nums_by_code)
-            if voucher_code  # caters for blank lines
+            for code in set(row_nums_by_code)
+            if code  # caters for blank lines
         ]
 
         def add_new_rewards() -> None:
@@ -385,8 +385,8 @@ class RewardUpdatesAgent(BlobFileAgent):
                 update_rows.extend(rows)
 
             db_session.execute(
-                update(Voucher)
-                .where(Voucher.voucher_code.in_(unallocated_reward_codes), Voucher.retailer_slug == retailer_slug)
+                update(Reward)
+                .where(Reward.code.in_(unallocated_reward_codes), Reward.retailer_slug == retailer_slug)
                 .values(deleted=True)
             )
             msg = f"Unallocated reward codes found while processing {blob_name}:\n" + "\n".join(
@@ -412,9 +412,9 @@ class RewardUpdatesAgent(BlobFileAgent):
 
         reward_datas = sync_run_query(
             lambda: db_session.execute(
-                select(Voucher.id, Voucher.voucher_code, Voucher.allocated)
+                select(Reward.id, Reward.code, Reward.allocated)
                 .with_for_update()
-                .where(Voucher.voucher_code.in_(reward_codes_in_file), Voucher.retailer_slug == retailer_slug)
+                .where(Reward.code.in_(reward_codes_in_file), Reward.retailer_slug == retailer_slug)
             )
             .mappings()
             .all(),
@@ -423,7 +423,7 @@ class RewardUpdatesAgent(BlobFileAgent):
         # Provides a dict in the following format:
         # {'<code>': {'id': 'f2c44cf7-9d0f-45d0-b199-44a3c8b72db3', 'allocated': True}}
         db_reward_data_by_code: dict[str, dict[str, Union[str, bool]]] = {
-            reward_data["voucher_code"]: {"id": str(reward_data["id"]), "allocated": reward_data["allocated"]}
+            reward_data["code"]: {"id": str(reward_data["id"]), "allocated": reward_data["allocated"]}
             for reward_data in reward_datas
         }
 
@@ -442,8 +442,8 @@ class RewardUpdatesAgent(BlobFileAgent):
         for code, reward_update_rows in reward_update_rows_by_code.items():
             reward_updates.extend(
                 [
-                    VoucherUpdate(
-                        voucher_id=uuid.UUID(cast(str, db_reward_data_by_code[code]["id"])),
+                    RewardUpdate(
+                        reward_uuid=uuid.UUID(cast(str, db_reward_data_by_code[code]["id"])),
                         date=reward_update_row.data.date,
                         status=reward_update_row.data.status,
                     )
@@ -459,7 +459,7 @@ class RewardUpdatesAgent(BlobFileAgent):
         self.enqueue_reward_updates(db_session, reward_updates)
 
     @staticmethod
-    def enqueue_reward_updates(db_session: "Session", reward_updates: list[VoucherUpdate]) -> None:
+    def enqueue_reward_updates(db_session: "Session", reward_updates: list[RewardUpdate]) -> None:
         def _commit() -> None:
             db_session.commit()
 
@@ -468,8 +468,8 @@ class RewardUpdatesAgent(BlobFileAgent):
 
         params_list = [
             {
-                "voucher_id": reward_update.voucher.id,
-                "retailer_slug": reward_update.voucher.retailer_slug,
+                "reward_uuid": reward_update.reward.id,
+                "retailer_slug": reward_update.reward.retailer_slug,
                 "date": datetime.fromisoformat(reward_update.date.isoformat()).timestamp(),
                 "status": reward_update.status.value,
             }
