@@ -26,7 +26,7 @@ def _process_rewards_cancellation(task_params: dict) -> dict:
             retailer_slug=task_params["retailer_slug"],
             reward_slug=task_params["reward_slug"],
         ),
-        headers={"Authorization": f"Token {settings.POLARIS_AUTH_TOKEN}"},
+        headers={"Authorization": f"Token {settings.POLARIS_API_AUTH_TOKEN}"},
         timeout=(3.03, 10),
     )
     resp.raise_for_status()

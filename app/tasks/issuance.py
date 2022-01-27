@@ -41,7 +41,7 @@ def _process_issuance(task_params: dict) -> dict:
             "reward_uuid": task_params["reward_uuid"],
         },
         headers={
-            "Authorization": f"Token {settings.POLARIS_AUTH_TOKEN}",
+            "Authorization": f"Token {settings.POLARIS_API_AUTH_TOKEN}",
             "Idempotency-Token": task_params["idempotency_token"],
         },
         timeout=(3.03, 10),

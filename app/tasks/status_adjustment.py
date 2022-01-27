@@ -30,7 +30,7 @@ def _process_status_adjustment(task_params: dict) -> dict:
             "status": task_params["status"],
             "date": task_params["date"],
         },
-        headers={"Authorization": f"Token {settings.POLARIS_AUTH_TOKEN}"},
+        headers={"Authorization": f"Token {settings.POLARIS_API_AUTH_TOKEN}"},
         timeout=(3.03, 10),
     )
     resp.raise_for_status()
