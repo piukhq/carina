@@ -106,10 +106,10 @@ class Settings(BaseSettings):
         else:
             raise KeyError("required var KEY_VAULT_URI is not set.")
 
-    POLARIS_AUTH_TOKEN: Optional[str] = None
+    POLARIS_API_AUTH_TOKEN: Optional[str] = None
 
-    @validator("POLARIS_AUTH_TOKEN")
-    def fetch_polaris_auth_token(cls, v: Optional[str], values: dict[str, Any]) -> Any:
+    @validator("POLARIS_API_AUTH_TOKEN")
+    def fetch_polaris_api_auth_token(cls, v: Optional[str], values: dict[str, Any]) -> Any:
         if isinstance(v, str) and not values["TESTING"]:
             return v
 
@@ -117,7 +117,7 @@ class Settings(BaseSettings):
             return KeyVault(
                 values["KEY_VAULT_URI"],
                 values["TESTING"] or values["MIGRATING"],
-            ).get_secret("bpl-customer-mgmt-auth-token")
+            ).get_secret("bpl-polaris-api-auth-token")
         else:
             raise KeyError("required var KEY_VAULT_URI is not set.")
 
