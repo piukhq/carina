@@ -91,10 +91,10 @@ class Settings(BaseSettings):
         else:
             raise KeyError("required var KEY_VAULT_URI is not set.")
 
-    CARINA_AUTH_TOKEN: Optional[str] = None
+    CARINA_API_AUTH_TOKEN: Optional[str] = None
 
-    @validator("CARINA_AUTH_TOKEN")
-    def fetch_carina_auth_token(cls, v: Optional[str], values: dict[str, Any]) -> Any:
+    @validator("CARINA_API_AUTH_TOKEN")
+    def fetch_carina_api_auth_token(cls, v: Optional[str], values: dict[str, Any]) -> Any:
         if isinstance(v, str) and not values["TESTING"]:
             return v
 
