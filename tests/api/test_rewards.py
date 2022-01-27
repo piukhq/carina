@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 client = TestClient(app)
-auth_headers = {"Authorization": f"token {settings.CARINA_AUTH_TOKEN}"}
+auth_headers = {"Authorization": f"token {settings.CARINA_API_AUTH_TOKEN}"}
 payload = {"account_url": "http://test.url/"}
 
 

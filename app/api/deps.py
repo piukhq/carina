@@ -28,5 +28,5 @@ def get_authorization_token(authorization: str = Header(None)) -> str:
 
 # user as in user of our api, not an account holder.
 def user_is_authorised(token: str = Depends(get_authorization_token)) -> None:
-    if not token == settings.CARINA_AUTH_TOKEN:
+    if not token == settings.CARINA_API_AUTH_TOKEN:
         raise HttpErrors.INVALID_TOKEN.value
