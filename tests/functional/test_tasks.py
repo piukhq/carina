@@ -1,6 +1,6 @@
 import json
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable
 from unittest import mock
 
@@ -24,7 +24,7 @@ from app.tasks.reward_cancellation import cancel_rewards
 from app.tasks.reward_deletion import delete_unallocated_rewards
 from app.tasks.status_adjustment import _process_status_adjustment, status_adjustment
 
-fake_now = datetime.utcnow()
+fake_now = datetime.now(tz=timezone.utc)
 
 
 @httpretty.activate
@@ -33,7 +33,7 @@ def test__process_issuance_ok(
     mock_datetime: mock.Mock, reward_issuance_task_params: dict, issuance_expected_payload: dict
 ) -> None:
 
-    mock_datetime.utcnow.return_value = fake_now
+    mock_datetime.now.return_value = fake_now
     httpretty.register_uri("POST", reward_issuance_task_params["account_url"], body="OK", status=200)
 
     response_audit = _process_issuance(reward_issuance_task_params)
@@ -240,7 +240,7 @@ def test__process_status_adjustment_ok(
     adjustment_url: str,
 ) -> None:
 
-    mock_datetime.utcnow.return_value = fake_now
+    mock_datetime.now.return_value = fake_now
     mock_datetime.fromisoformat = datetime.fromisoformat
 
     httpretty.register_uri("PATCH", adjustment_url, body="OK", status=200)
@@ -361,7 +361,7 @@ def test_delete_unallocated_rewards(delete_rewards_retry_task: RetryTask, db_ses
 @httpretty.activate
 @mock.patch("app.tasks.reward_cancellation.datetime")
 def test_cancel_reward(mock_datetime: mock.Mock, db_session: Session, cancel_rewards_retry_task: RetryTask) -> None:
-    mock_datetime.utcnow.return_value = fake_now
+    mock_datetime.now.return_value = fake_now
     task_params = cancel_rewards_retry_task.get_params()
     url = "{base_url}/bpl/loyalty/{retailer_slug}/rewards/{reward_slug}/cancel".format(
         base_url=settings.POLARIS_URL,

@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 
 from typing import Literal
 
@@ -25,5 +25,5 @@ class RewardUpdateSchema(BaseModel):  # pragma: no cover
     status: RewardUpdateStatuses
 
     @validator("date")
-    def get_date(cls, v: str) -> datetime.date:
-        return datetime.datetime.strptime(v, "%Y-%m-%d").date()
+    def get_date(cls, v: str) -> dt.date:
+        return dt.datetime.strptime(v, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc).date()

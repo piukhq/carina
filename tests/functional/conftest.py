@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Callable
 from uuid import uuid4
 
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 @pytest.fixture(scope="function")
 def reward_issuance_task_params(reward: Reward) -> dict:
-    now = datetime.utcnow()
+    now = datetime.now(tz=timezone.utc)
     return {
         "account_url": "http://test.url/",
         "reward_uuid": str(reward.id),
@@ -33,7 +33,7 @@ def reward_issuance_task_params(reward: Reward) -> dict:
 
 @pytest.fixture(scope="function")
 def reward_issuance_task_params_no_reward(reward_config: RewardConfig) -> dict:
-    now = datetime.utcnow()
+    now = datetime.now(tz=timezone.utc)
     return {
         "account_url": "http://test.url/",
         "issued_date": str(now.timestamp()),
@@ -105,7 +105,7 @@ def issuance_expected_payload(reward_issuance_task_params: dict) -> dict:
 def reward_update(db_session: "Session", reward: Reward) -> RewardUpdate:
     adjustment = RewardUpdate(
         reward=reward,
-        date=datetime.utcnow().date(),
+        date=datetime.now(tz=timezone.utc).date(),
         status=RewardUpdateStatuses.REDEEMED,
     )
     db_session.add(adjustment)
@@ -118,7 +118,7 @@ def reward_status_adjustment_task_params(reward_update: RewardUpdate) -> dict:
     return {
         "reward_uuid": str(reward_update.reward_uuid),
         "retailer_slug": reward_update.reward.retailer_slug,
-        "date": str(datetime.fromisoformat(reward_update.date.isoformat()).timestamp()),
+        "date": str(datetime.fromisoformat(reward_update.date.isoformat()).replace(tzinfo=timezone.utc).timestamp()),
         "status": reward_update.status.name,
     }
 

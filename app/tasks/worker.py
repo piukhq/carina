@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import click
 import rq
@@ -37,7 +37,7 @@ class RetryTaskWorker(rq.Worker):
         logger.info(f"Updating {task_statuses} metrics ...")
         try:
             with SyncSessionMaker() as db_session:
-                now = datetime.utcnow()
+                now = datetime.now(tz=timezone.utc)
                 res = (
                     db_session.execute(
                         select(TaskType.name, RetryTask.status, func.count(RetryTask.retry_task_id).label("count"))
