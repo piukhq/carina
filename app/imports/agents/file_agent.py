@@ -4,7 +4,7 @@ import string
 import uuid
 
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import lru_cache
 from io import StringIO
 from typing import TYPE_CHECKING, DefaultDict, NamedTuple, Optional, Union, cast
@@ -108,7 +108,7 @@ class BlobFileAgent:
             destination_container,
             dst_blob_name
             if dst_blob_name is not None
-            else f"{datetime.utcnow().strftime('%Y/%m/%d/%H%M')}/{src_blob_client.blob_name}",
+            else f"{datetime.now(tz=timezone.utc).strftime('%Y/%m/%d/%H%M')}/{src_blob_client.blob_name}",
         )
         dst_blob_client.start_copy_from_url(src_blob_client.url)  # Synchronous within the same storage account
         src_blob_client.delete_blob(lease=src_blob_lease)
@@ -470,7 +470,7 @@ class RewardUpdatesAgent(BlobFileAgent):
             {
                 "reward_uuid": reward_update.reward.id,
                 "retailer_slug": reward_update.reward.retailer_slug,
-                "date": datetime.fromisoformat(reward_update.date.isoformat()).timestamp(),
+                "date": datetime.fromisoformat(reward_update.date.isoformat()).replace(tzinfo=timezone.utc).timestamp(),
                 "status": reward_update.status.value,
             }
             for reward_update in reward_updates

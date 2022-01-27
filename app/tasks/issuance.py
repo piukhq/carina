@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Optional
 
 import sentry_sdk
@@ -28,8 +28,7 @@ CODE = "code"
 
 def _process_issuance(task_params: dict) -> dict:
     logger.info(f"Processing allocation for reward: {task_params['reward_uuid']}")
-    timestamp = datetime.utcnow()
-    response_audit: dict = {"timestamp": timestamp.isoformat()}
+    response_audit: dict = {"timestamp": datetime.now(tz=timezone.utc).isoformat()}
 
     resp = send_request_with_metrics(
         "POST",
@@ -181,7 +180,7 @@ def issue_reward(retry_task: RetryTask, db_session: "Session") -> None:
                         f"No Reward Codes Available for RewardConfig: "
                         f"{retry_task.get_params()['reward_config_id']}, "
                         f"reward slug: {retry_task.get_params()['reward_slug']} "
-                        f"on {datetime.utcnow().strftime('%Y-%m-%d')}"
+                        f"on {datetime.now(tz=timezone.utc).strftime('%Y-%m-%d')}"
                     )
                     logger.info(f"Sentry event ID: {event_id}")
 
