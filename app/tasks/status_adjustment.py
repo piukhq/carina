@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from retry_tasks_lib.db.models import RetryTask
@@ -17,8 +17,7 @@ if TYPE_CHECKING:
 
 def _process_status_adjustment(task_params: dict) -> dict:
     logger.info(f"Processing status adjustment for reward: {task_params['reward_uuid']}")
-    timestamp = datetime.utcnow()
-    response_audit: dict = {"timestamp": timestamp.isoformat()}
+    response_audit: dict = {"timestamp": datetime.now(tz=timezone.utc).isoformat()}
 
     resp = send_request_with_metrics(
         "PATCH",
@@ -31,7 +30,7 @@ def _process_status_adjustment(task_params: dict) -> dict:
             "status": task_params["status"],
             "date": task_params["date"],
         },
-        headers={"Authorization": f"Token {settings.POLARIS_AUTH_TOKEN}"},
+        headers={"Authorization": f"Token {settings.POLARIS_API_AUTH_TOKEN}"},
         timeout=(3.03, 10),
     )
     resp.raise_for_status()

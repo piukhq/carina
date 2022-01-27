@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from retry_tasks_lib.db.models import RetryTask
@@ -17,8 +17,7 @@ if TYPE_CHECKING:
 
 def _process_rewards_cancellation(task_params: dict) -> dict:
     logger.info(f"Processing rewards' cancellation for reward type: {task_params['reward_slug']}")
-    timestamp = datetime.utcnow()
-    response_audit: dict = {"timestamp": timestamp.isoformat()}
+    response_audit: dict = {"timestamp": datetime.now(tz=timezone.utc).isoformat()}
 
     resp = send_request_with_metrics(
         "POST",
@@ -27,7 +26,7 @@ def _process_rewards_cancellation(task_params: dict) -> dict:
             retailer_slug=task_params["retailer_slug"],
             reward_slug=task_params["reward_slug"],
         ),
-        headers={"Authorization": f"Token {settings.POLARIS_AUTH_TOKEN}"},
+        headers={"Authorization": f"Token {settings.POLARIS_API_AUTH_TOKEN}"},
         timeout=(3.03, 10),
     )
     resp.raise_for_status()

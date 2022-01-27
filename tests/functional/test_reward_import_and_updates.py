@@ -1,7 +1,7 @@
-import datetime
 import logging
 
 from collections import defaultdict
+from datetime import date, datetime, time, timezone
 from typing import TYPE_CHECKING, Callable, DefaultDict, List
 from unittest import mock
 
@@ -423,7 +423,7 @@ def test_updates_agent__process_updates(setup: SetupType, mocker: MockerFixture)
     assert len(reward_update_rows) == 1
     assert reward_update_rows[0].reward_uuid == reward.id
     assert reward_update_rows[0].status == RewardUpdateStatuses.REDEEMED
-    assert isinstance(reward_update_rows[0].date, datetime.date)
+    assert isinstance(reward_update_rows[0].date, date)
     assert str(reward_update_rows[0].date) == "2021-07-30"
     assert capture_message_spy.call_count == 0  # Should be no errors
     assert mock_enqueue.called
@@ -713,7 +713,7 @@ def test_move_blob(mocker: MockerFixture) -> None:
         mock_src_blob_client,
         src_blob_lease_client,
     )
-    blob = f"{datetime.datetime.utcnow().strftime('%Y/%m/%d/%H%M')}/{blob_name}"
+    blob = f"{datetime.now(tz=timezone.utc).strftime('%Y/%m/%d/%H%M')}/{blob_name}"
 
     # THEN
     blob_service_client.get_blob_client.assert_called_once_with("DESTINATION-CONTAINER", blob)
@@ -731,7 +731,7 @@ def test_enqueue_reward_updates(
     mock_enqueue_many_retry_tasks = mocker.patch("app.imports.agents.file_agent.enqueue_many_retry_tasks")
     mock_redis = mocker.patch("app.imports.agents.file_agent.redis")
 
-    today = datetime.date.today()
+    today = date.today()
     reward_update = RewardUpdate(
         reward=reward,
         date=today,
@@ -743,7 +743,7 @@ def test_enqueue_reward_updates(
         db_session,
         params_list=[
             {
-                "date": datetime.datetime.combine(today, datetime.time(0, 0)).timestamp(),
+                "date": datetime.combine(today, time(0, 0)).replace(tzinfo=timezone.utc).timestamp(),
                 "retailer_slug": "test-retailer",
                 "status": "redeemed",
                 "reward_uuid": reward.id,
@@ -767,7 +767,7 @@ def test_enqueue_reward_updates_exception(
     mock_enqueue_many_retry_tasks = mocker.patch("app.imports.agents.file_agent.enqueue_many_retry_tasks")
     error = redis.RedisError("Fake connection error")
     mock_enqueue_many_retry_tasks.side_effect = error
-    today = datetime.date.today()
+    today = date.today()
 
     reward_update = RewardUpdate(
         reward=reward,
