@@ -15,7 +15,6 @@ import sentry_sdk
 from azure.core.exceptions import HttpResponseError, ResourceExistsError
 from azure.storage.blob import BlobClient, BlobLeaseClient, BlobServiceClient
 from pydantic import ValidationError
-from retry_tasks_lib.enums import RetryTaskStatuses
 from retry_tasks_lib.utils.synchronous import enqueue_many_retry_tasks, sync_create_many_tasks
 from sqlalchemy import update
 from sqlalchemy.future import select
@@ -486,8 +485,6 @@ class RewardUpdatesAgent(BlobFileAgent):
             sentry_sdk.capture_exception(ex)
             sync_run_query(_rollback, db_session, rollback_on_exc=False)
         else:
-            for task in tasks:
-                task.status = RetryTaskStatuses.IN_PROGRESS
             sync_run_query(_commit, db_session, rollback_on_exc=False)
 
 
