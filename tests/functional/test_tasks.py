@@ -342,6 +342,14 @@ def test_delete_unallocated_rewards(delete_rewards_retry_task: RetryTask, db_ses
         retailer_slug=other_config.retailer_slug,
     )
     db_session.add(other_reward)
+
+    allocated_reward = Reward(
+        code="sample-allocated-code",
+        reward_config_id=reward.reward_config_id,
+        retailer_slug=reward.retailer_slug,
+        allocated=True,
+    )
+    db_session.add(allocated_reward)
     db_session.commit()
 
     assert reward.deleted is False
@@ -350,9 +358,11 @@ def test_delete_unallocated_rewards(delete_rewards_retry_task: RetryTask, db_ses
     db_session.refresh(delete_rewards_retry_task)
     db_session.refresh(reward)
     db_session.refresh(other_reward)
+    db_session.refresh(allocated_reward)
 
     assert reward.deleted is True
     assert other_reward.deleted is False
+    assert allocated_reward.deleted is False
     assert delete_rewards_retry_task.next_attempt_time is None
     assert delete_rewards_retry_task.attempts == 1
     assert delete_rewards_retry_task.audit_data == []
