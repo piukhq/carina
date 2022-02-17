@@ -50,7 +50,7 @@ def test_post_reward_allocation_happy_path(
     mocker.patch("app.api.tasks.enqueue_retry_task")
 
     resp = client.post(
-        f"/bpl/vouchers/{reward_config.retailer_slug}/rewards/{reward_config.reward_slug}/allocation",
+        f"/bpl/vouchers/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/allocation",
         json=payload,
         headers=auth_headers,
     )
@@ -88,7 +88,7 @@ def test_post_reward_allocation_wrong_reward_type(setup: SetupType, reward_issua
     db_session, reward_config, _ = setup
 
     resp = client.post(
-        f"/bpl/vouchers/{reward_config.retailer_slug}/rewards/WRONG-TYPE/allocation",
+        f"/bpl/vouchers/{reward_config.retailer.slug}/rewards/WRONG-TYPE/allocation",
         json=payload,
         headers=auth_headers,
     )
@@ -110,7 +110,7 @@ def test_post_reward_allocation_no_more_rewards(
     mocker.patch("app.api.tasks.enqueue_retry_task")
 
     resp = client.post(
-        f"/bpl/vouchers/{reward_config.retailer_slug}/rewards/{reward_config.reward_slug}/allocation",
+        f"/bpl/vouchers/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/allocation",
         json=payload,
         headers=auth_headers,
     )
@@ -141,7 +141,7 @@ def test_reward_type_status_ok(
         db_session.commit()
 
         resp = client.patch(
-            f"/bpl/vouchers/{reward_config.retailer_slug}/rewards/{reward_config.reward_slug}/status",
+            f"/bpl/vouchers/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/status",
             json={"status": transition_status},
             headers=auth_headers,
         )
@@ -172,7 +172,7 @@ def test_reward_type_status_bad_status(setup: SetupType) -> None:
     db_session, reward_config, _ = setup
 
     resp = client.patch(
-        f"/bpl/vouchers/{reward_config.retailer_slug}/rewards/{reward_config.reward_slug}/status",
+        f"/bpl/vouchers/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/status",
         json={"status": "active"},
         headers=auth_headers,
     )
@@ -199,7 +199,7 @@ def test_reward_type_status_reward_type_not_found(setup: SetupType) -> None:
     db_session, reward_config, _ = setup
 
     resp = client.patch(
-        f"/bpl/vouchers/{reward_config.retailer_slug}/rewards/invalid-reward-type/status",
+        f"/bpl/vouchers/{reward_config.retailer.slug}/rewards/invalid-reward-type/status",
         json={"status": "cancelled"},
         headers=auth_headers,
     )
@@ -215,7 +215,7 @@ def test_reward_type_status_wrong_reward_config_status(setup: SetupType) -> None
     db_session.commit()
 
     resp = client.patch(
-        f"/bpl/vouchers/{reward_config.retailer_slug}/rewards/{reward_config.reward_slug}/status",
+        f"/bpl/vouchers/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/status",
         json={"status": "ended"},
         headers=auth_headers,
     )

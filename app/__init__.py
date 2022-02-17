@@ -1,5 +1,3 @@
-import sentry_sdk
-
 from fastapi import FastAPI, status
 from fastapi.exceptions import RequestValidationError
 from fastapi_prometheus_metrics.endpoints import router as metrics_router

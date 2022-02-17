@@ -330,8 +330,9 @@ def test_delete_unallocated_rewards(delete_rewards_retry_task: RetryTask, db_ses
 
     other_config = RewardConfig(
         reward_slug="other-config",
-        validity_days=15,
-        retailer_slug=task_params["retailer_slug"],
+        required_fields_values="validity_days: 15",
+        retailer_id=task_params["retailer_id"],
+        fetch_type_id=reward.reward_config.fetch_type_id,
     )
     db_session.add(other_config)
     db_session.flush()
@@ -339,14 +340,14 @@ def test_delete_unallocated_rewards(delete_rewards_retry_task: RetryTask, db_ses
     other_reward = Reward(
         code="sample-other-code",
         reward_config_id=other_config.id,
-        retailer_slug=other_config.retailer_slug,
+        retailer_id=other_config.retailer_id,
     )
     db_session.add(other_reward)
 
     allocated_reward = Reward(
         code="sample-allocated-code",
         reward_config_id=reward.reward_config_id,
-        retailer_slug=reward.retailer_slug,
+        retailer_id=reward.retailer_id,
         allocated=True,
     )
     db_session.add(allocated_reward)

@@ -9,28 +9,25 @@ from sqlalchemy.future import select
 from app.core.config import settings
 from app.db.base_class import async_run_query
 from app.enums import HttpErrors
-from app.models import Reward, RewardConfig
+from app.models import Retailer, Reward, RewardConfig
 
 
 async def get_reward_config(
     db_session: AsyncSession,
-    retailer_slug: str,
+    retailer: Retailer,
     reward_slug: str,
     for_update: bool = False,
 ) -> RewardConfig:
-    async def _query(by_reward_slug: bool = False) -> List[RewardConfig]:
-        stmt = select(RewardConfig).where(RewardConfig.retailer_slug == retailer_slug)
-        if by_reward_slug:
-            stmt = stmt.where(RewardConfig.reward_slug == reward_slug)
-            if for_update:
-                stmt = stmt.with_for_update()
-        return await db_session.execute(stmt)
+    async def _query() -> List[RewardConfig]:
+        stmt = select(RewardConfig).where(
+            RewardConfig.retailer_id == retailer.id, RewardConfig.reward_slug == reward_slug
+        )
+        if for_update:
+            stmt = stmt.with_for_update()
 
-    retailer_reward_configs = (await async_run_query(_query, db_session)).scalars().all()
-    if not retailer_reward_configs:
-        raise HttpErrors.INVALID_RETAILER.value
+        return (await db_session.execute(stmt)).scalar_one_or_none()
 
-    reward_config = (await async_run_query(_query, db_session, by_reward_slug=True)).scalar_one_or_none()
+    reward_config = await async_run_query(_query, db_session)
     if reward_config is None:
         raise HttpErrors.UNKNOWN_REWARD_SLUG.value
 
@@ -100,17 +97,19 @@ async def create_reward_issuance_retry_task(
 
 
 async def create_delete_and_cancel_rewards_tasks(
-    db_session: AsyncSession, *, retailer_slug: str, reward_slug: str, create_cancel_task: bool
+    db_session: AsyncSession, *, retailer: Retailer, reward_slug: str, create_cancel_task: bool
 ) -> list[int]:
-    task_params = {"retailer_slug": retailer_slug, "reward_slug": reward_slug}
-
     async def _query() -> tuple[RetryTask, Optional[RetryTask]]:
         delete_task: RetryTask = await async_create_task(
-            db_session=db_session, task_type_name=settings.DELETE_UNALLOCATED_REWARDS_TASK_NAME, params=task_params
+            db_session=db_session,
+            task_type_name=settings.DELETE_UNALLOCATED_REWARDS_TASK_NAME,
+            params={"retailer_id": retailer.id, "reward_slug": reward_slug},
         )
         cancel_task: Optional[RetryTask] = (
             await async_create_task(
-                db_session=db_session, task_type_name=settings.CANCEL_REWARDS_TASK_NAME, params=task_params
+                db_session=db_session,
+                task_type_name=settings.CANCEL_REWARDS_TASK_NAME,
+                params={"retailer_slug": retailer.slug, "reward_slug": reward_slug},
             )
             if create_cancel_task is True
             else None
