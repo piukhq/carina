@@ -191,7 +191,7 @@ class Settings(BaseSettings):
     BLOB_IMPORT_LOGGING_LEVEL = logging.WARNING
 
     # The prefix used on every Redis key.
-    REDIS_KEY_PREFIX = "carinarewards"
+    REDIS_KEY_PREFIX = "carina:"
 
     REWARD_ISSUANCE_TASK_NAME = "reward-issuance"
     CANCEL_REWARDS_TASK_NAME = "cancel-rewards"
@@ -291,6 +291,7 @@ redis = Redis.from_url(
     socket_connect_timeout=3,
     socket_keepalive=True,
     retry_on_timeout=False,
+    decode_responses=True,
 )
 
 if settings.SENTRY_DSN:  # pragma: no cover

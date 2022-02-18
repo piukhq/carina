@@ -9,7 +9,6 @@ from functools import lru_cache
 from io import StringIO
 from typing import TYPE_CHECKING, DefaultDict, NamedTuple, Optional, Union, cast
 
-import click
 import sentry_sdk
 
 from azure.core.exceptions import HttpResponseError, ResourceExistsError
@@ -25,7 +24,7 @@ from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
 from app.enums import FileAgentType, RewardUpdateStatuses
 from app.models import Retailer, Reward, RewardConfig, RewardFileLog, RewardUpdate
-from app.scheduler import CronScheduler
+from app.scheduled_tasks.scheduler import cron_scheduler, run_only_if_leader
 from app.schemas import RewardUpdateSchema
 
 logger = logging.getLogger("reward-import")
@@ -110,22 +109,7 @@ class BlobFileAgent:
         dst_blob_client.start_copy_from_url(src_blob_client.url)  # Synchronous within the same storage account
         src_blob_client.delete_blob(lease=src_blob_lease)
 
-    def run(self) -> None:  # pragma: no cover
-
-        logger.info(f"Watching {self.container_name} for files via {self.__class__.__name__}.")
-
-        scheduler = CronScheduler(
-            name=self.scheduler_name,
-            schedule_fn=lambda: self.schedule,
-            callback=self.do_import,
-            coalesce_jobs=True,
-            logger=logger,
-        )
-
-        logger.debug(f"Beginning {scheduler}.")
-        scheduler.run()
-
-    def do_import(self) -> None:  # pragma: no cover
+    def _do_import(self) -> None:  # pragma: no cover
         with SyncSessionMaker() as db_session:
             for retailer in self.get_retailers(db_session):
                 self.process_blobs(retailer, db_session)
@@ -203,6 +187,10 @@ class RewardImportAgent(BlobFileAgent):
     def __init__(self) -> None:
         super().__init__()
         self.file_agent_type = FileAgentType.IMPORT
+
+    @run_only_if_leader(runner=cron_scheduler)
+    def do_import(self) -> None:  # pragma: no cover
+        super()._do_import()
 
     @lru_cache()
     def reward_configs_by_reward_id(self, retailer_id: int, db_session: "Session") -> dict[str, RewardConfig]:
@@ -303,6 +291,10 @@ class RewardUpdatesAgent(BlobFileAgent):
     def __init__(self) -> None:
         super().__init__()
         self.file_agent_type = FileAgentType.UPDATE
+
+    @run_only_if_leader(runner=cron_scheduler)
+    def do_import(self) -> None:  # pragma: no cover
+        super()._do_import()
 
     def process_csv(self, retailer: Retailer, blob_name: str, blob_content: str, db_session: "Session") -> None:
         content_reader = csv.reader(StringIO(blob_content), delimiter=",", quotechar="|")
@@ -484,22 +476,3 @@ class RewardUpdatesAgent(BlobFileAgent):
             sync_run_query(_rollback, db_session, rollback_on_exc=False)
         else:
             sync_run_query(_commit, db_session, rollback_on_exc=False)
-
-
-@click.group()
-def cli() -> None:  # pragma: no cover
-    pass
-
-
-@cli.command()
-def reward_import_agent() -> None:  # pragma: no cover
-    RewardImportAgent().run()
-
-
-@cli.command()
-def reward_updates_agent() -> None:  # pragma: no cover
-    RewardUpdatesAgent().run()
-
-
-if __name__ == "__main__":  # pragma: no cover
-    cli()
