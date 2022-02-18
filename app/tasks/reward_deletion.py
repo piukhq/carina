@@ -13,7 +13,7 @@ from app.models import Reward, RewardConfig
 from . import logger
 from .prometheus import tasks_run_total
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy.orm import Session
 
 

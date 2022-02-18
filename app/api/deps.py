@@ -8,7 +8,7 @@ from app.core.config import settings
 from app.db.session import AsyncSessionMaker
 from app.enums import HttpErrors
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
 
     from app.models import Retailer
 

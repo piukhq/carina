@@ -29,7 +29,7 @@ class Reward(Base, TimestampMixin):
     )
     __mapper_args__ = {"eager_defaults": True}
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         return f"{self.__class__.__name__}({self.retailer.slug}, " f"{self.code}, {self.allocated})"
 
 
@@ -50,10 +50,13 @@ class RewardConfig(Base, TimestampMixin):
     __mapper_args__ = {"eager_defaults": True}
     __table_args__ = (UniqueConstraint("reward_slug", "retailer_id", name="reward_slug_retailer_unq"),)
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         return f"{self.__class__.__name__}({self.retailer.slug}, " f"{self.reward_slug})"
 
     def load_required_fields_values(self) -> dict:
+        if self.required_fields_values in ["", None]:
+            return {}
+
         return yaml.safe_load(self.required_fields_values)
 
 
@@ -69,7 +72,7 @@ class RewardUpdate(Base, TimestampMixin):
 
     __mapper_args__ = {"eager_defaults": True}
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         return f"{self.__class__.__name__}({self.id})"
 
 
@@ -83,5 +86,5 @@ class RewardFileLog(Base, TimestampMixin):
     __mapper_args__ = {"eager_defaults": True}
     __table_args__ = (UniqueConstraint("file_name", "file_agent_type", name="file_name_file_agent_type_unq"),)
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         return f"{self.__class__.__name__}({self.id})"

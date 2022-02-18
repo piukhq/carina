@@ -9,7 +9,7 @@ from sqlalchemy.future import select
 from app.core.config import settings
 from app.db.base_class import async_run_query
 from app.enums import HttpErrors
-from app.models import Retailer, Reward, RewardConfig
+from app.models import Retailer, RewardConfig
 
 
 async def get_reward_config(
@@ -34,28 +34,6 @@ async def get_reward_config(
     return reward_config
 
 
-async def get_allocable_reward(db_session: AsyncSession, reward_config: RewardConfig) -> Optional[Reward]:
-    async def _query() -> Optional[Reward]:
-        return (
-            (
-                await db_session.execute(
-                    select(Reward)
-                    .with_for_update()
-                    .where(
-                        Reward.reward_config_id == reward_config.id,
-                        Reward.allocated == False,  # noqa
-                        Reward.deleted == False,  # noqa
-                    )
-                    .limit(1)
-                )
-            )
-            .scalars()
-            .first()
-        )
-
-    return await async_run_query(_query, db_session)
-
-
 async def _create_retry_task(db_session: AsyncSession, task_type_name: str, task_params: dict) -> RetryTask:
     async def _query() -> RetryTask:
         retry_task = await async_create_task(db_session=db_session, task_type_name=task_type_name, params=task_params)
@@ -68,30 +46,16 @@ async def _create_retry_task(db_session: AsyncSession, task_type_name: str, task
 async def create_reward_issuance_retry_task(
     db_session: AsyncSession,
     *,
-    reward: Optional[Reward],
-    issued_date: float,
-    expiry_date: float,
     reward_config: RewardConfig,
     account_url: str,
 ) -> RetryTask:
 
     task_params = {
         "account_url": account_url,
-        "issued_date": issued_date,
-        "expiry_date": expiry_date,
         "reward_config_id": reward_config.id,
         "reward_slug": reward_config.reward_slug,
         "idempotency_token": uuid4(),
     }
-
-    if reward is not None:
-        reward.allocated = True
-        task_params.update(
-            {
-                "reward_uuid": reward.id,
-                "code": reward.code,
-            }
-        )
 
     return await _create_retry_task(db_session, settings.REWARD_ISSUANCE_TASK_NAME, task_params)
 

@@ -30,7 +30,7 @@ def create_app() -> FastAPI:
     PrometheusManager(settings.PROJECT_NAME)  # initialise signals
 
     if settings.SENTRY_DSN:
-        app.add_middleware(SentryAsgiMiddleware)
+        app.add_middleware(SentryAsgiMiddleware)  # pragma: no cover
 
     # Prevent 307 temporary redirects if URLs have slashes on the end
     app.router.redirect_slashes = False

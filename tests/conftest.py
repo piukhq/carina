@@ -14,6 +14,7 @@ from app.db.base import Base
 from app.db.session import SyncSessionMaker, sync_engine
 from app.enums import RewardTypeStatuses
 from app.models import FetchType, Retailer, Reward, RewardConfig
+from app.models.retailer import RetailerFetchType
 from app.tasks.error_handlers import default_handler, handle_retry_task_request_error
 from app.tasks.issuance import issue_reward
 from app.tasks.status_adjustment import status_adjustment
@@ -86,10 +87,11 @@ def retailer(db_session: "Session") -> Retailer:
 
 
 @pytest.fixture(scope="function")
-def fetch_type(db_session: "Session") -> FetchType:
+def pre_loaded_fetch_type(db_session: "Session") -> FetchType:
     ft = FetchType(
         name="PRE_LOADED",
         required_fields="validity_days: integer",
+        path="app.fetch_reward.pre_loaded.PreLoaded",
     )
     db_session.add(ft)
     db_session.commit()
@@ -97,12 +99,65 @@ def fetch_type(db_session: "Session") -> FetchType:
 
 
 @pytest.fixture(scope="function")
-def reward_config(db_session: "Session", retailer: Retailer, fetch_type: FetchType) -> RewardConfig:
+def jigsaw_fetch_type(db_session: "Session") -> FetchType:
+    ft = FetchType(
+        name="JIGSAW_EGIFT",
+        path="app.fetch_reward.jigsaw.Jigsaw",
+        required_fields="transaction_value: integer",
+    )
+    db_session.add(ft)
+    db_session.commit()
+    return ft
+
+
+@pytest.fixture(scope="function")
+def jigsaw_retailer_fetch_type(
+    db_session: "Session", retailer: Retailer, jigsaw_fetch_type: FetchType
+) -> RetailerFetchType:
+    rft = RetailerFetchType(
+        retailer_id=retailer.id,
+        fetch_type_id=jigsaw_fetch_type.id,
+        agent_config='base_url: "http://test.url"\n' "brand_id: 30\n" "fetch_reward: true\n" 'fetch_balance: false"',
+    )
+    db_session.add(rft)
+    db_session.commit()
+    return rft
+
+
+@pytest.fixture(scope="function")
+def pre_loaded_retailer_fetch_type(
+    db_session: "Session", retailer: Retailer, pre_loaded_fetch_type: FetchType
+) -> RetailerFetchType:
+    rft = RetailerFetchType(
+        retailer_id=retailer.id,
+        fetch_type_id=pre_loaded_fetch_type.id,
+    )
+    db_session.add(rft)
+    db_session.commit()
+    return rft
+
+
+@pytest.fixture(scope="function")
+def reward_config(db_session: "Session", pre_loaded_retailer_fetch_type: RetailerFetchType) -> RewardConfig:
     config = RewardConfig(
         reward_slug="test-reward",
         required_fields_values="validity_days: 15",
-        retailer_id=retailer.id,
-        fetch_type_id=fetch_type.id,
+        retailer_id=pre_loaded_retailer_fetch_type.retailer_id,
+        fetch_type_id=pre_loaded_retailer_fetch_type.fetch_type_id,
+        status=RewardTypeStatuses.ACTIVE,
+    )
+    db_session.add(config)
+    db_session.commit()
+    return config
+
+
+@pytest.fixture(scope="function")
+def jigsaw_reward_config(db_session: "Session", jigsaw_retailer_fetch_type: RetailerFetchType) -> RewardConfig:
+    config = RewardConfig(
+        reward_slug="test-jigsaw-reward",
+        required_fields_values="transaction_value: 15",
+        retailer_id=jigsaw_retailer_fetch_type.retailer_id,
+        fetch_type_id=jigsaw_retailer_fetch_type.fetch_type_id,
         status=RewardTypeStatuses.ACTIVE,
     )
     db_session.add(config)
@@ -193,6 +248,7 @@ def reward_issuance_task_type(db_session: "Session") -> TaskType:
                 ("reward_uuid", "STRING"),
                 ("code", "STRING"),
                 ("idempotency_token", "STRING"),
+                ("customer_card_ref", "STRING"),
             )
         ]
     )

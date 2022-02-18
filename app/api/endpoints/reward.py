@@ -10,7 +10,6 @@ from app.api.deps import get_session, retailer_is_valid, user_is_authorised
 from app.api.tasks import enqueue_many_tasks, enqueue_task
 from app.db.base_class import async_run_query
 from app.enums import HttpErrors, RewardTypeStatuses
-from app.fetch_reward import get_allocable_reward
 from app.models import Retailer
 from app.schemas import RewardAllocationSchema
 from app.schemas.reward import RewardStatusSchema
@@ -30,14 +29,8 @@ async def allocation(
     db_session: AsyncSession = Depends(get_session),
 ) -> Any:
     reward_config = await crud.get_reward_config(db_session, retailer, reward_slug)
-    reward, issued, expiry = await get_allocable_reward(db_session, reward_config)
     retry_task = await crud.create_reward_issuance_retry_task(
-        db_session,
-        reward=reward,
-        issued_date=issued,
-        expiry_date=expiry,
-        reward_config=reward_config,
-        account_url=payload.account_url,
+        db_session, reward_config=reward_config, account_url=payload.account_url
     )
 
     asyncio.create_task(enqueue_task(retry_task_id=retry_task.retry_task_id))

@@ -1,11 +1,11 @@
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import sentry_sdk
 
 from fastapi import status
 from requests.exceptions import HTTPError
-from retry_tasks_lib.db.models import RetryTask, TaskTypeKeyValue
+from retry_tasks_lib.db.models import RetryTask, TaskTypeKey, TaskTypeKeyValue
 from retry_tasks_lib.enums import RetryTaskStatuses
 from retry_tasks_lib.utils.synchronous import enqueue_retry_task_delay, retryable_task
 from sqlalchemy.future import select
@@ -14,6 +14,7 @@ from app.core.config import redis, settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
 from app.enums import RewardTypeStatuses
+from app.fetch_reward import get_allocable_reward
 from app.models import Reward, RewardConfig
 
 from . import logger, send_request_with_metrics
@@ -24,6 +25,8 @@ if TYPE_CHECKING:  # pragma: no cover
 
 REWARD_ID = "reward_uuid"
 CODE = "code"
+ISSUED = "issued_date"
+EXPIRY = "expiry_date"
 
 
 def _process_issuance(task_params: dict) -> dict:
@@ -53,13 +56,11 @@ def _process_issuance(task_params: dict) -> dict:
     return response_audit
 
 
-def _get_reward_config_status(db_session: "Session", reward_config_id: int) -> RewardTypeStatuses:
-    reward_config_status: RewardTypeStatuses = sync_run_query(
-        lambda: db_session.execute(select(RewardConfig.status).where(RewardConfig.id == reward_config_id)).scalar_one(),
+def _get_reward_config(db_session: "Session", reward_config_id: int) -> RewardConfig:
+    return sync_run_query(
+        lambda: db_session.execute(select(RewardConfig).where(RewardConfig.id == reward_config_id)).scalar_one(),
         db_session,
     )
-
-    return reward_config_status
 
 
 def _get_reward(db_session: "Session", reward_uuid: str) -> Reward:
@@ -87,17 +88,19 @@ def _set_reward_and_delete_from_task(db_session: "Session", retry_task: RetryTas
     set reward allocated and clear the retry task's reward id to force a complete retry
     of the task with a new reward
     """
-    reward: Reward = _get_reward(db_session, reward_uuid)
-    reward.allocated = True
-    # Now delete the associated reward id and code in the DB
-    values_to_delete: dict[str, TaskTypeKeyValue] = {
-        value.task_type_key.name: value
-        for value in retry_task.task_type_key_values
-        if value.task_type_key.name in ("reward_uuid", "code")
-    }
-    db_session.delete(values_to_delete["reward_uuid"])
-    db_session.delete(values_to_delete["code"])
-    db_session.commit()
+
+    def _query() -> None:
+        db_session.execute(Reward.__table__.update().values(allocated=True).where(Reward.id == reward_uuid))
+        db_session.execute(
+            TaskTypeKeyValue.__table__.delete().where(
+                TaskTypeKeyValue.retry_task_id == RetryTask.retry_task_id,
+                TaskTypeKeyValue.task_type_key_id == TaskTypeKey.task_type_key_id,
+                TaskTypeKey.name.in_(["reward_uuid", "code", "issued_date", "expiry_date"]),
+            )
+        )
+        db_session.commit()
+
+    sync_run_query(_query, db_session)
 
 
 def _process_and_issue_reward(db_session: "Session", retry_task: RetryTask) -> None:
@@ -122,9 +125,8 @@ def _process_and_issue_reward(db_session: "Session", retry_task: RetryTask) -> N
 def issue_reward(retry_task: RetryTask, db_session: "Session") -> None:
     """Try to fetch and issue a reward, unless the campaign has been cancelled"""
 
-    print(retry_task.get_params())
-    reward_config_status = _get_reward_config_status(db_session, retry_task.get_params()["reward_config_id"])
-    if reward_config_status == RewardTypeStatuses.CANCELLED:
+    reward_config = _get_reward_config(db_session, retry_task.get_params()["reward_config_id"])
+    if reward_config.status == RewardTypeStatuses.CANCELLED:
         _cancel_task(db_session, retry_task)
         return
 
@@ -132,43 +134,29 @@ def issue_reward(retry_task: RetryTask, db_session: "Session") -> None:
     if "reward_uuid" in retry_task.get_params():
         _process_and_issue_reward(db_session, retry_task)
     else:
+        allocable_reward, issued, expiry = get_allocable_reward(
+            db_session, reward_config, send_request_with_metrics, retry_task
+        )
 
-        def _get_allocable_reward() -> Optional[Reward]:
-            allocable_reward = (
-                db_session.execute(
-                    select(Reward)
-                    .with_for_update()
-                    .where(
-                        Reward.reward_config_id == retry_task.get_params()["reward_config_id"],
-                        Reward.allocated == False,  # noqa
-                        Reward.deleted == False,  # noqa
-                    )
-                    .limit(1)
-                )
-                .scalars()
-                .first()
-            )
-
-            return allocable_reward
-
-        allocable_reward: Reward = sync_run_query(_get_allocable_reward, db_session)
-        if allocable_reward:
+        if allocable_reward is not None:
             key_ids = retry_task.task_type.get_key_ids_by_name()
 
-            def _add_reward_to_task_values_and_set_allocated() -> None:
-                allocable_reward.allocated = True
+            def _add_reward_to_task_values_and_set_allocated(reward: Reward) -> None:
+                reward.allocated = True
                 db_session.add_all(
                     retry_task.get_task_type_key_values(
                         [
-                            (key_ids[REWARD_ID], str(allocable_reward.id)),
-                            (key_ids[CODE], allocable_reward.code),
+                            (key_ids[REWARD_ID], str(reward.id)),
+                            (key_ids[CODE], reward.code),
+                            (key_ids[ISSUED], issued),
+                            (key_ids[EXPIRY], expiry),
                         ]
                     )
                 )
 
                 db_session.commit()
 
-            sync_run_query(_add_reward_to_task_values_and_set_allocated, db_session)
+            sync_run_query(_add_reward_to_task_values_and_set_allocated, db_session, reward=allocable_reward)
             db_session.refresh(retry_task)  # Ensure retry_task represents latest DB changes
             _process_and_issue_reward(db_session, retry_task)
         else:  # requeue the allocation attempt

@@ -112,13 +112,17 @@ def upgrade() -> None:
     ).scalar_one()
 
     if conn.scalar(sa.future.select(RewardConfig.c.id)):
-        conn.execute(
-            Retailer.insert(),
-            [{"slug": res[0]} for res in conn.execute(sa.future.select(RewardConfig.c.retailer_slug).distinct()).all()],
+        slug_to_id_map = dict(
+            conn.execute(
+                Retailer.insert().returning(Retailer.c.slug, Retailer.c.id),
+                [
+                    {"slug": res[0]}
+                    for res in conn.execute(sa.future.select(RewardConfig.c.retailer_slug).distinct()).all()
+                ],
+            ).all()
         )
-        slug_to_id_map = dict(conn.execute(sa.future.select(Retailer.c.slug, Retailer.c.id)).all())
-        conn.execute(RewardConfig.update().values(fetch_type_id=fetch_type_id))
 
+        conn.execute(RewardConfig.update().values(fetch_type_id=fetch_type_id))
         update_table_slug_to_id(conn, RewardConfig, slug_to_id_map)
         update_table_slug_to_id(conn, Reward, slug_to_id_map)
         conn.execute(

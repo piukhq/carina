@@ -49,6 +49,8 @@ def test_post_reward_allocation_happy_path(
     db_session, reward_config, reward = setup
     mocker.patch("app.api.tasks.enqueue_retry_task")
 
+    assert reward.allocated is False
+
     resp = client.post(
         f"/bpl/vouchers/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/allocation",
         json=payload,
@@ -62,10 +64,13 @@ def test_post_reward_allocation_happy_path(
         db_session, reward_issuance_task_type.task_type_id, reward_config.id
     )
 
+    db_session.refresh(reward)
+
     assert retry_task is not None
     assert payload["account_url"] in task_params_values
     assert str(reward_config.id) in task_params_values
-    assert str(reward.id) in task_params_values
+    assert str(reward.id) not in task_params_values
+    assert reward.allocated is False
 
 
 def test_post_reward_allocation_wrong_retailer(setup: SetupType, reward_issuance_task_type: TaskType) -> None:
