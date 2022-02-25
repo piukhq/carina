@@ -3,6 +3,8 @@ omit = *test*
        *alembic*
         app/version.py
         app/tasks/error_handlers.py
+        app/core/reporting.py
+        app/tasks/worker.py
 branch = True
 concurrency = thread
               greenlet

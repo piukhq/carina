@@ -30,16 +30,16 @@ def send_request_with_metrics(
     *,
     headers: Optional[Dict[str, Any]] = None,
     json: Optional[Dict[str, Any]] = None,
-    timeout: Tuple[float, int],
+    timeout: Tuple[float, int] = (3.03, 10),
 ) -> requests.Response:
 
     try:
         return requests.request(
             method, url, hooks={"response": update_metrics_hook}, headers=headers, json=json, timeout=timeout
         )
-    except requests.HTTPError as ex:
+    except requests.HTTPError as ex:  # pragma: no cover
         update_metrics_hook(ex.response)
         raise
-    except requests.RequestException as ex:
+    except requests.RequestException as ex:  # pragma: no cover
         update_metrics_exception_handler(ex, method, url)
         raise

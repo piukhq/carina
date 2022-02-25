@@ -11,7 +11,7 @@ from app.db.session import SyncSessionMaker
 from . import logger, send_request_with_metrics
 from .prometheus import tasks_run_total
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy.orm import Session
 
 
