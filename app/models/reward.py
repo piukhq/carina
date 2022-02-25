@@ -18,7 +18,7 @@ class Reward(Base, TimestampMixin):
     allocated = Column(Boolean, default=False, nullable=False)
     deleted = Column(Boolean, default=False, nullable=False)
     reward_config_id = Column(Integer, ForeignKey("reward_config.id"), nullable=False)
-    retailer_id = Column(Integer, ForeignKey("retailer.id"), nullable=False)
+    retailer_id = Column(Integer, ForeignKey("retailer.id", ondelete="CASCADE"), nullable=False)
 
     reward_config = relationship("RewardConfig", back_populates="rewards")
     retailer = relationship("Retailer", back_populates="rewards")
@@ -38,8 +38,8 @@ class RewardConfig(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True)
     reward_slug = Column(String(32), index=True, nullable=False)
-    retailer_id = Column(Integer, ForeignKey("retailer.id"), nullable=False)
-    fetch_type_id = Column(Integer, ForeignKey("fetch_type.id"), nullable=False)
+    retailer_id = Column(Integer, ForeignKey("retailer.id", ondelete="CASCADE"), nullable=False)
+    fetch_type_id = Column(Integer, ForeignKey("fetch_type.id", ondelete="CASCADE"), nullable=False)
     status = Column(Enum(RewardTypeStatuses), nullable=False, default=RewardTypeStatuses.ACTIVE)
     required_fields_values = Column(Text, nullable=True)
 

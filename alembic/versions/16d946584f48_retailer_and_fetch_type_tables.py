@@ -27,13 +27,14 @@ rewardfetchtype = sa.dialects.postgresql.ENUM("PRE_LOADED", name="rewardfetchtyp
 
 def get_tables(
     conn: sa.engine.Connection,
-) -> tuple[sa.Table, sa.Table, sa.Table, sa.Table, sa.Table, sa.Table, sa.Table]:
+) -> tuple[sa.Table, sa.Table, sa.Table, sa.Table, sa.Table, sa.Table, sa.Table, sa.Table]:
     metadata = sa.MetaData()
     return (
         sa.Table("retailer", metadata, autoload_with=conn),
         sa.Table("reward_config", metadata, autoload_with=conn),
         sa.Table("reward", metadata, autoload_with=conn),
         sa.Table("fetch_type", metadata, autoload_with=conn),
+        sa.Table("retailer_fetch_type", metadata, autoload_with=conn),
         sa.Table("task_type", metadata, autoload_with=conn),
         sa.Table("task_type_key", metadata, autoload_with=conn),
         sa.Table("task_type_key_value", metadata, autoload_with=conn),
@@ -88,14 +89,8 @@ def upgrade() -> None:
         sa.Column("retailer_id", sa.Integer(), nullable=False),
         sa.Column("fetch_type_id", sa.Integer(), nullable=False),
         sa.Column("agent_config", sa.Text(), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["fetch_type_id"],
-            ["fetch_type.id"],
-        ),
-        sa.ForeignKeyConstraint(
-            ["retailer_id"],
-            ["retailer.id"],
-        ),
+        sa.ForeignKeyConstraint(["fetch_type_id"], ["fetch_type.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["retailer_id"], ["retailer.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("retailer_id", "fetch_type_id"),
     )
     op.add_column("reward", sa.Column("retailer_id", sa.Integer(), nullable=True))
@@ -105,7 +100,9 @@ def upgrade() -> None:
 
     # ------------------------------------------------ data migration ------------------------------------------------ #
     conn = op.get_bind()
-    Retailer, RewardConfig, Reward, FetchType, TaskType, TaskTypeKey, TaskTypeKeyValue = get_tables(conn)
+    Retailer, RewardConfig, Reward, FetchType, RetailerFetchType, TaskType, TaskTypeKey, TaskTypeKeyValue = get_tables(
+        conn
+    )
 
     fetch_type_id = conn.execute(
         FetchType.insert().values(name="PRE_LOADED", required_fields="validity_days: integer").returning(FetchType.c.id)
@@ -120,6 +117,11 @@ def upgrade() -> None:
                     for res in conn.execute(sa.future.select(RewardConfig.c.retailer_slug).distinct()).all()
                 ],
             ).all()
+        )
+
+        conn.execute(
+            RetailerFetchType.insert(),
+            [{"retailer_id": retailer_id, "fetch_type_id": fetch_type_id} for retailer_id in slug_to_id_map.values()],
         )
 
         conn.execute(RewardConfig.update().values(fetch_type_id=fetch_type_id))
@@ -156,20 +158,24 @@ def upgrade() -> None:
     op.alter_column("reward_config", "fetch_type_id", nullable=False)
 
     op.drop_column("reward_config", "validity_days")
-    op.create_foreign_key(REWARD_CONFIG_FETCH_TYPE_FK, "reward_config", "fetch_type", ["fetch_type_id"], ["id"])
+    op.create_foreign_key(
+        REWARD_CONFIG_FETCH_TYPE_FK, "reward_config", "fetch_type", ["fetch_type_id"], ["id"], ondelete="CASCADE"
+    )
     op.drop_column("reward_config", "fetch_type")
     op.drop_index("ix_reward_retailer_slug", table_name="reward")
     op.drop_constraint("reward_code_retailer_slug_reward_config_unq", "reward", type_="unique")
     op.create_unique_constraint(
         "code_retailer_reward_config_unq", "reward", ["code", "retailer_id", "reward_config_id"]
     )
-    op.create_foreign_key(REWARD_RETAILER_FK, "reward", "retailer", ["retailer_id"], ["id"])
+    op.create_foreign_key(REWARD_RETAILER_FK, "reward", "retailer", ["retailer_id"], ["id"], ondelete="CASCADE")
     op.drop_column("reward", "retailer_slug")
 
     op.drop_index("ix_reward_config_retailer_slug", table_name="reward_config")
     op.drop_constraint("reward_slug_retailer_slug_unq", "reward_config", type_="unique")
     op.create_unique_constraint("reward_slug_retailer_unq", "reward_config", ["reward_slug", "retailer_id"])
-    op.create_foreign_key(REWARD_CONFIG_RETAILER_FK, "reward_config", "retailer", ["retailer_id"], ["id"])
+    op.create_foreign_key(
+        REWARD_CONFIG_RETAILER_FK, "reward_config", "retailer", ["retailer_id"], ["id"], ondelete="CASCADE"
+    )
     op.drop_column("reward_config", "retailer_slug")
     rewardfetchtype.drop(conn, checkfirst=False)
 
@@ -185,7 +191,7 @@ def downgrade() -> None:
     op.add_column("reward_config", sa.Column("validity_days", sa.INTEGER(), autoincrement=False, nullable=True))
 
     # ------------------------------------------------ data migration ------------------------------------------------ #
-    Retailer, RewardConfig, Reward, _, TaskType, TaskTypeKey, TaskTypeKeyValue = get_tables(conn)
+    Retailer, RewardConfig, Reward, _, _, TaskType, TaskTypeKey, TaskTypeKeyValue = get_tables(conn)
 
     conn.execute(RewardConfig.update().values(fetch_type="PRE_LOADED"))
     id_to_slug_map = dict(conn.execute(sa.future.select(Retailer.c.id, Retailer.c.slug)).all())

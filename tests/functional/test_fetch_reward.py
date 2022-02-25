@@ -92,7 +92,7 @@ def test_jigsaw_agent_ok(
     )
     httpretty.register_uri(
         "POST",
-        f"{agent_config['base_url']}/order/v4/register",
+        f"{agent_config['base_url']}/order/V4/register",
         body=json.dumps(
             {
                 "status": 2000,
@@ -152,7 +152,7 @@ def test_jigsaw_agent_ok_token_already_set(
     now = datetime.now(tz=timezone.utc)
     httpretty.register_uri(
         "POST",
-        f"{agent_config['base_url']}/order/v4/register",
+        f"{agent_config['base_url']}/order/V4/register",
         body=json.dumps(
             {
                 "status": 2000,
@@ -211,7 +211,7 @@ def test_jigsaw_agent_ok_no_retry_task(
     now = datetime.now(tz=timezone.utc)
     httpretty.register_uri(
         "POST",
-        f"{agent_config['base_url']}/order/v4/register",
+        f"{agent_config['base_url']}/order/V4/register",
         body=json.dumps(
             {
                 "status": 2000,
@@ -271,7 +271,7 @@ def test_jigsaw_agent_ok_card_ref_in_task_params(
     now = datetime.now(tz=timezone.utc)
     httpretty.register_uri(
         "POST",
-        f"{agent_config['base_url']}/order/v4/register",
+        f"{agent_config['base_url']}/order/V4/register",
         body=json.dumps(
             {
                 "status": 2000,
