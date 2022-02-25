@@ -27,8 +27,6 @@ class Jigsaw(BaseAgent):
     ```yaml
     base_url: "https://dev.jigsaw360.com"
     brand_id: 30
-    fetch_reward: true
-    fetch_balance: false
     ```
 
     Sample getToken success response payload:
@@ -98,7 +96,7 @@ class Jigsaw(BaseAgent):
         dt = datetime.fromisoformat(date_time_str)
         if dt.tzinfo is None:
             self.logger.info("Received naive datetime from Jigsaw, assuming UTC timezone.")
-            dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=timezone.utc)
 
         return dt.astimezone(tz=timezone.utc)
 
@@ -161,7 +159,7 @@ class Jigsaw(BaseAgent):
 
         resp = self.send_request(
             "POST",
-            f"{self.base_url}/order/v4/register",
+            f"{self.base_url}/order/V4/register",
             json={
                 "customer_card_ref": customer_card_ref,
                 "brand_id": self.config["brand_id"],

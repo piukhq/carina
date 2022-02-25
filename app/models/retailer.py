@@ -45,8 +45,8 @@ class FetchType(Base, TimestampMixin):
 class RetailerFetchType(Base, TimestampMixin):
     __tablename__ = "retailer_fetch_type"
 
-    retailer_id = Column(Integer, ForeignKey("retailer.id"), nullable=False)
-    fetch_type_id = Column(Integer, ForeignKey("fetch_type.id"), nullable=False)
+    retailer_id = Column(Integer, ForeignKey("retailer.id", ondelete="CASCADE"), nullable=False)
+    fetch_type_id = Column(Integer, ForeignKey("fetch_type.id", ondelete="CASCADE"), nullable=False)
     agent_config = Column(Text, nullable=True)
 
     retailer = relationship("Retailer", back_populates="retailer_fetch_types", overlaps="fetch_types,retailers")
