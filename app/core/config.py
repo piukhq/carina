@@ -191,7 +191,7 @@ class Settings(BaseSettings):
     BLOB_IMPORT_LOGGING_LEVEL = logging.WARNING
 
     # The prefix used on every Redis key.
-    REDIS_KEY_PREFIX = "carinarewards"
+    REDIS_KEY_PREFIX = "carina:"
 
     REWARD_ISSUANCE_TASK_NAME = "reward-issuance"
     CANCEL_REWARDS_TASK_NAME = "cancel-rewards"
@@ -211,6 +211,22 @@ class Settings(BaseSettings):
         if v and isinstance(v, list):
             return v
         return (values["TASK_QUEUE_PREFIX"] + name for name in ("high", "default", "low"))
+
+    JIGSAW_AGENT_USERNAME: str = "Bink_dev"
+    JIGSAW_AGENT_PASSWORD: Optional[str] = None
+
+    @validator("JIGSAW_AGENT_PASSWORD")
+    def fetch_jigsaw_agent_password(cls, v: Optional[str], values: dict[str, Any]) -> Any:
+        if isinstance(v, str) and not values["TESTING"]:
+            return v
+
+        if "KEY_VAULT_URI" in values:
+            return KeyVault(
+                values["KEY_VAULT_URI"],
+                values["TESTING"] or values["MIGRATING"],
+            ).get_secret("bpl-carina-agent-jigsaw-password")
+        else:
+            raise KeyError("required var KEY_VAULT_URI is not set.")
 
     class Config:
         case_sensitive = True
@@ -275,6 +291,7 @@ redis = Redis.from_url(
     socket_connect_timeout=3,
     socket_keepalive=True,
     retry_on_timeout=False,
+    decode_responses=True,
 )
 
 if settings.SENTRY_DSN:  # pragma: no cover

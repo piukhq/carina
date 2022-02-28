@@ -4,9 +4,9 @@ verify_ssl = true
 name = "pypi"
 
 [[source]]
-name = "pypi-cloud"
 url = "https://269fdc63-af3d-4eca-8101-8bddc22d6f14:b694b5b1-f97e-49e4-959e-f3c202e3ab91@pypi.uksouth.bink.sh/simple"
 verify_ssl = true
+name = "pypi-cloud"
 
 [packages]
 fastapi = "*"
@@ -32,8 +32,10 @@ azure-keyvault = "*"
 azure-storage-blob = "!=12.9.0"  # version 12.9.0 has bad type annotations
 apscheduler = "*"
 testfixtures = "*"
-retry-tasks-lib = {version=">=1.10.2", index="pypi-cloud"}
+retry-tasks-lib = {version=">=1.11.0", index="pypi-cloud"}
 fastapi-prometheus-metrics = {version=">=0.1.0", index="pypi-cloud"}
+pyyaml = "*"
+typer = "*"
 
 [dev-packages]
 flake8 = "*"
@@ -50,6 +52,7 @@ sqlalchemy-utils = "*"
 pytest-mock = "*"
 types-redis = "*"
 types-requests = "*"
+types-pyyaml = "*"
 
 [requires]
 python_version = "3.9"

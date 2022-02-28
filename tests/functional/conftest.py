@@ -9,7 +9,7 @@ from retry_tasks_lib.utils.synchronous import sync_create_task
 
 from app.core.config import settings
 from app.enums import RewardTypeStatuses, RewardUpdateStatuses
-from app.models import Reward, RewardUpdate
+from app.models import RetailerFetchType, Reward, RewardUpdate
 from app.models.reward import RewardConfig
 
 if TYPE_CHECKING:
@@ -19,12 +19,13 @@ if TYPE_CHECKING:
 @pytest.fixture(scope="function")
 def reward_issuance_task_params(reward: Reward) -> dict:
     now = datetime.now(tz=timezone.utc)
+    validity_days = reward.reward_config.load_required_fields_values().get("validity_days", 0)
     return {
         "account_url": "http://test.url/",
         "reward_uuid": str(reward.id),
         "code": reward.code,
         "issued_date": str(now.timestamp()),
-        "expiry_date": str((now + timedelta(days=reward.reward_config.validity_days)).timestamp()),
+        "expiry_date": str((now + timedelta(days=validity_days)).timestamp()),
         "reward_config_id": str(reward.reward_config_id),
         "reward_slug": reward.reward_config.reward_slug,
         "idempotency_token": str(uuid4()),
@@ -33,11 +34,8 @@ def reward_issuance_task_params(reward: Reward) -> dict:
 
 @pytest.fixture(scope="function")
 def reward_issuance_task_params_no_reward(reward_config: RewardConfig) -> dict:
-    now = datetime.now(tz=timezone.utc)
     return {
         "account_url": "http://test.url/",
-        "issued_date": str(now.timestamp()),
-        "expiry_date": str((now + timedelta(days=reward_config.validity_days)).timestamp()),
         "reward_config_id": str(reward_config.id),
         "reward_slug": reward_config.reward_slug,
         "idempotency_token": str(uuid4()),
@@ -117,7 +115,7 @@ def reward_update(db_session: "Session", reward: Reward) -> RewardUpdate:
 def reward_status_adjustment_task_params(reward_update: RewardUpdate) -> dict:
     return {
         "reward_uuid": str(reward_update.reward_uuid),
-        "retailer_slug": reward_update.reward.retailer_slug,
+        "retailer_slug": reward_update.reward.retailer.slug,
         "date": str(datetime.fromisoformat(reward_update.date.isoformat()).replace(tzinfo=timezone.utc).timestamp()),
         "status": reward_update.status.name,
     }
@@ -172,7 +170,7 @@ def delete_rewards_retry_task(
         db_session,
         task_type_name=reward_deletion_task_type.name,
         params={
-            "retailer_slug": reward_config.retailer_slug,
+            "retailer_id": reward_config.retailer_id,
             "reward_slug": reward_config.reward_slug,
         },
     )
@@ -188,7 +186,7 @@ def cancel_rewards_retry_task(
         db_session,
         task_type_name=reward_cancellation_task_type.name,
         params={
-            "retailer_slug": reward_config.retailer_slug,
+            "retailer_slug": reward_config.retailer.slug,
             "reward_slug": reward_config.reward_slug,
         },
     )
@@ -197,12 +195,13 @@ def cancel_rewards_retry_task(
 
 
 @pytest.fixture(scope="function")
-def create_reward_config(db_session: "Session") -> Callable:
+def create_reward_config(db_session: "Session", pre_loaded_retailer_fetch_type: RetailerFetchType) -> Callable:
     def _create_reward_config(**reward_config_params: Any) -> RewardConfig:
         mock_reward_config_params = {
             "reward_slug": "test-reward",
-            "validity_days": 15,
-            "retailer_slug": "test-retailer",
+            "required_fields_values": "validity_days: 15",
+            "retailer_id": pre_loaded_retailer_fetch_type.retailer_id,
+            "fetch_type_id": pre_loaded_retailer_fetch_type.fetch_type_id,
             "status": RewardTypeStatuses.ACTIVE,
         }
 

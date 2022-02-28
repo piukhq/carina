@@ -13,7 +13,8 @@ from app.core.config import settings
 from app.db.base import Base
 from app.db.session import SyncSessionMaker, sync_engine
 from app.enums import RewardTypeStatuses
-from app.models import Reward, RewardConfig
+from app.models import FetchType, Retailer, Reward, RewardConfig
+from app.models.retailer import RetailerFetchType
 from app.tasks.error_handlers import default_handler, handle_retry_task_request_error
 from app.tasks.issuance import issue_reward
 from app.tasks.status_adjustment import status_adjustment
@@ -78,11 +79,85 @@ def setup(db_session: "Session", reward_config: RewardConfig, reward: Reward) ->
 
 
 @pytest.fixture(scope="function")
-def reward_config(db_session: "Session") -> RewardConfig:
+def retailer(db_session: "Session") -> Retailer:
+    r = Retailer(slug="test-retailer")
+    db_session.add(r)
+    db_session.commit()
+    return r
+
+
+@pytest.fixture(scope="function")
+def pre_loaded_fetch_type(db_session: "Session") -> FetchType:
+    ft = FetchType(
+        name="PRE_LOADED",
+        required_fields="validity_days: integer",
+        path="app.fetch_reward.pre_loaded.PreLoaded",
+    )
+    db_session.add(ft)
+    db_session.commit()
+    return ft
+
+
+@pytest.fixture(scope="function")
+def jigsaw_fetch_type(db_session: "Session") -> FetchType:
+    ft = FetchType(
+        name="JIGSAW_EGIFT",
+        path="app.fetch_reward.jigsaw.Jigsaw",
+        required_fields="transaction_value: integer",
+    )
+    db_session.add(ft)
+    db_session.commit()
+    return ft
+
+
+@pytest.fixture(scope="function")
+def jigsaw_retailer_fetch_type(
+    db_session: "Session", retailer: Retailer, jigsaw_fetch_type: FetchType
+) -> RetailerFetchType:
+    rft = RetailerFetchType(
+        retailer_id=retailer.id,
+        fetch_type_id=jigsaw_fetch_type.id,
+        agent_config='base_url: "http://test.url"\n' "brand_id: 30\n" "fetch_reward: true\n" 'fetch_balance: false"',
+    )
+    db_session.add(rft)
+    db_session.commit()
+    return rft
+
+
+@pytest.fixture(scope="function")
+def pre_loaded_retailer_fetch_type(
+    db_session: "Session", retailer: Retailer, pre_loaded_fetch_type: FetchType
+) -> RetailerFetchType:
+    rft = RetailerFetchType(
+        retailer_id=retailer.id,
+        fetch_type_id=pre_loaded_fetch_type.id,
+    )
+    db_session.add(rft)
+    db_session.commit()
+    return rft
+
+
+@pytest.fixture(scope="function")
+def reward_config(db_session: "Session", pre_loaded_retailer_fetch_type: RetailerFetchType) -> RewardConfig:
     config = RewardConfig(
         reward_slug="test-reward",
-        validity_days=15,
-        retailer_slug="test-retailer",
+        required_fields_values="validity_days: 15",
+        retailer_id=pre_loaded_retailer_fetch_type.retailer_id,
+        fetch_type_id=pre_loaded_retailer_fetch_type.fetch_type_id,
+        status=RewardTypeStatuses.ACTIVE,
+    )
+    db_session.add(config)
+    db_session.commit()
+    return config
+
+
+@pytest.fixture(scope="function")
+def jigsaw_reward_config(db_session: "Session", jigsaw_retailer_fetch_type: RetailerFetchType) -> RewardConfig:
+    config = RewardConfig(
+        reward_slug="test-jigsaw-reward",
+        required_fields_values="transaction_value: 15",
+        retailer_id=jigsaw_retailer_fetch_type.retailer_id,
+        fetch_type_id=jigsaw_retailer_fetch_type.fetch_type_id,
         status=RewardTypeStatuses.ACTIVE,
     )
     db_session.add(config)
@@ -94,7 +169,7 @@ def reward_config(db_session: "Session") -> RewardConfig:
 def reward(db_session: "Session", reward_config: RewardConfig) -> Reward:
     rc = Reward(
         code="TSTCD1234",
-        retailer_slug=reward_config.retailer_slug,
+        retailer_id=reward_config.retailer_id,
         reward_config=reward_config,
     )
     db_session.add(rc)
@@ -112,7 +187,7 @@ def create_reward(db_session: "Session", reward_config: RewardConfig) -> Callabl
         """
         mock_reward_params = {
             "code": "TSTCD1234",
-            "retailer_slug": reward_config.retailer_slug,
+            "retailer_id": reward_config.retailer_id,
             "reward_config": reward_config,
         }
 
@@ -134,7 +209,7 @@ def create_rewards(db_session: "Session", reward_config: RewardConfig) -> Callab
             "deleted": False,
             "allocated": False,
             "reward_config_id": reward_config.id,
-            "retailer_slug": reward_config.retailer_slug,
+            "retailer_id": reward_config.retailer_id,
         }
         rewards = [Reward(**reward_data | override_data) for override_data in override_datas]
         db_session.add_all(rewards)
@@ -173,6 +248,7 @@ def reward_issuance_task_type(db_session: "Session") -> TaskType:
                 ("reward_uuid", "STRING"),
                 ("code", "STRING"),
                 ("idempotency_token", "STRING"),
+                ("customer_card_ref", "STRING"),
             )
         ]
     )
@@ -224,7 +300,7 @@ def reward_deletion_task_type(db_session: "Session") -> TaskType:
             TaskTypeKey(task_type_id=task.task_type_id, name=key_name, type=key_type)
             for key_name, key_type in (
                 ("reward_slug", "STRING"),
-                ("retailer_slug", "STRING"),
+                ("retailer_id", "INTEGER"),
             )
         ]
     )

@@ -9,7 +9,6 @@ from functools import lru_cache
 from io import StringIO
 from typing import TYPE_CHECKING, DefaultDict, NamedTuple, Optional, Union, cast
 
-import click
 import sentry_sdk
 
 from azure.core.exceptions import HttpResponseError, ResourceExistsError
@@ -24,8 +23,8 @@ from app.core.config import redis, settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
 from app.enums import FileAgentType, RewardUpdateStatuses
-from app.models import Reward, RewardConfig, RewardFileLog, RewardUpdate
-from app.scheduler import CronScheduler
+from app.models import Retailer, Reward, RewardConfig, RewardFileLog, RewardUpdate
+from app.scheduled_tasks.scheduler import cron_scheduler, run_only_if_leader
 from app.schemas import RewardUpdateSchema
 
 logger = logging.getLogger("reward-import")
@@ -79,13 +78,11 @@ class BlobFileAgent:
         if settings.SENTRY_DSN:
             sentry_sdk.capture_message(msg)
 
-    def retailer_slugs(self, db_session: "Session") -> list[str]:
-        return sync_run_query(
-            lambda: db_session.execute(select(RewardConfig.retailer_slug).distinct()).scalars().all(), db_session
-        )
+    def get_retailers(self, db_session: "Session") -> list[Retailer]:
+        return sync_run_query(lambda: db_session.execute(select(Retailer)).scalars().all(), db_session)
 
     def process_csv(
-        self, retailer_slug: str, blob_name: str, blob_content: str, db_session: "Session"
+        self, retailer: Retailer, blob_name: str, blob_content: str, db_session: "Session"
     ) -> None:  # pragma: no cover
         raise NotImplementedError
 
@@ -112,29 +109,14 @@ class BlobFileAgent:
         dst_blob_client.start_copy_from_url(src_blob_client.url)  # Synchronous within the same storage account
         src_blob_client.delete_blob(lease=src_blob_lease)
 
-    def run(self) -> None:  # pragma: no cover
-
-        logger.info(f"Watching {self.container_name} for files via {self.__class__.__name__}.")
-
-        scheduler = CronScheduler(
-            name=self.scheduler_name,
-            schedule_fn=lambda: self.schedule,
-            callback=self.do_import,
-            coalesce_jobs=True,
-            logger=logger,
-        )
-
-        logger.debug(f"Beginning {scheduler}.")
-        scheduler.run()
-
-    def do_import(self) -> None:  # pragma: no cover
+    def _do_import(self) -> None:  # pragma: no cover
         with SyncSessionMaker() as db_session:
-            for retailer_slug in self.retailer_slugs(db_session):
-                self.process_blobs(retailer_slug, db_session)
+            for retailer in self.get_retailers(db_session):
+                self.process_blobs(retailer, db_session)
 
-    def process_blobs(self, retailer_slug: str, db_session: "Session") -> None:
+    def process_blobs(self, retailer: Retailer, db_session: "Session") -> None:
         for blob in self.container_client.list_blobs(
-            name_starts_with=self.blob_path_template.substitute(retailer_slug=retailer_slug)
+            name_starts_with=self.blob_path_template.substitute(retailer_slug=retailer.slug)
         ):
             blob_client = self.blob_service_client.get_blob_client(self.container_name, blob.name)
 
@@ -166,7 +148,7 @@ class BlobFileAgent:
             logger.debug(f"Processing blob {blob.name}.")
             try:
                 self.process_csv(
-                    retailer_slug=retailer_slug,
+                    retailer=retailer,
                     blob_name=blob.name,
                     blob_content=byte_content.decode("utf-8", "strict"),
                     db_session=db_session,
@@ -206,10 +188,14 @@ class RewardImportAgent(BlobFileAgent):
         super().__init__()
         self.file_agent_type = FileAgentType.IMPORT
 
+    @run_only_if_leader(runner=cron_scheduler)
+    def do_import(self) -> None:  # pragma: no cover
+        super()._do_import()
+
     @lru_cache()
-    def reward_configs_by_reward_slug(self, retailer_slug: str, db_session: "Session") -> dict[str, RewardConfig]:
+    def reward_configs_by_reward_id(self, retailer_id: int, db_session: "Session") -> dict[str, RewardConfig]:
         reward_configs = sync_run_query(
-            lambda: db_session.execute(select(RewardConfig).where(RewardConfig.retailer_slug == retailer_slug))
+            lambda: db_session.execute(select(RewardConfig).where(RewardConfig.retailer_id == retailer_id))
             .scalars()
             .all(),
             db_session,
@@ -232,15 +218,15 @@ class RewardImportAgent(BlobFileAgent):
                 f"Invalid rows found in {blob_name}:\nrows: {', '.join(map(str, sorted(invalid_rows)))}"
             )
 
-    def process_csv(self, retailer_slug: str, blob_name: str, blob_content: str, db_session: "Session") -> None:
-        _base_path, sub_path = blob_name.split(self.blob_path_template.substitute(retailer_slug=retailer_slug))
+    def process_csv(self, retailer: Retailer, blob_name: str, blob_content: str, db_session: "Session") -> None:
+        _base_path, sub_path = blob_name.split(self.blob_path_template.substitute(retailer_slug=retailer.slug))
         try:
             reward_slug, _path_remainder = sub_path.split("/", maxsplit=1)
         except ValueError as ex:
             raise BlobProcessingError(f"No reward_slug path section found ({ex})")
 
         try:
-            reward_config = self.reward_configs_by_reward_slug(retailer_slug, db_session)[reward_slug]
+            reward_config = self.reward_configs_by_reward_id(retailer.id, db_session)[reward_slug]
         except KeyError:
             raise BlobProcessingError(f"No RewardConfig found for reward_slug {reward_slug}")
 
@@ -260,7 +246,7 @@ class RewardImportAgent(BlobFileAgent):
                     or_(
                         and_(
                             Reward.code.in_(row_nums_by_code.keys()),
-                            Reward.retailer_slug == retailer_slug,
+                            Reward.retailer_id == retailer.id,
                             Reward.reward_config_id == reward_config.id,
                         ),
                         and_(Reward.reward_config_id != reward_config.id, not_(Reward.deleted)),
@@ -285,7 +271,7 @@ class RewardImportAgent(BlobFileAgent):
             Reward(
                 code=code,
                 reward_config_id=reward_config.id,
-                retailer_slug=retailer_slug,
+                retailer_id=retailer.id,
             )
             for code in set(row_nums_by_code)
             if code  # caters for blank lines
@@ -306,7 +292,11 @@ class RewardUpdatesAgent(BlobFileAgent):
         super().__init__()
         self.file_agent_type = FileAgentType.UPDATE
 
-    def process_csv(self, retailer_slug: str, blob_name: str, blob_content: str, db_session: "Session") -> None:
+    @run_only_if_leader(runner=cron_scheduler)
+    def do_import(self) -> None:  # pragma: no cover
+        super()._do_import()
+
+    def process_csv(self, retailer: Retailer, blob_name: str, blob_content: str, db_session: "Session") -> None:
         content_reader = csv.reader(StringIO(blob_content), delimiter=",", quotechar="|")
 
         # This is a defaultdict(list) incase we encounter the reward code twice in one file
@@ -337,7 +327,7 @@ class RewardUpdatesAgent(BlobFileAgent):
 
         self._process_updates(
             db_session=db_session,
-            retailer_slug=retailer_slug,
+            retailer=retailer,
             reward_update_rows_by_code=reward_update_rows_by_code,
             blob_name=blob_name,
         )
@@ -365,7 +355,7 @@ class RewardUpdatesAgent(BlobFileAgent):
     def _process_unallocated_codes(
         self,
         db_session: "Session",
-        retailer_slug: str,
+        retailer: Retailer,
         blob_name: str,
         reward_codes_in_file: list[str],
         db_reward_data_by_code: dict[str, dict[str, Union[str, bool]]],
@@ -385,7 +375,7 @@ class RewardUpdatesAgent(BlobFileAgent):
 
             db_session.execute(
                 update(Reward)
-                .where(Reward.code.in_(unallocated_reward_codes), Reward.retailer_slug == retailer_slug)
+                .where(Reward.code.in_(unallocated_reward_codes), Reward.retailer_id == retailer.id)
                 .values(deleted=True)
             )
             msg = f"Unallocated reward codes found while processing {blob_name}:\n" + "\n".join(
@@ -402,7 +392,7 @@ class RewardUpdatesAgent(BlobFileAgent):
     def _process_updates(
         self,
         db_session: "Session",
-        retailer_slug: str,
+        retailer: Retailer,
         reward_update_rows_by_code: DefaultDict[str, list[RewardUpdateRow]],
         blob_name: str,
     ) -> None:
@@ -413,7 +403,7 @@ class RewardUpdatesAgent(BlobFileAgent):
             lambda: db_session.execute(
                 select(Reward.id, Reward.code, Reward.allocated)
                 .with_for_update()
-                .where(Reward.code.in_(reward_codes_in_file), Reward.retailer_slug == retailer_slug)
+                .where(Reward.code.in_(reward_codes_in_file), Reward.retailer_id == retailer.id)
             )
             .mappings()
             .all(),
@@ -430,7 +420,7 @@ class RewardUpdatesAgent(BlobFileAgent):
 
         self._process_unallocated_codes(
             db_session,
-            retailer_slug,
+            retailer,
             blob_name,
             reward_codes_in_file,
             db_reward_data_by_code,
@@ -468,7 +458,7 @@ class RewardUpdatesAgent(BlobFileAgent):
         params_list = [
             {
                 "reward_uuid": reward_update.reward.id,
-                "retailer_slug": reward_update.reward.retailer_slug,
+                "retailer_slug": reward_update.reward.retailer.slug,
                 "date": datetime.fromisoformat(reward_update.date.isoformat()).replace(tzinfo=timezone.utc).timestamp(),
                 "status": reward_update.status.value,
             }
@@ -486,22 +476,3 @@ class RewardUpdatesAgent(BlobFileAgent):
             sync_run_query(_rollback, db_session, rollback_on_exc=False)
         else:
             sync_run_query(_commit, db_session, rollback_on_exc=False)
-
-
-@click.group()
-def cli() -> None:  # pragma: no cover
-    pass
-
-
-@cli.command()
-def reward_import_agent() -> None:  # pragma: no cover
-    RewardImportAgent().run()
-
-
-@cli.command()
-def reward_updates_agent() -> None:  # pragma: no cover
-    RewardUpdatesAgent().run()
-
-
-if __name__ == "__main__":  # pragma: no cover
-    cli()

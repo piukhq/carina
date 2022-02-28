@@ -6,11 +6,11 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import crud
-from app.api.deps import get_session, user_is_authorised
+from app.api.deps import get_session, retailer_is_valid, user_is_authorised
 from app.api.tasks import enqueue_many_tasks, enqueue_task
 from app.db.base_class import async_run_query
 from app.enums import HttpErrors, RewardTypeStatuses
-from app.fetch_reward import get_allocable_reward
+from app.models import Retailer
 from app.schemas import RewardAllocationSchema
 from app.schemas.reward import RewardStatusSchema
 
@@ -24,19 +24,13 @@ router = APIRouter()
 )
 async def allocation(
     payload: RewardAllocationSchema,
-    retailer_slug: str,
     reward_slug: str,
+    retailer: Retailer = Depends(retailer_is_valid),
     db_session: AsyncSession = Depends(get_session),
 ) -> Any:
-    reward_config = await crud.get_reward_config(db_session, retailer_slug, reward_slug)
-    reward, issued, expiry = await get_allocable_reward(db_session, reward_config)
+    reward_config = await crud.get_reward_config(db_session, retailer, reward_slug)
     retry_task = await crud.create_reward_issuance_retry_task(
-        db_session,
-        reward=reward,
-        issued_date=issued,
-        expiry_date=expiry,
-        reward_config=reward_config,
-        account_url=payload.account_url,
+        db_session, reward_config=reward_config, account_url=payload.account_url
     )
 
     asyncio.create_task(enqueue_task(retry_task_id=retry_task.retry_task_id))
@@ -49,9 +43,12 @@ async def allocation(
     dependencies=[Depends(user_is_authorised)],
 )
 async def reward_type_status(
-    payload: RewardStatusSchema, retailer_slug: str, reward_slug: str, db_session: AsyncSession = Depends(get_session)
+    payload: RewardStatusSchema,
+    reward_slug: str,
+    retailer: Retailer = Depends(retailer_is_valid),
+    db_session: AsyncSession = Depends(get_session),
 ) -> Any:
-    reward_config = await crud.get_reward_config(db_session, retailer_slug, reward_slug, for_update=True)
+    reward_config = await crud.get_reward_config(db_session, retailer, reward_slug, for_update=True)
 
     if reward_config.status != RewardTypeStatuses.ACTIVE:  # pragma: coverage bug 1012
         raise HttpErrors.STATUS_UPDATE_FAILED.value
@@ -64,7 +61,7 @@ async def reward_type_status(
 
     retry_tasks_ids = await crud.create_delete_and_cancel_rewards_tasks(
         db_session,
-        retailer_slug=retailer_slug,
+        retailer=retailer,
         reward_slug=reward_slug,
         create_cancel_task=payload.status == RewardTypeStatuses.CANCELLED,
     )

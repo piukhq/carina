@@ -1,17 +1,43 @@
-from typing import Optional, Tuple
+from importlib import import_module
+from typing import TYPE_CHECKING, Callable, Optional, Tuple, Type
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 
-from app.models import Reward, RewardConfig
+from app.db.base_class import sync_run_query
+from app.models import RetailerFetchType, Reward, RewardConfig
 
-from . import pre_loaded
+from .base import BaseAgent
+
+if TYPE_CHECKING:  # pragma: no cover
+    from retry_tasks_lib.db.models import RetryTask
+    from sqlalchemy.orm import Session
 
 
-async def get_allocable_reward(
-    db_session: AsyncSession, reward_config: RewardConfig
+def get_allocable_reward(
+    db_session: "Session", reward_config: RewardConfig, send_request_fn: Callable = None, retry_task: "RetryTask" = None
 ) -> Tuple[Optional[Reward], float, float]:
 
-    # placeholder for fetching based on reward config type using "agents" type of logic
-    # for now defaulting to "pre_loaded" agent
+    try:
+        mod, cls = reward_config.fetch_type.path.rsplit(".", 1)
+        mod = import_module(mod)
+        Agent: Type[BaseAgent] = getattr(mod, cls)
+    except (ValueError, ModuleNotFoundError, AttributeError) as ex:
+        BaseAgent.logger.warning(
+            f"Could not import agent class for fetch_type {reward_config.fetch_type.name}.", exc_info=ex
+        )
+        raise
 
-    return await pre_loaded.get_reward(db_session, reward_config)
+    def _query() -> RetailerFetchType:
+        return db_session.execute(
+            select(RetailerFetchType).where(
+                RetailerFetchType.retailer_id == reward_config.retailer_id,
+                RetailerFetchType.fetch_type_id == reward_config.fetch_type_id,
+            )
+        ).scalar_one()
+
+    agent_config: dict = sync_run_query(_query, db_session).load_agent_config()
+
+    with Agent(db_session, reward_config, agent_config, send_request_fn, retry_task) as agent:
+        reward, issued, expiry = agent.fetch_reward()
+
+    return reward, issued, expiry
