@@ -35,6 +35,7 @@ testfixtures = "*"
 retry-tasks-lib = {version=">=1.11.0", index="pypi-cloud"}
 fastapi-prometheus-metrics = {version=">=0.1.0", index="pypi-cloud"}
 pyyaml = "*"
+typer = "*"
 
 [dev-packages]
 flake8 = "*"
