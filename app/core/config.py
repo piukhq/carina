@@ -286,12 +286,30 @@ dictConfig(
 )
 
 
+# this will decode responses:
+# >>> redis.set('test', 'hello')
+# True
+# >>> redis.get('test')
+# 'hello'
 redis = Redis.from_url(
     settings.REDIS_URL,
     socket_connect_timeout=3,
     socket_keepalive=True,
     retry_on_timeout=False,
     decode_responses=True,
+)
+
+# used for RQ:
+# this will decode responses:
+# >>> redis.set('test', 'hello')
+# True
+# >>> redis.get('test')
+# b'hello'
+redis_raw = Redis.from_url(
+    settings.REDIS_URL,
+    socket_connect_timeout=3,
+    socket_keepalive=True,
+    retry_on_timeout=False,
 )
 
 if settings.SENTRY_DSN:  # pragma: no cover

@@ -7,7 +7,7 @@ import sentry_sdk
 
 from retry_tasks_lib.utils.error_handler import handle_request_exception
 
-from app.core.config import redis, settings
+from app.core.config import redis_raw, settings
 from app.db.session import SyncSessionMaker
 
 from . import logger
@@ -43,7 +43,7 @@ def handle_retry_task_request_error(
     with SyncSessionMaker() as db_session:
         handle_request_exception(
             db_session=db_session,
-            connection=redis,
+            connection=redis_raw,
             backoff_base=settings.TASK_RETRY_BACKOFF_BASE,
             max_retries=settings.TASK_MAX_RETRIES,
             job=job,
@@ -60,7 +60,7 @@ def handle_issue_reward_request_error(
     with SyncSessionMaker() as db_session:
         handle_request_exception(
             db_session=db_session,
-            connection=redis,
+            connection=redis_raw,
             backoff_base=settings.TASK_RETRY_BACKOFF_BASE,
             max_retries=settings.TASK_MAX_RETRIES,
             job=job,

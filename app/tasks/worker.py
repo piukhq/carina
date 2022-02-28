@@ -1,20 +1,15 @@
 from datetime import datetime, timedelta, timezone
 
-import click
 import rq
 import sentry_sdk
 
-from prometheus_client import CollectorRegistry
-from prometheus_client import start_http_server as start_prometheus_server
-from prometheus_client.multiprocess import MultiProcessCollector
 from retry_tasks_lib.db.models import RetryTask, TaskType
 from retry_tasks_lib.enums import RetryTaskStatuses
-from retry_tasks_lib.utils.error_handler import job_meta_handler
 from sqlalchemy import func
 from sqlalchemy.future import select
 from sqlalchemy.sql.expression import and_, or_
 
-from app.core.config import redis, settings
+from app.core.config import settings
 from app.db.session import SyncSessionMaker
 
 from . import logger
@@ -76,28 +71,3 @@ class RetryTaskWorker(rq.Worker):
 
         except Exception as ex:
             sentry_sdk.capture_exception(ex)
-
-
-@click.group()
-def cli() -> None:
-    pass
-
-
-@cli.command()
-def worker(burst: bool = False) -> None:
-
-    registry = CollectorRegistry()
-    MultiProcessCollector(registry)
-    start_prometheus_server(settings.PROMETHEUS_HTTP_SERVER_PORT, registry=registry)
-
-    worker = RetryTaskWorker(
-        queues=settings.TASK_QUEUES,
-        connection=redis,
-        log_job_description=True,
-        exception_handlers=[job_meta_handler],
-    )
-    worker.work(burst=burst, with_scheduler=True)
-
-
-if __name__ == "__main__":
-    cli()

@@ -10,7 +10,7 @@ from retry_tasks_lib.enums import RetryTaskStatuses
 from retry_tasks_lib.utils.synchronous import enqueue_retry_task_delay, retryable_task
 from sqlalchemy.future import select
 
-from app.core.config import redis, settings
+from app.core.config import redis_raw, settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
 from app.enums import RewardTypeStatuses
@@ -179,7 +179,7 @@ def issue_reward(retry_task: RetryTask, db_session: "Session") -> None:
                 sync_run_query(_set_waiting, db_session)
 
             next_attempt_time = enqueue_retry_task_delay(
-                connection=redis,
+                connection=redis_raw,
                 retry_task=retry_task,
                 delay_seconds=settings.REWARD_ISSUANCE_REQUEUE_BACKOFF_SECONDS,
             )
