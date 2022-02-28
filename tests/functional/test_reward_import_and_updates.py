@@ -719,7 +719,7 @@ def test_enqueue_reward_updates(
     mock_sync_create_many_tasks = mocker.patch("app.imports.agents.file_agent.sync_create_many_tasks")
     mock_sync_create_many_tasks.return_value = [mock.MagicMock(spec=RetryTask, retry_task_id=1)]
     mock_enqueue_many_retry_tasks = mocker.patch("app.imports.agents.file_agent.enqueue_many_retry_tasks")
-    mock_redis = mocker.patch("app.imports.agents.file_agent.redis")
+    mock_redis = mocker.patch("app.imports.agents.file_agent.redis_raw")
 
     today = date.today()
     reward_update = RewardUpdate(
