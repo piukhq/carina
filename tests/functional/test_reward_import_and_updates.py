@@ -43,13 +43,11 @@ def _get_reward_rows(db_session: "Session") -> List[Reward]:
 
 
 def test_import_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> None:
-    mocker.patch("app.scheduler.sentry_sdk")
+    mocker.patch("app.imports.agents.file_agent.sentry_sdk")
     db_session, reward_config, pre_existing_reward = setup
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
     from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
-    from app.scheduler import sentry_sdk as scheduler_sentry_sdk
 
-    capture_message_spy = mocker.spy(scheduler_sentry_sdk, "capture_message")
     mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
     mock_settings.SENTRY_DSN = "SENTRY_DSN"
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
@@ -95,7 +93,7 @@ def test_import_agent__process_csv_soft_deleted(
     Test that a reward code will be imported OK when the code exists in the DB but for a different reward slug,
     and it has been soft deleted
     """
-    mocker.patch("app.scheduler.sentry_sdk")
+    mocker.patch("app.imports.agents.file_agent.sentry_sdk")
     db_session, reward_config, pre_existing_reward = setup
     second_reward_config = create_reward_config(**{"reward_slug": "second-test-reward"})
     # Associate the existing reward with a different reward config i.e. a different reward slug.
@@ -105,9 +103,7 @@ def test_import_agent__process_csv_soft_deleted(
     db_session.commit()
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
     from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
-    from app.scheduler import sentry_sdk as scheduler_sentry_sdk
 
-    mocker.spy(scheduler_sentry_sdk, "capture_message")
     mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
     mock_settings.SENTRY_DSN = "SENTRY_DSN"
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
@@ -138,7 +134,6 @@ def test_import_agent__process_csv_not_soft_deleted(
     Test that a reward code imported for a different reward slug, but where that existing reward code has
     NOT been soft-deleted, will cause an error to be reported and will not be imported
     """
-    mocker.patch("app.scheduler.sentry_sdk")
     db_session, reward_config, pre_existing_reward = setup
     second_reward_config = create_reward_config(**{"reward_slug": "second-test-reward"})
     # Associate the existing reward with a different reward config i.e. a different reward slug.
@@ -147,9 +142,7 @@ def test_import_agent__process_csv_not_soft_deleted(
     db_session.commit()
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
     from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
-    from app.scheduler import sentry_sdk as scheduler_sentry_sdk
 
-    mocker.spy(scheduler_sentry_sdk, "capture_message")
     mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
     mock_settings.SENTRY_DSN = "SENTRY_DSN"
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
@@ -183,15 +176,12 @@ def test_import_agent__process_csv_same_reward_slug_not_soft_deleted(setup: Setu
     Test that a reward code imported for the same reward slug, where that existing reward code HAS
     been soft-deleted, will cause an error to be reported and will not be imported
     """
-    mocker.patch("app.scheduler.sentry_sdk")
     db_session, reward_config, pre_existing_reward = setup
     pre_existing_reward.deleted = True
     db_session.commit()
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
     from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
-    from app.scheduler import sentry_sdk as scheduler_sentry_sdk
 
-    mocker.spy(scheduler_sentry_sdk, "capture_message")
     mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
     mock_settings.SENTRY_DSN = "SENTRY_DSN"
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
