@@ -40,7 +40,7 @@ class LogLevel(str):
 
 
 class Settings(BaseSettings):
-    API_PREFIX: str = "/bpl/vouchers"
+    API_PREFIX: str = "/bpl/rewards"
     TESTING: bool = False
     SQL_DEBUG: bool = False
     METRICS_DEBUG: bool = False
