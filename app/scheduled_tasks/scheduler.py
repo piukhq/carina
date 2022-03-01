@@ -43,15 +43,15 @@ def acquire_lock(runner: Runner) -> Callable:
                     logger.exception(ex)
                 finally:
                     redis.delete(func_lock_key)
-
             else:
                 msg = f"{runner} could not run {func.__qualname__}. Could not acquire the lock."
                 lock_val = redis.get(func_lock_key)
-                try:
-                    runner_uid, timestamp = lock_val.split(":", 1)
-                    msg += f"\nProcess locked since: {timestamp} by runner of id: {runner_uid}"
-                except (AttributeError, ValueError):
-                    logger.error(f"unexpected lock value ({lock_val})")
+                if lock_val is not None:
+                    try:
+                        runner_uid, timestamp = lock_val.split(":", 1)
+                        msg += f"\nProcess locked since: {timestamp} by runner of id: {runner_uid}"
+                    except ValueError:
+                        logger.error(f"unexpected lock value ({lock_val})")
 
                 logger.info(msg)
 
