@@ -300,7 +300,7 @@ redis = Redis.from_url(
 )
 
 # used for RQ:
-# this will decode responses:
+# this will not decode responses:
 # >>> redis.set('test', 'hello')
 # True
 # >>> redis.get('test')
