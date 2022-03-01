@@ -1,6 +1,6 @@
 import logging
-import socket
 
+from datetime import datetime, timezone
 from functools import wraps
 from logging import Logger
 from typing import Any, Callable, Optional, Protocol
@@ -9,7 +9,6 @@ from uuid import uuid4
 from apscheduler.schedulers.background import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.util import undefined
-from redis.exceptions import WatchError
 
 from app.core.config import redis, settings
 from app.scheduled_tasks import logger as scheduled_tasks_logger
@@ -18,42 +17,43 @@ from . import logger
 
 
 class Runner(Protocol):
-    id: str
+    uid: str
     name: str
 
 
-def run_only_if_leader(runner: Runner) -> Callable:
+def acquire_lock(runner: Runner) -> Callable:
     """
-    Decorator for use with scheduled tasks to determine whether the host/pod is
-    the leader and thus whether to execute the task or not.
-
+    Decorator for use with scheduled tasks to ensure a scheduled task won't be
+    run concurrently somewhere else.
     """
+    LOCK_TIMEOUT_SECS = 3600
 
     def decorater(func: Callable) -> Callable:
-        host_leader_id = f"{socket.gethostname()}-{runner.id}"
-
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> None:
             func_lock_key = f"{settings.REDIS_KEY_PREFIX}{runner.name}:{func.__qualname__}"
-            with redis.pipeline() as pipe:
+            value = f"{runner.uid}:{datetime.now(tz=timezone.utc)}"
+            if redis.set(func_lock_key, value, LOCK_TIMEOUT_SECS, nx=True):
+                # This assumes jobs will be completed within LOCK_TIMEOUT_SECS
+                # seconds and if the lock expires then another process can run
+                # the function without consequence
                 try:
-                    pipe.watch(func_lock_key)
-                    cached_leader_id = pipe.get(func_lock_key)
-                    if cached_leader_id in (host_leader_id, None):
-                        pipe.multi()
-                        pipe.setex(func_lock_key, 30, host_leader_id)
-                        pipe.execute()
-                        return func(*args, **kwargs)
-                    else:
-                        logger.info(
-                            f"Leader with id {host_leader_id} could not run {func.__qualname__}. Not the leader."
-                        )
-                except WatchError:
-                    # somebody else changed the key
-                    logger.info(
-                        f"Leader with id {host_leader_id} could not run {func.__qualname__}. "
-                        "Could not acquire leader lock."
-                    )
+                    func(*args, **kwargs)
+                except Exception as ex:
+                    logger.exception(ex)
+                finally:
+                    redis.delete(func_lock_key)
+            else:
+                msg = f"{runner} could not run {func.__qualname__}. Could not acquire the lock."
+                lock_val = redis.get(func_lock_key)
+                if lock_val is not None:
+                    try:
+                        runner_uid, timestamp = lock_val.split(":", 1)
+                        msg += f"\nProcess locked since: {timestamp} by runner of id: {runner_uid}"
+                    except ValueError:
+                        logger.error(f"unexpected lock value ({lock_val})")
+
+                logger.info(msg)
 
         return wrapper
 
@@ -65,12 +65,12 @@ class CronScheduler:  # pragma: no cover
     default_schedule = "* * * * *"
 
     def __init__(self, *, logger: Logger = None):
-        self.id = str(uuid4())
+        self.uid = str(uuid4())
         self.log = logger if logger is not None else logging.getLogger("cron-scheduler")
         self._scheduler = BlockingScheduler()
 
     def __str__(self) -> str:
-        return f"{self.__class__.__name__}(id: {self.id})"
+        return f"{self.__class__.__name__}(id: {self.uid})"
 
     def _get_trigger(self, schedule: Callable) -> CronTrigger:
         tz = "Europe/London"

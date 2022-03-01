@@ -7,7 +7,7 @@ from prometheus_client import start_http_server as start_prometheus_server
 from prometheus_client.multiprocess import MultiProcessCollector
 from retry_tasks_lib.utils.error_handler import job_meta_handler
 
-from app.core.config import redis, settings
+from app.core.config import redis_raw, settings
 from app.imports.agents.file_agent import RewardImportAgent, RewardUpdatesAgent
 from app.scheduled_tasks.scheduler import cron_scheduler as carina_cron_scheduler
 from app.tasks.worker import RetryTaskWorker
@@ -24,7 +24,7 @@ def task_worker(burst: bool = False) -> None:
     start_prometheus_server(settings.PROMETHEUS_HTTP_SERVER_PORT, registry=registry)
     worker = RetryTaskWorker(
         queues=settings.TASK_QUEUES,
-        connection=redis,
+        connection=redis_raw,
         log_job_description=True,
         exception_handlers=[job_meta_handler],
     )

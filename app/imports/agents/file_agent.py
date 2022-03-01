@@ -19,12 +19,12 @@ from sqlalchemy import update
 from sqlalchemy.future import select
 from sqlalchemy.sql import and_, not_, or_
 
-from app.core.config import redis, settings
+from app.core.config import redis_raw, settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
 from app.enums import FileAgentType, RewardUpdateStatuses
 from app.models import Retailer, Reward, RewardConfig, RewardFileLog, RewardUpdate
-from app.scheduled_tasks.scheduler import cron_scheduler, run_only_if_leader
+from app.scheduled_tasks.scheduler import acquire_lock, cron_scheduler
 from app.schemas import RewardUpdateSchema
 
 logger = logging.getLogger("reward-import")
@@ -188,7 +188,7 @@ class RewardImportAgent(BlobFileAgent):
         super().__init__()
         self.file_agent_type = FileAgentType.IMPORT
 
-    @run_only_if_leader(runner=cron_scheduler)
+    @acquire_lock(runner=cron_scheduler)
     def do_import(self) -> None:  # pragma: no cover
         super()._do_import()
 
@@ -292,7 +292,7 @@ class RewardUpdatesAgent(BlobFileAgent):
         super().__init__()
         self.file_agent_type = FileAgentType.UPDATE
 
-    @run_only_if_leader(runner=cron_scheduler)
+    @acquire_lock(runner=cron_scheduler)
     def do_import(self) -> None:  # pragma: no cover
         super()._do_import()
 
@@ -469,7 +469,7 @@ class RewardUpdatesAgent(BlobFileAgent):
         )
         try:
             enqueue_many_retry_tasks(
-                db_session, retry_tasks_ids=[task.retry_task_id for task in tasks], connection=redis
+                db_session, retry_tasks_ids=[task.retry_task_id for task in tasks], connection=redis_raw
             )
         except Exception as ex:
             sentry_sdk.capture_exception(ex)

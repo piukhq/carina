@@ -17,17 +17,14 @@ BPL Reward Management API
 
 ### reward allocation worker (rq)
 
-- `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES pipenv run python -m app.tasks.worker worker`
+- `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES pipenv run python -m app.core.cli task-worker`
 - this worker deals with asynchronous tasks e.g. allocating rewards to account_holders, through Polaris' API
 
 > Running the command with the above environment variable is a work around for [this issue](https://github.com/rq/rq/issues/1418). It's a mac only issue to do with os.fork()'ing which rq.Worker utilises.
-> 
-### reward updates import scheduler
 
-- `pipenv run python -m app.imports.agents.file_agent reward-updates-agent`
-- this scheduler deals with downloading reward status change files and inserting into the reward_update table
+### cron scheduler (apscheduler)
 
-### reward import scheduler
-
-- `pipenv run python -m app.imports.agents.file_agent reward-import-agent`
-- this scheduler deals with downloading reward import files and inserting into the reward table
+- `pipenv run python -m app.core.cli cron-scheduler`
+- schedules regular tasks:
+  - downloading reward status change files and inserting into the reward_update table
+  - downloading reward import files and inserting into the reward table
