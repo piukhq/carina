@@ -374,8 +374,8 @@ def test_delete_unallocated_rewards(delete_rewards_retry_task: RetryTask, db_ses
 def test_cancel_reward(mock_datetime: mock.Mock, db_session: Session, cancel_rewards_retry_task: RetryTask) -> None:
     mock_datetime.now.return_value = fake_now
     task_params = cancel_rewards_retry_task.get_params()
-    url = "{base_url}/bpl/loyalty/{retailer_slug}/rewards/{reward_slug}/cancel".format(
-        base_url=settings.POLARIS_URL,
+    url = "{base_url}/{retailer_slug}/rewards/{reward_slug}/cancel".format(
+        base_url=settings.POLARIS_BASE_URL,
         retailer_slug=task_params["retailer_slug"],
         reward_slug=task_params["reward_slug"],
     )

@@ -179,7 +179,8 @@ class Settings(BaseSettings):
 
         return db_uri
 
-    POLARIS_URL: str = "http://polaris-api"
+    POLARIS_HOST: str = "http://polaris-api"
+    POLARIS_BASE_URL: str = f"{POLARIS_HOST}/bpl/loyalty"
     REDIS_URL: str
 
     BLOB_STORAGE_DSN: str = ""
