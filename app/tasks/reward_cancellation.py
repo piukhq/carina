@@ -21,8 +21,8 @@ def _process_rewards_cancellation(task_params: dict) -> dict:
 
     resp = send_request_with_metrics(
         "POST",
-        "{base_url}/bpl/loyalty/{retailer_slug}/rewards/{reward_slug}/cancel".format(
-            base_url=settings.POLARIS_URL,
+        "{base_url}/{retailer_slug}/rewards/{reward_slug}/cancel".format(
+            base_url=settings.POLARIS_BASE_URL,
             retailer_slug=task_params["retailer_slug"],
             reward_slug=task_params["reward_slug"],
         ),

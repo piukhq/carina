@@ -155,8 +155,8 @@ def adjustment_expected_payload(reward_status_adjustment_retry_task: RetryTask) 
 
 @pytest.fixture(scope="function")
 def adjustment_url(reward_status_adjustment_task_params: dict) -> str:
-    return "{base_url}/bpl/loyalty/{retailer_slug}/rewards/{reward_uuid}/status".format(
-        base_url=settings.POLARIS_URL,
+    return "{base_url}/{retailer_slug}/rewards/{reward_uuid}/status".format(
+        base_url=settings.POLARIS_BASE_URL,
         retailer_slug=reward_status_adjustment_task_params["retailer_slug"],
         reward_uuid=reward_status_adjustment_task_params["reward_uuid"],
     )
