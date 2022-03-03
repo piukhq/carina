@@ -180,7 +180,14 @@ class Settings(BaseSettings):
         return db_uri
 
     POLARIS_HOST: str = "http://polaris-api"
-    POLARIS_BASE_URL: str = f"{POLARIS_HOST}/bpl/loyalty"
+    POLARIS_BASE_URL: str = ""
+
+    @validator("POLARIS_BASE_URL")
+    def polaris_base_url(cls, v: str, values: dict[str, Any]) -> str:
+        if v != "":
+            return v
+        return f"{values['POLARIS_HOST']}/bpl/loyalty"
+
     REDIS_URL: str
 
     BLOB_STORAGE_DSN: str = ""
