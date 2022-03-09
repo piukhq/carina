@@ -189,6 +189,15 @@ class Settings(BaseSettings):
 
     REDIS_URL: str
 
+    @validator("REDIS_URL")
+    def assemble_redis_url(cls, v: str, values: dict[str, Any]) -> str:
+
+        if values["TESTING"]:
+            base_url, db_n = v.rsplit("/", 1)
+            return f"{base_url}/{int(db_n) + 1}"
+
+        return v
+
     BLOB_STORAGE_DSN: str = ""
     BLOB_IMPORT_CONTAINER = "carina-imports"
     BLOB_ARCHIVE_CONTAINER = "carina-archive"
