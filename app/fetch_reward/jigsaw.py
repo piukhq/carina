@@ -3,14 +3,16 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 from uuid import uuid4
 
 import requests
+import sentry_sdk
 
+from fastapi import status
 from retry_tasks_lib.db.models import RetryTask, TaskTypeKey, TaskTypeKeyValue
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.future import select
 
 from app.core.config import redis, settings
 from app.db.base_class import sync_run_query
-from app.fetch_reward.base import BaseAgent
+from app.fetch_reward.base import AgentError, BaseAgent
 from app.models import Reward
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -23,6 +25,8 @@ if TYPE_CHECKING:  # pragma: no cover
 
 class Jigsaw(BaseAgent):
     """
+    Handles fetching a Reward from Jigsaw.
+
     Sample agent_config:
     ```yaml
     base_url: "https://dev.jigsaw360.com"
@@ -68,6 +72,15 @@ class Jigsaw(BaseAgent):
     ```
     """
 
+    JIGSAW_STATUS_CODE_MAP = {
+        "5000": status.HTTP_500_INTERNAL_SERVER_ERROR,
+        "5003": status.HTTP_503_SERVICE_UNAVAILABLE,
+        "4003": status.HTTP_403_FORBIDDEN,
+        "4001": status.HTTP_401_UNAUTHORIZED,
+    }
+    NEW_TOKEN_NEEDED_STATUS = "4001"
+    NEW_TOKEN_NEEDED_IDS = ["10003", "10006", "10007"]
+
     redis_token_key = f"{settings.REDIS_KEY_PREFIX}:agent:jigsaw:auth_token"
 
     def __init__(
@@ -81,26 +94,114 @@ class Jigsaw(BaseAgent):
         super().__init__(db_session, reward_config, config, send_request_fn, retry_task)
         self.base_url: str = self.config["base_url"]
         self.customer_card_ref: Optional[str] = None
+        self.reward_config_required_values = reward_config.load_required_fields_values()
 
-    def _get_response_body_or_raise_for_status(self, resp: requests.Response) -> dict:
-        # TODO: add error reponse logic, only happy path supported for now.
-        resp.raise_for_status()
-        response_payload = resp.json()
+    @staticmethod
+    def _send_to_sentry(msg: str) -> Optional[str]:
+        """
+        Sends provided message to sentry and returns sentry event id.
+        If SENTRY_DSN is not set, does nothing and returns None.
+        """
+        with sentry_sdk.push_scope() as scope:
+            scope.fingerprint = ["{{ default }}", "{{ message }}"]
+            event_id = sentry_sdk.capture_message(msg)
 
-        if response_payload["status"] == 2000:
-            return response_payload
-        else:
-            raise requests.RequestException
+        return event_id
+
+    def _collect_response_data(self, resp: requests.Response) -> tuple[dict, str, str, str, str]:
+        """tries to collect json payload, jigsaw status, status description, and error message if present."""
+        try:
+            response_payload = resp.json()
+            jigsaw_status = str(response_payload["status"])
+            description = response_payload["status_description"]
+            error_msg = next((msg for msg in response_payload.get("messages", []) if msg["isError"]), None)
+
+            if error_msg is not None:
+                msg_id = str(error_msg["id"])
+                msg_info = error_msg["info"]
+            else:
+                msg_id = "N/A"
+                msg_info = ""
+
+        except (requests.exceptions.JSONDecodeError, KeyError) as ex:
+            msg = f"Jigsaw: unexpected response format. info: {ex}"
+            event_id = self._send_to_sentry(msg)
+            raise requests.HTTPError(f"{msg} (sentry event id: {event_id})", response=resp)
+
+        return response_payload, jigsaw_status, description, msg_id, msg_info
+
+    def _get_response_body_or_raise_for_status(
+        self, resp: requests.Response, try_again_call: Optional[Callable] = None
+    ) -> dict:
+        """Validates a http response based on Jigsaw specific status codes and errors ids."""
+
+        response_payload, jigsaw_status, description, msg_id, msg_info = self._collect_response_data(resp)
+
+        # BPL-437: If jigsaw returns a 4001 status with a message with isError set as True and the id equal to
+        # one of the ids in NEW_TOKEN_NEEDED_IDS we need to fetch a new authorisation token and try again.
+        try_again_with_new_token = (
+            try_again_call is not None
+            and jigsaw_status == self.NEW_TOKEN_NEEDED_STATUS
+            and msg_id in self.NEW_TOKEN_NEEDED_IDS
+        )
+
+        if not try_again_with_new_token and jigsaw_status in self.JIGSAW_STATUS_CODE_MAP.keys():
+            resp.status_code = self.JIGSAW_STATUS_CODE_MAP[jigsaw_status]
+            raise requests.HTTPError(
+                f"Received a {jigsaw_status} {description} response. Details: {msg_id} {msg_info}",
+                response=resp,
+            )
+
+        if self.retry_task is not None:
+            self.retry_task.update_task(
+                db_session=self.db_session,
+                response_audit={
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+                    "request": {"method": resp.request.method, "url": resp.request.url},
+                    "response": {
+                        "status": resp.status_code,
+                        "jigsaw_status": f"{jigsaw_status} {description}",
+                        "message": f"{msg_id} {msg_info}",
+                    },
+                },
+            )
+
+        # we want to capture the failed response's audit before trying again.
+        if try_again_with_new_token:
+            redis.delete(self.redis_token_key)
+            new_resp = try_again_call()  # type: ignore [misc]
+            return self._get_response_body_or_raise_for_status(new_resp)
+
+        if jigsaw_status != "2000":
+            msg = (
+                f"Jigsaw: unknown error returned. "
+                f"status: {jigsaw_status} {description}, message: {msg_id} {msg_info}"
+            )
+            event_id = self._send_to_sentry(msg)
+            raise AgentError(f"{msg} (sentry event id: {event_id})")
+
+        return response_payload
 
     def _get_tz_aware_datetime_from_isoformat(self, date_time_str: str) -> datetime:
+        """Returns a UTC timezone aware datetime from an isoformat string, assumes UTC if timezone is not specified"""
+
         dt = datetime.fromisoformat(date_time_str)
         if dt.tzinfo is None:
-            self.logger.info("Received naive datetime from Jigsaw, assuming UTC timezone.")
+            self.logger.info("Jigsaw: Received naive datetime, assuming UTC timezone.")
             dt = dt.replace(tzinfo=timezone.utc)
 
         return dt.astimezone(tz=timezone.utc)
 
-    def _request_new_token(self) -> str:
+    def _get_auth_token(self) -> str:
+        """
+        Fetches a Jigsaw's authorisation token from redis.
+        If it cannot find it cached, requests a new one to Jigsaw, caches it, and returns it.
+        """
+
+        token = redis.get(self.redis_token_key)
+        if token is not None:
+            return token
+
         resp = self.send_request(
             "POST",
             f"{self.base_url}/order/V4/getToken",
@@ -116,20 +217,18 @@ class Jigsaw(BaseAgent):
             - datetime.now(tz=timezone.utc).timestamp()
         )
         if expire_in < 0:
-            raise ValueError("Jigsaw returned an already expired token.")
+            raise AgentError("Jigsaw: Jigsaw returned an already expired token.")
 
         token = response_payload["data"]["Token"]
         redis.set(self.redis_token_key, token, expire_in)
         return token
 
-    def _get_auth_token(self) -> str:
-        token = redis.get(self.redis_token_key)
-        if token is not None:
-            return token
-
-        return self._request_new_token()
-
     def _generate_customer_card_ref(self) -> tuple[str, datetime]:
+        """
+        Generates a new customer_card_ref uuid and a datetime now utc.
+        If a customer_card_ref is stored as task param, returns that instead of creating a new uuid.
+        """
+
         customer_card_ref: Optional[str] = None
         if self.retry_task is not None:
             customer_card_ref = self.retry_task.get_params().get("customer_card_ref", None)
@@ -138,6 +237,8 @@ class Jigsaw(BaseAgent):
         return self.customer_card_ref, datetime.now(tz=timezone.utc)
 
     def _save_reward(self, customer_card_ref: str, reward_code: str) -> Reward:
+        """Stores the Reward data returned by Jigsaw in the DB"""
+
         def _query() -> Reward:
             reward = Reward(
                 id=customer_card_ref,
@@ -153,25 +254,30 @@ class Jigsaw(BaseAgent):
 
         return sync_run_query(_query, self.db_session)
 
-    def fetch_reward(self) -> tuple[Reward, float, float]:
-        token = self._get_auth_token()
-        customer_card_ref, issued = self._generate_customer_card_ref()
-
-        resp = self.send_request(
+    def _register_reward(self) -> requests.Response:
+        """
+        Registers our customer_card_ref to Jigsaw and returns a new Reward code.
+        """
+        return self.send_request(
             "POST",
             f"{self.base_url}/order/V4/register",
             json={
-                "customer_card_ref": customer_card_ref,
+                "customer_card_ref": self.customer_card_ref,
                 "brand_id": self.config["brand_id"],
-                "transaction_value": self.reward_config.load_required_fields_values()["transaction_value"],
+                "transaction_value": self.reward_config_required_values["transaction_value"],
             },
-            headers={"Token": token},
+            headers={"Token": self._get_auth_token()},
         )
-        response_payload = self._get_response_body_or_raise_for_status(resp)
 
-        if response_payload["data"]["balance"] != self.reward_config.load_required_fields_values()["transaction_value"]:
+    def fetch_reward(self) -> tuple[Reward, float, float]:
+        customer_card_ref, issued = self._generate_customer_card_ref()
+
+        resp = self._register_reward()
+        response_payload = self._get_response_body_or_raise_for_status(resp, try_again_call=self._register_reward)
+
+        if response_payload["data"]["balance"] != self.reward_config_required_values["transaction_value"]:
             # TODO: this logic will be expanded in BPL-438, remove # pragma: no cover once implemented
-            raise ValueError("fetched reward balance and transaction value do not match.")  # pragma: no cover
+            raise AgentError("Jigsaw: fetched reward balance and transaction value do not match.")  # pragma: no cover
 
         expiry = self._get_tz_aware_datetime_from_isoformat(response_payload["data"]["expiry_date"])
         reward = self._save_reward(customer_card_ref, response_payload["data"]["number"])
