@@ -43,7 +43,6 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/bpl/rewards"
     TESTING: bool = False
     SQL_DEBUG: bool = False
-    METRICS_DEBUG: bool = False
 
     @validator("TESTING")
     def is_test(cls, v: bool) -> bool:
@@ -189,6 +188,15 @@ class Settings(BaseSettings):
         return f"{values['POLARIS_HOST']}/bpl/loyalty"
 
     REDIS_URL: str
+
+    @validator("REDIS_URL")
+    def assemble_redis_url(cls, v: str, values: dict[str, Any]) -> str:
+
+        if values["TESTING"]:
+            base_url, db_n = v.rsplit("/", 1)
+            return f"{base_url}/{int(db_n) + 1}"
+
+        return v
 
     BLOB_STORAGE_DSN: str = ""
     BLOB_IMPORT_CONTAINER = "carina-imports"

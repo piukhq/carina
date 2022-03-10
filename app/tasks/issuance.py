@@ -18,6 +18,7 @@ from app.fetch_reward import get_allocable_reward
 from app.models import Reward, RewardConfig
 
 from . import logger, send_request_with_metrics
+from .prometheus import tasks_run_total
 
 if TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy.orm import Session
@@ -124,7 +125,7 @@ def _process_and_issue_reward(db_session: "Session", retry_task: RetryTask) -> N
 @retryable_task(db_session_factory=SyncSessionMaker)
 def issue_reward(retry_task: RetryTask, db_session: "Session") -> None:
     """Try to fetch and issue a reward, unless the campaign has been cancelled"""
-
+    tasks_run_total.labels(app=settings.PROJECT_NAME, task_name=settings.REWARD_ISSUANCE_TASK_NAME).inc()
     reward_config = _get_reward_config(db_session, retry_task.get_params()["reward_config_id"])
     if reward_config.status == RewardTypeStatuses.CANCELLED:
         _cancel_task(db_session, retry_task)
