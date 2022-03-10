@@ -48,3 +48,7 @@ class BaseAgent(ABC):
     @abstractmethod
     def fetch_balance(self) -> Any:  # pragma: no cover
         ...
+
+
+class AgentError(Exception):
+    pass
