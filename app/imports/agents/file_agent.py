@@ -51,14 +51,17 @@ class BlobFileAgent:
         self.schedule = settings.BLOB_IMPORT_SCHEDULE
         blob_client_logger = logging.getLogger("blob-client")
         blob_client_logger.setLevel(settings.BLOB_IMPORT_LOGGING_LEVEL)
-        self.blob_service_client = BlobServiceClient.from_connection_string(
+        self.blob_service_client: BlobServiceClient = BlobServiceClient.from_connection_string(
             settings.BLOB_STORAGE_DSN, logger=blob_client_logger
         )
+        # type hints for blob storage still not working properly, remove ignores if it gets fixed.
         try:
-            self.blob_service_client.create_container(self.container_name)
+            self.blob_service_client.create_container(self.container_name)  # type: ignore [attr-defined]
         except ResourceExistsError:
             pass  # this is fine
-        self.container_client = self.blob_service_client.get_container_client(self.container_name)
+        self.container_client = self.blob_service_client.get_container_client(  # type: ignore [attr-defined]
+            self.container_name
+        )
 
     def _blob_name_is_duplicate(self, db_session: "Session", file_name: str) -> bool:
         file_name = sync_run_query(
