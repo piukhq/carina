@@ -98,18 +98,6 @@ class Jigsaw(BaseAgent):
         self.reward_config_required_values = reward_config.load_required_fields_values()
         self.fernet = Fernet(settings.JIGSAW_AGENT_ENCRYPTION_KEY.encode())
 
-    @staticmethod
-    def _send_to_sentry(msg: str) -> Optional[str]:
-        """
-        Sends provided message to sentry and returns sentry event id.
-        If SENTRY_DSN is not set, does nothing and returns None.
-        """
-        with sentry_sdk.push_scope() as scope:
-            scope.fingerprint = ["{{ default }}", "{{ message }}"]
-            event_id = sentry_sdk.capture_message(msg)
-
-        return event_id
-
     def _collect_response_data(self, resp: requests.Response) -> tuple[dict, str, str, str, str]:
         """tries to collect json payload, jigsaw status, status description, and error message if present."""
         try:
@@ -126,9 +114,7 @@ class Jigsaw(BaseAgent):
                 msg_info = ""
 
         except (requests.exceptions.JSONDecodeError, KeyError) as ex:
-            msg = f"Jigsaw: unexpected response format. info: {ex}"
-            event_id = self._send_to_sentry(msg)
-            raise requests.HTTPError(f"{msg} (sentry event id: {event_id})", response=resp)
+            raise requests.HTTPError(f"Jigsaw: unexpected response format. info: {ex}", response=resp)
 
         return response_payload, jigsaw_status, description, msg_id, msg_info
 
@@ -175,12 +161,10 @@ class Jigsaw(BaseAgent):
             return self._get_response_body_or_raise_for_status(new_resp)
 
         if jigsaw_status != "2000":
-            msg = (
+            raise AgentError(
                 f"Jigsaw: unknown error returned. "
                 f"status: {jigsaw_status} {description}, message: {msg_id} {msg_info}"
             )
-            event_id = self._send_to_sentry(msg)
-            raise AgentError(f"{msg} (sentry event id: {event_id})")
 
         return response_payload
 
@@ -204,9 +188,10 @@ class Jigsaw(BaseAgent):
         try:
             return self.fernet.decrypt(raw_token).decode()
         except Exception as ex:
-            msg = f"Jigsaw: Unexpected value retrieved from redis for {self.redis_token_key}. info: {ex}"
-            event_id = self._send_to_sentry(msg)
-            self.logger.error(f"{msg} (sentry event id: {event_id})")
+            sentry_sdk.capture_exception(ex)
+            self.logger.exception(
+                f"Jigsaw: Unexpected value retrieved from redis for {self.redis_token_key}.", exc_info=ex
+            )
             return None
 
     def _encrypt_and_set_token(self, token: str, expires_in: timedelta) -> None:
@@ -219,9 +204,8 @@ class Jigsaw(BaseAgent):
                 expires_in,
             )
         except Exception as ex:
-            msg = f"Jigsaw: Unexpected error while encrypting and saving token to redis. info: {ex}"
-            event_id = self._send_to_sentry(msg)
-            self.logger.error(f"{msg} (sentry event id: {event_id})")
+            sentry_sdk.capture_exception(ex)
+            self.logger.exception("Jigsaw: Unexpected error while encrypting and saving token to redis.", exc_info=ex)
 
     def _get_auth_token(self) -> str:
         """

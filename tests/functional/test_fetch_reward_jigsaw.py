@@ -504,19 +504,13 @@ def test_jigsaw_agent_getToken_unexpected_error_response(
     mock_datetime.now.return_value = now
     mock_datetime.fromisoformat = datetime.fromisoformat
     spy_logger = mocker.spy(Jigsaw, "logger")
-    mock_sentry = mocker.patch("app.fetch_reward.jigsaw.sentry_sdk", autospec=True)
-    mock_sentry.capture_message.return_value = 1
 
     with pytest.raises(AgentError) as exc_info:
         with Jigsaw(db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward) as agent:
             agent.fetch_reward()
 
     spy_logger.exception.assert_called_with(exc_info.value)
-    mock_sentry.capture_message.assert_called()
-    assert (
-        exc_info.value.args[0]
-        == "Jigsaw: unknown error returned. status: 9000 OMG, message: 9000 AHHHHHHHHHHHH!!!! (sentry event id: 1)"
-    )
+    assert exc_info.value.args[0] == "Jigsaw: unknown error returned. status: 9000 OMG, message: 9000 AHHHHHHHHHHHH!!!!"
     assert db_session.scalar(select(Reward).where(Reward.reward_config_id == jigsaw_reward_config.id)) is None
     db_session.refresh(issuance_retry_task_no_reward)
     task_params_keys = issuance_retry_task_no_reward.get_params().keys()
