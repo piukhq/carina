@@ -1,16 +1,17 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Callable, Optional
 from uuid import uuid4
 
 import requests
 import sentry_sdk
 
+from cryptography.fernet import Fernet
 from fastapi import status
 from retry_tasks_lib.db.models import RetryTask, TaskTypeKey, TaskTypeKeyValue
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.future import select
 
-from app.core.config import redis, settings
+from app.core.config import redis_raw, settings
 from app.db.base_class import sync_run_query
 from app.fetch_reward.base import AgentError, BaseAgent
 from app.models import Reward
@@ -95,6 +96,7 @@ class Jigsaw(BaseAgent):
         self.base_url: str = self.config["base_url"]
         self.customer_card_ref: Optional[str] = None
         self.reward_config_required_values = reward_config.load_required_fields_values()
+        self.fernet = Fernet(settings.JIGSAW_AGENT_ENCRYPTION_KEY.encode())
 
     @staticmethod
     def _send_to_sentry(msg: str) -> Optional[str]:
@@ -139,13 +141,13 @@ class Jigsaw(BaseAgent):
 
         # BPL-437: If jigsaw returns a 4001 status with a message with isError set as True and the id equal to
         # one of the ids in NEW_TOKEN_NEEDED_IDS we need to fetch a new authorisation token and try again.
-        try_again_with_new_token = (
+        wipe_cached_token_and_try_again = (
             try_again_call is not None
             and jigsaw_status == self.NEW_TOKEN_NEEDED_STATUS
             and msg_id in self.NEW_TOKEN_NEEDED_IDS
         )
 
-        if not try_again_with_new_token and jigsaw_status in self.JIGSAW_STATUS_CODE_MAP.keys():
+        if not wipe_cached_token_and_try_again and jigsaw_status in self.JIGSAW_STATUS_CODE_MAP.keys():
             resp.status_code = self.JIGSAW_STATUS_CODE_MAP[jigsaw_status]
             raise requests.HTTPError(
                 f"Received a {jigsaw_status} {description} response. Details: {msg_id} {msg_info}",
@@ -167,8 +169,8 @@ class Jigsaw(BaseAgent):
             )
 
         # we want to capture the failed response's audit before trying again.
-        if try_again_with_new_token:
-            redis.delete(self.redis_token_key)
+        if wipe_cached_token_and_try_again:
+            redis_raw.delete(self.redis_token_key)
             new_resp = try_again_call()  # type: ignore [misc]
             return self._get_response_body_or_raise_for_status(new_resp)
 
@@ -192,13 +194,42 @@ class Jigsaw(BaseAgent):
 
         return dt.astimezone(tz=timezone.utc)
 
+    def _get_and_decrypt_token(self) -> Optional[str]:
+        """tries to fetch and decrypt token from redis, returns the token as a string on success and None on failure."""
+
+        raw_token = redis_raw.get(self.redis_token_key)
+        if raw_token is None:
+            return None
+
+        try:
+            return self.fernet.decrypt(raw_token).decode()
+        except Exception as ex:
+            msg = f"Jigsaw: Unexpected value retrieved from redis for {self.redis_token_key}. info: {ex}"
+            event_id = self._send_to_sentry(msg)
+            self.logger.error(f"{msg} (sentry event id: {event_id})")
+            return None
+
+    def _encrypt_and_set_token(self, token: str, expires_in: timedelta) -> None:
+        """tries to encrypt the provided token and store it in redis."""
+
+        try:
+            redis_raw.set(
+                self.redis_token_key,
+                self.fernet.encrypt(token.encode()),
+                expires_in,
+            )
+        except Exception as ex:
+            msg = f"Jigsaw: Unexpected error while encrypting and saving token to redis. info: {ex}"
+            event_id = self._send_to_sentry(msg)
+            self.logger.error(f"{msg} (sentry event id: {event_id})")
+
     def _get_auth_token(self) -> str:
         """
         Fetches a Jigsaw's authorisation token from redis.
         If it cannot find it cached, requests a new one to Jigsaw, caches it, and returns it.
         """
 
-        token = redis.get(self.redis_token_key)
+        token = self._get_and_decrypt_token()
         if token is not None:
             return token
 
@@ -212,15 +243,14 @@ class Jigsaw(BaseAgent):
         )
 
         response_payload = self._get_response_body_or_raise_for_status(resp)
-        expire_in = int(
-            self._get_tz_aware_datetime_from_isoformat(response_payload["data"]["Expires"]).timestamp()
-            - datetime.now(tz=timezone.utc).timestamp()
+        expires_in = self._get_tz_aware_datetime_from_isoformat(response_payload["data"]["Expires"]) - datetime.now(
+            tz=timezone.utc
         )
-        if expire_in < 0:
+        if expires_in.total_seconds() <= 0:
             raise AgentError("Jigsaw: Jigsaw returned an already expired token.")
 
         token = response_payload["data"]["Token"]
-        redis.set(self.redis_token_key, token, expire_in)
+        self._encrypt_and_set_token(token, expires_in)
         return token
 
     def _generate_customer_card_ref(self) -> tuple[str, datetime]:

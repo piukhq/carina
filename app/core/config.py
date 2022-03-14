@@ -244,6 +244,21 @@ class Settings(BaseSettings):
         else:
             raise KeyError("required var KEY_VAULT_URI is not set.")
 
+    JIGSAW_AGENT_ENCRYPTION_KEY: Optional[str] = None
+
+    @validator("JIGSAW_AGENT_ENCRYPTION_KEY")
+    def fetch_jigsaw_agent_encryption_key(cls, v: Optional[str], values: dict[str, Any]) -> Any:
+        if isinstance(v, str) and not values["TESTING"]:
+            return v
+
+        if "KEY_VAULT_URI" in values:
+            return KeyVault(
+                values["KEY_VAULT_URI"],
+                values["TESTING"] or values["MIGRATING"],
+            ).get_secret("bpl-carina-agent-jigsaw-encryption-key")
+        else:
+            raise KeyError("required var KEY_VAULT_URI is not set.")
+
     class Config:
         case_sensitive = True
         # env var settings priority ie priority 1 will override priority 2:
