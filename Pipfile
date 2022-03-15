@@ -12,7 +12,7 @@ name = "pypi-cloud"
 fastapi = "*"
 uvicorn = {extras = ["standard"], version = "*"}
 pydantic = "*"
-sqlalchemy = "*"
+sqlalchemy = {extras = ["asyncio"], version = "*"}  # Workaround https://github.com/sqlalchemy/sqlalchemy/issues/7714
 alembic = "*"
 asyncpg = "*"
 psycopg2-binary = "*"
@@ -41,7 +41,7 @@ cryptography = "*"
 [dev-packages]
 flake8 = "*"
 isort = "*"
-black = "==21.9b0"
+black = "*"
 mypy = "==0.910"
 ipython = "*"
 pytest = "*"
