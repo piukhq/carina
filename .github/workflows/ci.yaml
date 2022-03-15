@@ -35,17 +35,18 @@ jobs:
         with:
           python-version: "3.9"
       - run: pip install pipenv
-      - run: pipenv install --dev --system --deploy --ignore-pipfile
-      - run: xenon --no-assert --max-average A --max-modules B --max-absolute B .
-      - run: mypy app
-      - run: alembic upgrade head
-      - run: pytest --verbose --cov app --cov-report term-missing
-      - run: flake8 .
-      - run: black --line-length=120 --check .
-      - run: isort --check --line-length 120 --profile black .
-  create_dev_release:
+      - run: pipenv install --dev --ignore-pipfile
+      - run: pipenv run xenon --no-assert --max-average A --max-modules B --max-absolute B .
+      - run: pipenv run mypy app
+      - run: pipenv run alembic upgrade head
+      - run: pipenv run pytest --verbose --cov app --cov-report term-missing
+      - run: pipenv run flake8 .
+      - run: pipenv run black --line-length=120 --check .
+      - run: pipenv run isort --check --line-length 120 --profile black .
+  release_dev:
     if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-    name: create_dev_release
+    name: release_dev
+    environment: development
     runs-on: ubuntu-latest
     needs: [ tests ]
     steps:
@@ -61,11 +62,12 @@ jobs:
         with:
           push: true
           tags: |
-            binkcore.azurecr.io/carina:${{ steps.date.outputs.date }}
-            binkcore.azurecr.io/carina:latest
-  create_tag_release:
+            binkcore.azurecr.io/${{ github.event.repository.name }}:${{ steps.date.outputs.date }}
+            binkcore.azurecr.io/${{ github.event.repository.name }}:latest
+  release_staging:
     if: github.event_name == 'release' && github.event.action == 'published'
-    name: create_tag_release
+    name: release_staging
+    environment: staging
     runs-on: ubuntu-latest
     needs: [ tests ]
     steps:
@@ -84,6 +86,25 @@ jobs:
         with:
           push: true
           tags: |
-            binkcore.azurecr.io/carina:${{ github.event.release.tag_name }}
-            binkcore.azurecr.io/carina:staging-${{ github.event.release.tag_name }}
-            binkcore.azurecr.io/carina:staging
+            binkcore.azurecr.io/${{ github.event.repository.name }}:${{ github.event.release.tag_name }}
+            binkcore.azurecr.io/${{ github.event.repository.name }}:staging-${{ github.event.release.tag_name }}
+            binkcore.azurecr.io/${{ github.event.repository.name }}:staging
+  release_production:
+    if: github.event_name == 'release' && github.event.action == 'published'
+    name: release_production
+    environment: production
+    needs: [ release_staging ]
+    runs-on: ubuntu-latest
+    container: ghcr.io/binkhq/tagbot:latest
+    steps:
+      - run: |
+          tagbot \
+            --username binkcore \
+            --password ${{ secrets.ACR_BINKCORE_PASSWORD }} \
+            --source binkcore.azurecr.io/${{ github.event.repository.name }}:${{ github.event.release.tag_name }} \
+            --tag prod-${{ github.event.release.tag_name }}
+          tagbot \
+            --username binkcore \
+            --password ${{ secrets.ACR_BINKCORE_PASSWORD }} \
+            --source binkcore.azurecr.io/${{ github.event.repository.name }}:${{ github.event.release.tag_name }} \
+            --tag prod
