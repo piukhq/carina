@@ -1,3 +1,5 @@
+# pylint: disable=import-outside-toplevel,protected-access,invalid-name
+
 import logging
 
 from collections import defaultdict

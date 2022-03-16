@@ -1,3 +1,5 @@
+# pylint: disable=import-outside-toplevel,no-value-for-parameter
+
 import json
 
 from datetime import datetime, timezone
@@ -434,9 +436,9 @@ def test_reward_issuance_409_from_polaris(
     db_session.refresh(reward)
 
     assert all(
-        [item not in issuance_retry_task.get_params() for item in ["reward_uuid", "code", "issued_date", "expiry_date"]]
+        (item not in issuance_retry_task.get_params() for item in ["reward_uuid", "code", "issued_date", "expiry_date"])
     )
-    assert all([item in control_task.get_params() for item in ["reward_uuid", "code", "issued_date", "expiry_date"]])
+    assert all((item in control_task.get_params() for item in ["reward_uuid", "code", "issued_date", "expiry_date"]))
 
     assert issuance_retry_task.attempts == 1
     assert issuance_retry_task.next_attempt_time is None  # Will be set by error handler

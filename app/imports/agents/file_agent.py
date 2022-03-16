@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, DefaultDict, NamedTuple, Optional, Union, cast
 import sentry_sdk
 
 from azure.core.exceptions import HttpResponseError, ResourceExistsError
-from azure.storage.blob import BlobClient, BlobLeaseClient, BlobServiceClient
+from azure.storage.blob import BlobClient, BlobLeaseClient, BlobServiceClient  # pylint: disable=unused-import
 from pydantic import ValidationError
 from retry_tasks_lib.utils.synchronous import enqueue_many_retry_tasks, sync_create_many_tasks
 from sqlalchemy import update
@@ -30,6 +30,7 @@ from app.schemas import RewardUpdateSchema
 logger = logging.getLogger("reward-import")
 
 if TYPE_CHECKING:  # pragma: no cover
+    from azure.storage.blob import BlobProperties
     from sqlalchemy.orm import Session
 
 
@@ -47,6 +48,7 @@ class BlobFileAgent:
     scheduler_name = "carina-blob-file-agent"
 
     def __init__(self) -> None:
+        self.file_agent_type: FileAgentType
         self.container_name = settings.BLOB_IMPORT_CONTAINER
         self.schedule = settings.BLOB_IMPORT_SCHEDULE
         blob_client_logger = logging.getLogger("blob-client")
@@ -67,21 +69,23 @@ class BlobFileAgent:
         file_name = sync_run_query(
             lambda: db_session.execute(
                 select(RewardFileLog.file_name).where(
-                    RewardFileLog.file_agent_type == self.file_agent_type,  # type: ignore
+                    RewardFileLog.file_agent_type == self.file_agent_type,
                     RewardFileLog.file_name == file_name,
                 )
             ).scalar_one_or_none(),
             db_session,
         )
 
-        return True if file_name else False
+        return file_name is not None
 
-    def _log_and_capture_msg(self, msg: str) -> None:
+    @staticmethod
+    def _log_and_capture_msg(msg: str) -> None:
         logger.error(msg)
         if settings.SENTRY_DSN:
             sentry_sdk.capture_message(msg)
 
-    def get_retailers(self, db_session: "Session") -> list[Retailer]:
+    @staticmethod
+    def get_retailers(db_session: "Session") -> list[Retailer]:
         return sync_run_query(lambda: db_session.execute(select(Retailer)).scalars().all(), db_session)
 
     def process_csv(
@@ -117,6 +121,50 @@ class BlobFileAgent:
             for retailer in self.get_retailers(db_session):
                 self.process_blobs(retailer, db_session)
 
+    def _process_blob(
+        self,
+        db_session: "Session",
+        *,
+        retailer: Retailer,
+        blob: "BlobProperties",
+        blob_client: BlobClient,
+        lease: BlobLeaseClient,
+        byte_content: bytes,
+    ) -> None:
+        logger.debug(f"Processing blob {blob.name}.")
+        try:
+            self.process_csv(
+                retailer=retailer,
+                blob_name=blob.name,
+                blob_content=byte_content.decode("utf-8", "strict"),
+                db_session=db_session,
+            )
+        except BlobProcessingError as ex:
+            logger.error(f"Problem processing blob {blob.name} - {ex}. Moving to {settings.BLOB_ERROR_CONTAINER}")
+            self.move_blob(settings.BLOB_ERROR_CONTAINER, blob_client, lease)
+            sync_run_query(lambda: db_session.rollback(), db_session)  # pylint: disable=unnecessary-lambda
+        except UnicodeDecodeError as ex:
+            logger.error(
+                f"Problem decoding blob {blob.name} (files should be utf-8 encoded) - {ex}. "
+                f"Moving to {settings.BLOB_ERROR_CONTAINER}"
+            )
+            self.move_blob(settings.BLOB_ERROR_CONTAINER, blob_client, lease)
+            sync_run_query(lambda: db_session.rollback(), db_session)  # pylint: disable=unnecessary-lambda
+        else:
+            logger.debug(f"Archiving blob {blob.name}.")
+            self.move_blob(settings.BLOB_ARCHIVE_CONTAINER, blob_client, lease)
+
+            def add_reward_file_log(blb: "BlobProperties") -> None:
+                db_session.add(
+                    RewardFileLog(
+                        file_name=blb.name,
+                        file_agent_type=self.file_agent_type,
+                    )
+                )
+                db_session.commit()
+
+            sync_run_query(add_reward_file_log, db_session, blb=blob)
+
     def process_blobs(self, retailer: Retailer, db_session: "Session") -> None:
         for blob in self.container_client.list_blobs(
             name_starts_with=self.blob_path_template.substitute(retailer_slug=retailer.slug)
@@ -147,40 +195,14 @@ class BlobFileAgent:
                 continue
 
             byte_content = blob_client.download_blob(lease=lease).readall()
-
-            logger.debug(f"Processing blob {blob.name}.")
-            try:
-                self.process_csv(
-                    retailer=retailer,
-                    blob_name=blob.name,
-                    blob_content=byte_content.decode("utf-8", "strict"),
-                    db_session=db_session,
-                )
-            except BlobProcessingError as ex:
-                logger.error(f"Problem processing blob {blob.name} - {ex}. Moving to {settings.BLOB_ERROR_CONTAINER}")
-                self.move_blob(settings.BLOB_ERROR_CONTAINER, blob_client, lease)
-                sync_run_query(lambda: db_session.rollback(), db_session)
-            except UnicodeDecodeError as ex:
-                logger.error(
-                    f"Problem decoding blob {blob.name} (files should be utf-8 encoded) - {ex}. "
-                    f"Moving to {settings.BLOB_ERROR_CONTAINER}"
-                )
-                self.move_blob(settings.BLOB_ERROR_CONTAINER, blob_client, lease)
-                sync_run_query(lambda: db_session.rollback(), db_session)
-            else:
-                logger.debug(f"Archiving blob {blob.name}.")
-                self.move_blob(settings.BLOB_ARCHIVE_CONTAINER, blob_client, lease)
-
-                def add_reward_file_log() -> None:
-                    db_session.add(
-                        RewardFileLog(
-                            file_name=blob.name,
-                            file_agent_type=self.file_agent_type,  # type: ignore
-                        )
-                    )
-                    db_session.commit()
-
-                sync_run_query(add_reward_file_log, db_session)
+            self._process_blob(
+                db_session,
+                retailer=retailer,
+                blob=blob,
+                blob_client=blob_client,
+                lease=lease,
+                byte_content=byte_content,
+            )
 
 
 class RewardImportAgent(BlobFileAgent):
@@ -196,7 +218,9 @@ class RewardImportAgent(BlobFileAgent):
         super()._do_import()
 
     @lru_cache()
-    def reward_configs_by_reward_id(self, retailer_id: int, db_session: "Session") -> dict[str, RewardConfig]:
+    def reward_configs_by_reward_id(  # pylint: disable=no-self-use
+        self, retailer_id: int, db_session: "Session"
+    ) -> dict[str, RewardConfig]:
         reward_configs = sync_run_query(
             lambda: db_session.execute(select(RewardConfig).where(RewardConfig.retailer_id == retailer_id))
             .scalars()
@@ -205,8 +229,9 @@ class RewardImportAgent(BlobFileAgent):
         )
         return {reward_config.reward_slug: reward_config for reward_config in reward_configs}
 
+    @staticmethod
     def _report_pre_existing_codes(
-        self, pre_existing_reward_codes: list[str], row_nums_by_code: dict[str, list[int]], blob_name: str
+        pre_existing_reward_codes: list[str], row_nums_by_code: dict[str, list[int]], blob_name: str
     ) -> None:
         msg = f"Pre-existing reward codes found in {blob_name}:\n" + "\n".join(
             [f"rows: {', '.join(map(str, row_nums_by_code[code]))}" for code in pre_existing_reward_codes]
@@ -215,24 +240,22 @@ class RewardImportAgent(BlobFileAgent):
         if settings.SENTRY_DSN:
             sentry_sdk.capture_message(msg)
 
-    def _report_invalid_rows(self, invalid_rows: list[int], blob_name: str) -> None:
+    @staticmethod
+    def _report_invalid_rows(invalid_rows: list[int], blob_name: str) -> None:
         if invalid_rows:
             sentry_sdk.capture_message(
                 f"Invalid rows found in {blob_name}:\nrows: {', '.join(map(str, sorted(invalid_rows)))}"
             )
 
-    def process_csv(self, retailer: Retailer, blob_name: str, blob_content: str, db_session: "Session") -> None:
-        _base_path, sub_path = blob_name.split(self.blob_path_template.substitute(retailer_slug=retailer.slug))
-        try:
-            reward_slug, _path_remainder = sub_path.split("/", maxsplit=1)
-        except ValueError as ex:
-            raise BlobProcessingError(f"No reward_slug path section found ({ex})")
-
-        try:
-            reward_config = self.reward_configs_by_reward_id(retailer.id, db_session)[reward_slug]
-        except KeyError:
-            raise BlobProcessingError(f"No RewardConfig found for reward_slug {reward_slug}")
-
+    def _get_reward_codes_and_report_invalid(
+        self,
+        db_session: "Session",
+        *,
+        retailer: Retailer,
+        reward_config: RewardConfig,
+        blob_name: str,
+        blob_content: str,
+    ) -> tuple[list[str], defaultdict[str, list[int]]]:
         content_reader = csv.reader(StringIO(blob_content), delimiter=",", quotechar="|")
         invalid_rows: list[int] = []
 
@@ -263,6 +286,26 @@ class RewardImportAgent(BlobFileAgent):
         )
 
         self._report_invalid_rows(invalid_rows, blob_name)
+        return db_reward_codes, row_nums_by_code
+
+    # pylint: disable=too-many-locals
+    def process_csv(self, retailer: Retailer, blob_name: str, blob_content: str, db_session: "Session") -> None:
+        _, sub_path = blob_name.split(self.blob_path_template.substitute(retailer_slug=retailer.slug))
+        try:
+            reward_slug, _ = sub_path.split("/", maxsplit=1)
+        except ValueError as ex:
+            raise BlobProcessingError(f"No reward_slug path section found ({ex})")  # pylint: disable=raise-missing-from
+
+        try:
+            reward_config = self.reward_configs_by_reward_id(retailer.id, db_session)[reward_slug]
+        except KeyError:
+            raise BlobProcessingError(  # pylint: disable=raise-missing-from
+                f"No RewardConfig found for reward_slug {reward_slug}"
+            )
+
+        db_reward_codes, row_nums_by_code = self._get_reward_codes_and_report_invalid(
+            db_session, retailer=retailer, reward_config=reward_config, blob_name=blob_name, blob_content=blob_content
+        )
 
         pre_existing_reward_codes = list(set(db_reward_codes) & set(row_nums_by_code.keys()))
         if pre_existing_reward_codes:
@@ -312,8 +355,8 @@ class RewardUpdatesAgent(BlobFileAgent):
                     date=row[1].strip(),
                     status=RewardUpdateStatuses(row[2].strip()),
                 )
-            except (ValidationError, IndexError, ValueError) as e:
-                invalid_rows.append((row_num, e))
+            except (ValidationError, IndexError, ValueError) as ex:
+                invalid_rows.append((row_num, ex))
             else:
                 reward_update_rows_by_code[data.dict()["code"]].append(RewardUpdateRow(data, row_num=row_num))
 
@@ -335,8 +378,8 @@ class RewardUpdatesAgent(BlobFileAgent):
             blob_name=blob_name,
         )
 
+    @staticmethod
     def _report_unknown_codes(
-        self,
         reward_codes_in_file: list[str],
         db_reward_data_by_code: dict[str, dict[str, Union[str, bool]]],
         reward_update_rows_by_code: DefaultDict[str, list[RewardUpdateRow]],
@@ -355,9 +398,10 @@ class RewardUpdatesAgent(BlobFileAgent):
             if settings.SENTRY_DSN:
                 sentry_sdk.capture_message(msg)
 
+    @staticmethod
     def _process_unallocated_codes(
-        self,
         db_session: "Session",
+        *,
         retailer: Retailer,
         blob_name: str,
         reward_codes_in_file: list[str],
@@ -423,11 +467,11 @@ class RewardUpdatesAgent(BlobFileAgent):
 
         self._process_unallocated_codes(
             db_session,
-            retailer,
-            blob_name,
-            reward_codes_in_file,
-            db_reward_data_by_code,
-            reward_update_rows_by_code,
+            retailer=retailer,
+            blob_name=blob_name,
+            reward_codes_in_file=reward_codes_in_file,
+            db_reward_data_by_code=db_reward_data_by_code,
+            reward_update_rows_by_code=reward_update_rows_by_code,
         )
 
         reward_updates = []
@@ -474,7 +518,7 @@ class RewardUpdatesAgent(BlobFileAgent):
             enqueue_many_retry_tasks(
                 db_session, retry_tasks_ids=[task.retry_task_id for task in tasks], connection=redis_raw
             )
-        except Exception as ex:
+        except Exception as ex:  # pylint: disable=broad-except
             sentry_sdk.capture_exception(ex)
             sync_run_query(_rollback, db_session, rollback_on_exc=False)
         else:

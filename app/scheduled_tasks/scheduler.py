@@ -15,6 +15,8 @@ from app.scheduled_tasks import logger as scheduled_tasks_logger
 
 from . import logger
 
+LOCK_TIMEOUT_SECS = 3600
+
 
 class Runner(Protocol):
     uid: str
@@ -26,7 +28,6 @@ def acquire_lock(runner: Runner) -> Callable:
     Decorator for use with scheduled tasks to ensure a scheduled task won't be
     run concurrently somewhere else.
     """
-    LOCK_TIMEOUT_SECS = 3600
 
     def decorater(func: Callable) -> Callable:
         @wraps(func)
@@ -39,7 +40,7 @@ def acquire_lock(runner: Runner) -> Callable:
                 # the function without consequence
                 try:
                     func(*args, **kwargs)
-                except Exception as ex:
+                except Exception as ex:  # pylint: disable=broad-except
                     logger.exception(ex)
                 finally:
                     redis.delete(func_lock_key)
@@ -64,9 +65,9 @@ class CronScheduler:  # pragma: no cover
     name = "cron-scheduler"
     default_schedule = "* * * * *"
 
-    def __init__(self, *, logger: Logger = None):
+    def __init__(self, *, log: Logger = None):
         self.uid = str(uuid4())
-        self.log = logger if logger is not None else logging.getLogger("cron-scheduler")
+        self.log = log if log is not None else logging.getLogger("cron-scheduler")
         self._scheduler = BlockingScheduler()
 
     def __str__(self) -> str:
@@ -103,4 +104,4 @@ class CronScheduler:  # pragma: no cover
         self._scheduler.start()
 
 
-cron_scheduler = CronScheduler(logger=scheduled_tasks_logger)
+cron_scheduler = CronScheduler(log=scheduled_tasks_logger)

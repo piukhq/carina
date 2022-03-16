@@ -15,7 +15,7 @@ class RewardStatusSchema(BaseModel):
     status: Literal[RewardTypeStatuses.CANCELLED, RewardTypeStatuses.ENDED]
 
     @validator("status")
-    def get_status(cls, v: str) -> RewardTypeStatuses:
+    def get_status(cls, v: str) -> RewardTypeStatuses:  # pylint: disable=no-self-argument,no-self-use
         return RewardTypeStatuses(v)
 
 
@@ -25,5 +25,5 @@ class RewardUpdateSchema(BaseModel):  # pragma: no cover
     status: RewardUpdateStatuses
 
     @validator("date")
-    def get_date(cls, v: str) -> dt.date:
+    def get_date(cls, v: str) -> dt.date:  # pylint: disable=no-self-argument,no-self-use
         return dt.datetime.strptime(v, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc).date()

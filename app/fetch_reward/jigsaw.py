@@ -89,16 +89,24 @@ class Jigsaw(BaseAgent):
         db_session: "Session",
         reward_config: "RewardConfig",
         config: dict,
+        *,
         send_request_fn: Callable = None,
         retry_task: RetryTask = None,
     ) -> None:
-        super().__init__(db_session, reward_config, config, send_request_fn, retry_task)
+        super().__init__(
+            db_session=db_session,
+            reward_config=reward_config,
+            config=config,
+            send_request_fn=send_request_fn,
+            retry_task=retry_task,
+        )
         self.base_url: str = self.config["base_url"]
         self.customer_card_ref: Optional[str] = None
         self.reward_config_required_values = reward_config.load_required_fields_values()
         self.fernet = Fernet(settings.JIGSAW_AGENT_ENCRYPTION_KEY.encode())
 
-    def _collect_response_data(self, resp: requests.Response) -> tuple[dict, str, str, str, str]:
+    @staticmethod
+    def _collect_response_data(resp: requests.Response) -> tuple[dict, str, str, str, str]:
         """tries to collect json payload, jigsaw status, status description, and error message if present."""
         try:
             response_payload = resp.json()
@@ -133,7 +141,7 @@ class Jigsaw(BaseAgent):
             and msg_id in self.NEW_TOKEN_NEEDED_IDS
         )
 
-        if not wipe_cached_token_and_try_again and jigsaw_status in self.JIGSAW_STATUS_CODE_MAP.keys():
+        if not wipe_cached_token_and_try_again and jigsaw_status in self.JIGSAW_STATUS_CODE_MAP:
             resp.status_code = self.JIGSAW_STATUS_CODE_MAP[jigsaw_status]
             raise requests.HTTPError(
                 f"Received a {jigsaw_status} {description} response. Details: {msg_id} {msg_info}",
@@ -187,7 +195,7 @@ class Jigsaw(BaseAgent):
 
         try:
             return self.fernet.decrypt(raw_token).decode()
-        except Exception as ex:
+        except Exception as ex:  # pylint: disable=broad-except
             sentry_sdk.capture_exception(ex)
             self.logger.exception(
                 f"Jigsaw: Unexpected value retrieved from redis for {self.redis_token_key}.", exc_info=ex
@@ -203,7 +211,7 @@ class Jigsaw(BaseAgent):
                 self.fernet.encrypt(token.encode()),
                 expires_in,
             )
-        except Exception as ex:
+        except Exception as ex:  # pylint: disable=broad-except
             sentry_sdk.capture_exception(ex)
             self.logger.exception("Jigsaw: Unexpected error while encrypting and saving token to redis.", exc_info=ex)
 
@@ -290,7 +298,7 @@ class Jigsaw(BaseAgent):
         response_payload = self._get_response_body_or_raise_for_status(resp, try_again_call=self._register_reward)
 
         if response_payload["data"]["balance"] != self.reward_config_required_values["transaction_value"]:
-            # TODO: this logic will be expanded in BPL-438, remove # pragma: no cover once implemented
+            # this logic will be expanded in BPL-438, remove # pragma: no cover once implemented
             raise AgentError("Jigsaw: fetched reward balance and transaction value do not match.")  # pragma: no cover
 
         expiry = self._get_tz_aware_datetime_from_isoformat(response_payload["data"]["expiry_date"])

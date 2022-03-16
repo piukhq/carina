@@ -22,6 +22,7 @@ class BaseAgent(ABC):
         db_session: "Session",
         reward_config: "RewardConfig",
         config: dict,
+        *,
         send_request_fn: Callable = None,
         retry_task: "RetryTask" = None,
     ) -> None:
