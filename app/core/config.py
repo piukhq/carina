@@ -75,20 +75,6 @@ class Settings(BaseSettings):
         return v
 
     KEY_VAULT_URI: str = "https://bink-uksouth-dev-com.vault.azure.net/"
-    SECRET_KEY: Optional[str] = None
-
-    @validator("SECRET_KEY")
-    def fetch_secret_key(cls, v: Optional[str], values: dict[str, Any]) -> Any:
-        if isinstance(v, str) and not values["TESTING"]:
-            return v
-
-        if "KEY_VAULT_URI" in values:
-            return KeyVault(
-                values["KEY_VAULT_URI"],
-                values["TESTING"] or values["MIGRATING"],
-            ).get_secret("bpl-carina-secret-key")
-        else:
-            raise KeyError("required var KEY_VAULT_URI is not set.")
 
     CARINA_API_AUTH_TOKEN: Optional[str] = None
 
