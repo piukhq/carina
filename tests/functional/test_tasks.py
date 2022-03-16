@@ -11,7 +11,7 @@ import requests
 from pytest_mock import MockerFixture
 from retry_tasks_lib.db.models import RetryTask
 from retry_tasks_lib.enums import RetryTaskStatuses
-from retry_tasks_lib.utils.synchronous import IncorrectRetryTaskStatusError
+from retry_tasks_lib.utils.synchronous import IncorrectRetryTaskStatusError, sync_create_task
 from sqlalchemy.future import select
 from sqlalchemy.orm import Session
 from testfixtures import LogCapture
@@ -401,9 +401,15 @@ def test_cancel_reward(mock_datetime: mock.Mock, db_session: Session, cancel_rew
 
 @httpretty.activate
 def test_reward_issuance_409_from_polaris(
-    db_session: "Session", issuance_retry_task: RetryTask, create_reward: Callable
+    db_session: "Session", issuance_retry_task: RetryTask, create_reward: Callable, reward_issuance_task_params: dict
 ) -> None:
     """Test reward is deleted for the task (from the DB) and task retried on a 409 from Polaris"""
+
+    control_task = sync_create_task(
+        db_session, task_type_name=issuance_retry_task.task_type.name, params=reward_issuance_task_params
+    )
+    db_session.commit()
+
     # Get the associated reward
     reward = db_session.execute(
         select(Reward).where(Reward.id == issuance_retry_task.get_params()["reward_uuid"])
@@ -427,7 +433,11 @@ def test_reward_issuance_409_from_polaris(
     db_session.commit()
     db_session.refresh(reward)
 
-    assert "reward_uuid" not in issuance_retry_task.get_params()
+    assert all(
+        [item not in issuance_retry_task.get_params() for item in ["reward_uuid", "code", "issued_date", "expiry_date"]]
+    )
+    assert all([item in control_task.get_params() for item in ["reward_uuid", "code", "issued_date", "expiry_date"]])
+
     assert issuance_retry_task.attempts == 1
     assert issuance_retry_task.next_attempt_time is None  # Will be set by error handler
     # The reward should also have been set to allocated: True

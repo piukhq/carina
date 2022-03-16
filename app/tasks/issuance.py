@@ -94,7 +94,7 @@ def _set_reward_and_delete_from_task(db_session: "Session", retry_task: RetryTas
         db_session.execute(Reward.__table__.update().values(allocated=True).where(Reward.id == reward_uuid))
         db_session.execute(
             TaskTypeKeyValue.__table__.delete().where(
-                TaskTypeKeyValue.retry_task_id == RetryTask.retry_task_id,
+                TaskTypeKeyValue.retry_task_id == retry_task.retry_task_id,
                 TaskTypeKeyValue.task_type_key_id == TaskTypeKey.task_type_key_id,
                 TaskTypeKey.name.in_(["reward_uuid", "code", "issued_date", "expiry_date"]),
             )
