@@ -20,7 +20,7 @@ def get_allocable_reward(
     try:
         mod, cls = reward_config.fetch_type.path.rsplit(".", 1)
         mod = import_module(mod)
-        Agent: Type[BaseAgent] = getattr(mod, cls)
+        Agent: Type[BaseAgent] = getattr(mod, cls)  # pylint: disable=invalid-name
     except (ValueError, ModuleNotFoundError, AttributeError) as ex:
         BaseAgent.logger.warning(
             f"Could not import agent class for fetch_type {reward_config.fetch_type.name}.", exc_info=ex
@@ -37,7 +37,13 @@ def get_allocable_reward(
 
     agent_config: dict = sync_run_query(_query, db_session).load_agent_config()
 
-    with Agent(db_session, reward_config, agent_config, send_request_fn, retry_task) as agent:
+    with Agent(
+        db_session,
+        reward_config,
+        agent_config,
+        send_request_fn=send_request_fn,
+        retry_task=retry_task,
+    ) as agent:
         reward, issued, expiry = agent.fetch_reward()
 
     return reward, issued, expiry

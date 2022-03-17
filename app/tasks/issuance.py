@@ -108,8 +108,8 @@ def _process_and_issue_reward(db_session: "Session", retry_task: RetryTask) -> N
     task_params = retry_task.get_params()
     try:
         response_audit = _process_issuance(task_params)
-    except HTTPError as e:
-        if e.response.status_code == status.HTTP_409_CONFLICT:
+    except HTTPError as ex:
+        if ex.response.status_code == status.HTTP_409_CONFLICT:
             _set_reward_and_delete_from_task(
                 db_session=db_session, retry_task=retry_task, reward_uuid=task_params.get("reward_uuid")
             )

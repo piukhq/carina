@@ -1,3 +1,5 @@
+# pylint: disable=too-many-arguments,too-many-locals
+
 import json
 
 from datetime import datetime, timedelta, timezone
@@ -381,7 +383,7 @@ def test_jigsaw_agent_expired_token(
 
 
 @httpretty.activate
-def test_jigsaw_agent_getToken_retry_paths(
+def test_jigsaw_agent_get_token_retry_paths(
     mocker: "MockerFixture",
     db_session: "Session",
     jigsaw_reward_config: "RewardConfig",
@@ -426,7 +428,7 @@ def test_jigsaw_agent_getToken_retry_paths(
 
 
 @httpretty.activate
-def test_jigsaw_agent_getToken_failure_paths(
+def test_jigsaw_agent_get_token_failure_paths(
     mocker: "MockerFixture",
     db_session: "Session",
     jigsaw_reward_config: "RewardConfig",
@@ -471,7 +473,7 @@ def test_jigsaw_agent_getToken_failure_paths(
 
 
 @httpretty.activate
-def test_jigsaw_agent_getToken_unexpected_error_response(
+def test_jigsaw_agent_get_token_unexpected_error_response(
     mocker: "MockerFixture",
     db_session: "Session",
     jigsaw_reward_config: "RewardConfig",
@@ -682,7 +684,7 @@ def test_jigsaw_agent_register_retry_get_token(
     )
 
     def register_response_generator(
-        request: requests.Request, uri: str, response_headers: dict
+        request: requests.Request, uri: str, response_headers: dict  # pylint: disable=unused-argument
     ) -> tuple[int, dict, str]:
 
         for msg_id in retry_error_ids:

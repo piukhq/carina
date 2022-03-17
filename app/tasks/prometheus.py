@@ -26,7 +26,9 @@ task_statuses = Gauge(
 )
 
 
-def update_metrics_hook(resp: "Response", *args: Any, **kwargs: Any) -> None:  # pragma: no cover
+def update_metrics_hook(
+    resp: "Response", *args: Any, **kwargs: Any  # pylint: disable=unused-argument
+) -> None:  # pragma: no cover
     outgoing_http_requests_total.labels(
         app=settings.PROJECT_NAME,
         method=resp.request.method,
