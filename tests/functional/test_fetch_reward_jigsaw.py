@@ -1,3 +1,5 @@
+# pylint: disable=too-many-arguments,too-many-locals
+
 import json
 
 from datetime import datetime, timedelta, timezone
@@ -381,7 +383,7 @@ def test_jigsaw_agent_expired_token(
 
 
 @httpretty.activate
-def test_jigsaw_agent_getToken_retry_paths(
+def test_jigsaw_agent_get_token_retry_paths(
     mocker: "MockerFixture",
     db_session: "Session",
     jigsaw_reward_config: "RewardConfig",
@@ -426,7 +428,7 @@ def test_jigsaw_agent_getToken_retry_paths(
 
 
 @httpretty.activate
-def test_jigsaw_agent_getToken_failure_paths(
+def test_jigsaw_agent_get_token_failure_paths(
     mocker: "MockerFixture",
     db_session: "Session",
     jigsaw_reward_config: "RewardConfig",
@@ -471,7 +473,7 @@ def test_jigsaw_agent_getToken_failure_paths(
 
 
 @httpretty.activate
-def test_jigsaw_agent_getToken_unexpected_error_response(
+def test_jigsaw_agent_get_token_unexpected_error_response(
     mocker: "MockerFixture",
     db_session: "Session",
     jigsaw_reward_config: "RewardConfig",
@@ -509,7 +511,9 @@ def test_jigsaw_agent_getToken_unexpected_error_response(
         with Jigsaw(db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward) as agent:
             agent.fetch_reward()
 
-    spy_logger.exception.assert_called_with(exc_info.value)
+    spy_logger.exception.assert_called_with(
+        "Exception occurred while fetching a new Jigsaw reward, exiting agent gracefully.", exc_info=exc_info.value
+    )
     assert exc_info.value.args[0] == "Jigsaw: unknown error returned. status: 9000 OMG, message: 9000 AHHHHHHHHHHHH!!!!"
     assert db_session.scalar(select(Reward).where(Reward.reward_config_id == jigsaw_reward_config.id)) is None
     db_session.refresh(issuance_retry_task_no_reward)
@@ -682,7 +686,7 @@ def test_jigsaw_agent_register_retry_get_token(
     )
 
     def register_response_generator(
-        request: requests.Request, uri: str, response_headers: dict
+        request: requests.Request, uri: str, response_headers: dict  # pylint: disable=unused-argument
     ) -> tuple[int, dict, str]:
 
         for msg_id in retry_error_ids:

@@ -25,7 +25,8 @@ class RetryTaskWorker(rq.Worker):
         super().run_maintenance_tasks()
         self.update_metrics()
 
-    def update_metrics(self) -> None:
+    @staticmethod
+    def update_metrics() -> None:
         """
         Query the database to find tasks that need reporting
         """
@@ -69,5 +70,5 @@ class RetryTaskWorker(rq.Worker):
                         status=RetryTaskStatuses(row["status"]).name,
                     ).set(int(row["count"]))
 
-        except Exception as ex:
+        except Exception as ex:  # pylint: disable=broad-except
             sentry_sdk.capture_exception(ex)

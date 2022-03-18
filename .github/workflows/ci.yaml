@@ -36,13 +36,14 @@ jobs:
           python-version: "3.9"
       - run: pip install pipenv
       - run: pipenv install --dev --ignore-pipfile
-      - run: pipenv run xenon --no-assert --max-average A --max-modules B --max-absolute B .
-      - run: pipenv run mypy app
       - run: pipenv run alembic upgrade head
+      - run: pipenv run xenon --no-assert --max-average A --max-modules B --max-absolute B .
+      - run: pipenv run pylint app tests
+      - run: pipenv run black --check .
+      - run: pipenv run isort --check .
+      - run: pipenv run mypy app
       - run: pipenv run pytest --verbose --cov app --cov-report term-missing
-      - run: pipenv run flake8 .
-      - run: pipenv run black --line-length=120 --check .
-      - run: pipenv run isort --check --line-length 120 --profile black .
+
   release_dev:
     if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
     name: release_dev

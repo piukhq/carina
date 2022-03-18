@@ -39,7 +39,6 @@ typer = "*"
 cryptography = "*"
 
 [dev-packages]
-flake8 = "*"
 isort = "*"
 black = "*"
 mypy = "==0.910"
@@ -54,6 +53,8 @@ pytest-mock = "*"
 types-redis = "*"
 types-requests = "*"
 types-pyyaml = "*"
+pylint = "*"
+pylint-pytest = "*"
 
 [requires]
 python_version = "3.9"

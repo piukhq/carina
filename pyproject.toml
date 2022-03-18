@@ -11,3 +11,35 @@ ensure_newline_before_comments = true
 line_length = 120
 skip_gitignore = true
 lines_between_types = 1
+
+[tool.mypy]
+disallow_untyped_defs = true
+show_error_codes = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+plugins = [
+    "pydantic.mypy", 
+    "sqlalchemy.ext.mypy.plugin",
+]
+
+[tool.pylint.MASTER]
+load-plugins=[
+    "pylint_pytest",
+    "pylint.extensions.mccabe"
+]
+
+[tool.pylint.messages_control]
+max-line-length = 120
+disable = [
+    "logging-fstring-interpolation",
+    "missing-module-docstring",
+    "missing-function-docstring",
+    "missing-class-docstring",
+    "too-few-public-methods",
+    "consider-using-f-string",
+    "duplicate-code", # pylint definition of "duplicate" is way too loose (ex: fastapi route definitions are flagged).
+]
+good-names=["k", "v", "i", "q", "fn", "ex", "dt", "tz"]
+extension-pkg-whitelist=[
+    "pydantic",
+]

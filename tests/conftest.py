@@ -1,3 +1,5 @@
+# pylint: disable=invalid-name
+
 import uuid
 
 from collections import namedtuple
@@ -57,8 +59,8 @@ def setup_redis() -> Generator:
 
 @pytest.fixture(scope="session")
 def main_db_session() -> Generator["Session", None, None]:
-    with SyncSessionMaker() as db_session:
-        yield db_session
+    with SyncSessionMaker() as session:
+        yield session
 
 
 @pytest.fixture(scope="function")
@@ -201,11 +203,11 @@ def create_reward(db_session: "Session", reward_config: RewardConfig) -> Callabl
         }
 
         mock_reward_params.update(reward_params)
-        reward = Reward(**mock_reward_params)
-        db_session.add(reward)
+        rwd = Reward(**mock_reward_params)
+        db_session.add(rwd)
         db_session.commit()
 
-        return reward
+        return rwd
 
     return _create_reward
 
@@ -230,8 +232,8 @@ def create_rewards(db_session: "Session", reward_config: RewardConfig) -> Callab
 
 @pytest.fixture(scope="function")
 def capture() -> Generator:
-    with LogCapture() as capture:
-        yield capture
+    with LogCapture() as cpt:
+        yield cpt
 
 
 @pytest.fixture(scope="function")
