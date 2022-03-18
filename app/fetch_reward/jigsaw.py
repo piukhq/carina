@@ -311,7 +311,9 @@ class Jigsaw(BaseAgent):
     def __exit__(self, exc_type: type, exc_value: Exception, exc_traceback: "Traceback") -> None:
 
         if exc_value is not None:
-            self.logger.exception(exc_value)
+            self.logger.exception(
+                "Exception occurred while fetching a new Jigsaw reward, exiting agent gracefully.", exc_info=exc_value
+            )
 
             if self.customer_card_ref is not None and self.retry_task is not None:
 
