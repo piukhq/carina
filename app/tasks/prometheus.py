@@ -7,20 +7,22 @@ from app.core.config import settings
 if TYPE_CHECKING:  # pragma: no cover
     from requests import RequestException, Response  # pragma: no cover
 
+METRIC_NAME_PREFIX = "bpl_"
+
 outgoing_http_requests_total = Counter(
-    name="bpl_outgoing_http_requests_total",
+    name=f"{METRIC_NAME_PREFIX}outgoing_http_requests_total",
     documentation="Total outgoing http requests by response status.",
     labelnames=("app", "method", "response", "exception", "url"),
 )
 
 tasks_run_total = Counter(
-    name="bpl_tasks_run_total",
+    name=f"{METRIC_NAME_PREFIX}tasks_run_total",
     documentation="Counter for tasks run.",
     labelnames=("app", "task_name"),
 )
 
 task_statuses = Gauge(
-    name="bpl_task_anomalies",
+    name=f"{METRIC_NAME_PREFIX}task_anomalies",
     documentation="The current number of tasks in an unusual state",
     labelnames=("app", "task_name", "status"),
 )

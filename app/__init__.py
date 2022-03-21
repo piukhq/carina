@@ -27,7 +27,7 @@ def create_app() -> FastAPI:
     app.add_middleware(MetricsSecurityMiddleware)
     app.add_middleware(PrometheusMiddleware)
 
-    PrometheusManager(settings.PROJECT_NAME)  # initialise signals
+    PrometheusManager(settings.PROJECT_NAME, metric_name_prefix="bpl")  # initialise signals
 
     if settings.SENTRY_DSN:
         app.add_middleware(SentryAsgiMiddleware)  # pragma: no cover
