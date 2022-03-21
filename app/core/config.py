@@ -3,7 +3,7 @@ import os
 import sys
 
 from logging.config import dictConfig
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import sentry_sdk
 
@@ -68,15 +68,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "carina"
     ROOT_LOG_LEVEL: Optional[LogLevel] = None
     QUERY_LOG_LEVEL: Optional[LogLevel] = None
-    LOG_FORMATTER: str = "json"
-
-    @validator("LOG_FORMATTER")
-    @classmethod
-    def validate_formatter(cls, v: str) -> Optional[str]:
-        if v not in ["json", "brief"]:
-            raise ValueError(f'"{v}" is not a valid LOG_FORMATTER value, choices are [json, brief]')
-        return v
-
+    LOG_FORMATTER: Literal["json", "brief", "console"] = "json"
     KEY_VAULT_URI: str = "https://bink-uksouth-dev-com.vault.azure.net/"
 
     CARINA_API_AUTH_TOKEN: Optional[str] = None
@@ -278,6 +270,7 @@ dictConfig(
         "disable_existing_loggers": False,
         "formatters": {
             "brief": {"format": "%(levelname)s:     %(asctime)s - %(message)s"},
+            "console": {"()": "app.core.reporting.ConsoleFormatter"},
             "json": {"()": "app.core.reporting.JSONFormatter"},
         },
         "handlers": {
@@ -303,15 +296,13 @@ dictConfig(
                 "propagate": False,
                 "handlers": ["stdout"],
             },
-            "sqlalchemy": {
+            "sqlalchemy.engine": {
                 "level": settings.QUERY_LOG_LEVEL or logging.WARN,
-                "qualname": "sqlalchemy.engine",
             },
             "alembic": {
                 "level": "INFO",
                 "handlers": ["stderr"],
                 "propagate": False,
-                "qualname": "alembic",
             },
         },
     }

@@ -41,7 +41,7 @@ cryptography = "*"
 [dev-packages]
 isort = "*"
 black = "*"
-mypy = "==0.910"
+mypy = "*"
 ipython = "*"
 pytest = "*"
 pytest-cov = "*"

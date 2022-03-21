@@ -11,6 +11,7 @@ class JSONFormatter(logging.Formatter):
         pass
 
     def format(self, record: logging.LogRecord) -> str:
+
         return json.dumps(
             {
                 "timestamp": record.created,
@@ -23,7 +24,7 @@ class JSONFormatter(logging.Formatter):
                 "module": record.module,
                 "function": record.funcName,
                 "name": record.name,
-                "message": record.msg % record.args,
+                "message": record.getMessage(),
             }
         )
 
@@ -48,6 +49,6 @@ class ConsoleFormatter(logging.Formatter):
                 "where": f"{record.module}.{record.funcName}, line: {record.lineno}",
                 "process": record.processName,
                 "thread": record.threadName,
-                "message": record.msg % record.args,
+                "message": record.getMessage(),
             }
         )
