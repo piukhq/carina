@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
         with:
-          python-version: "3.9"
+          python-version: "3.10"
       - run: pip install pipenv
       - run: pipenv install --dev --ignore-pipfile
       - run: pipenv run alembic upgrade head
@@ -41,7 +41,7 @@ jobs:
       - run: pipenv run pylint app tests
       - run: pipenv run black --check .
       - run: pipenv run isort --check .
-      - run: pipenv run mypy app
+      - run: pipenv run mypy .
       - run: pipenv run pytest --verbose --cov app --cov-report term-missing
 
   release_dev:

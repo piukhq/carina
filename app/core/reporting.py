@@ -7,7 +7,7 @@ from prettyprinter import cpprint
 
 class JSONFormatter(logging.Formatter):
     # noinspection PyMissingConstructor
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # pylint: disable=super-init-not-called
         pass
 
     def format(self, record: logging.LogRecord) -> str:
@@ -30,7 +30,7 @@ class JSONFormatter(logging.Formatter):
 
 class ConsoleFormatter(logging.Formatter):
     # noinspection PyMissingConstructor
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # pylint: disable=super-init-not-called
         pass
 
     @staticmethod

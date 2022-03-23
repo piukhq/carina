@@ -3,7 +3,7 @@
 import json
 
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Generator
+from typing import TYPE_CHECKING, Generator, cast
 from unittest import mock
 from uuid import uuid4
 
@@ -125,8 +125,8 @@ def test_jigsaw_agent_ok(
     assert expiry == (now + timedelta(days=1)).timestamp()
 
     mock_uuid.assert_called_once()
-    spy_redis_set.assert_called_once_with(Jigsaw.redis_token_key, mock.ANY, timedelta(days=1))
-    assert fernet.decrypt(redis_raw.get(Jigsaw.redis_token_key)).decode() == test_token
+    spy_redis_set.assert_called_once_with(Jigsaw.REDIS_TOKEN_KEY, mock.ANY, timedelta(days=1))
+    assert fernet.decrypt(cast(bytes, redis_raw.get(Jigsaw.REDIS_TOKEN_KEY))).decode() == test_token
 
 
 @httpretty.activate
