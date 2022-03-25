@@ -1,8 +1,10 @@
-FROM ghcr.io/binkhq/python:3.9
+FROM ghcr.io/binkhq/python:3.10
 
 WORKDIR /app
 ADD . .
-RUN pipenv install --deploy --system --ignore-pipfile
+RUN apt-get update && apt-get install gcc -y && \
+    pipenv install --deploy --system --ignore-pipfile && \
+    apt-get autoremove -y gcc && rm -rf /var/lib/apt/lists/*
 
 ENV PROMETHEUS_MULTIPROC_DIR=/dev/shm
 ENTRYPOINT [ "linkerd-await", "--" ]

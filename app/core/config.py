@@ -3,7 +3,7 @@ import os
 import sys
 
 from logging.config import dictConfig
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import sentry_sdk
 
@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     SQL_DEBUG: bool = False
 
     @validator("TESTING")
+    @classmethod
     def is_test(cls, v: bool) -> bool:
         command = sys.argv[0]
         args = sys.argv[1:] if len(sys.argv) > 1 else []
@@ -56,6 +57,7 @@ class Settings(BaseSettings):
     MIGRATING: bool = False
 
     @validator("MIGRATING")
+    @classmethod
     def is_migration(cls, v: bool) -> bool:
         command = sys.argv[0]
 
@@ -66,19 +68,13 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "carina"
     ROOT_LOG_LEVEL: Optional[LogLevel] = None
     QUERY_LOG_LEVEL: Optional[LogLevel] = None
-    LOG_FORMATTER: str = "json"
-
-    @validator("LOG_FORMATTER")
-    def validate_formatter(cls, v: str) -> Optional[str]:
-        if v not in ["json", "brief"]:
-            raise ValueError(f'"{v}" is not a valid LOG_FORMATTER value, choices are [json, brief]')
-        return v
-
+    LOG_FORMATTER: Literal["json", "brief", "console"] = "json"
     KEY_VAULT_URI: str = "https://bink-uksouth-dev-com.vault.azure.net/"
 
     CARINA_API_AUTH_TOKEN: Optional[str] = None
 
     @validator("CARINA_API_AUTH_TOKEN")
+    @classmethod
     def fetch_carina_api_auth_token(cls, v: Optional[str], values: dict[str, Any]) -> Any:
         if isinstance(v, str) and not values["TESTING"]:
             return v
@@ -88,12 +84,13 @@ class Settings(BaseSettings):
                 values["KEY_VAULT_URI"],
                 values["TESTING"] or values["MIGRATING"],
             ).get_secret("bpl-carina-api-auth-token")
-        else:
-            raise KeyError("required var KEY_VAULT_URI is not set.")
+
+        raise KeyError("required var KEY_VAULT_URI is not set.")
 
     POLARIS_API_AUTH_TOKEN: Optional[str] = None
 
     @validator("POLARIS_API_AUTH_TOKEN")
+    @classmethod
     def fetch_polaris_api_auth_token(cls, v: Optional[str], values: dict[str, Any]) -> Any:
         if isinstance(v, str) and not values["TESTING"]:
             return v
@@ -103,8 +100,8 @@ class Settings(BaseSettings):
                 values["KEY_VAULT_URI"],
                 values["TESTING"] or values["MIGRATING"],
             ).get_secret("bpl-polaris-api-auth-token")
-        else:
-            raise KeyError("required var KEY_VAULT_URI is not set.")
+
+        raise KeyError("required var KEY_VAULT_URI is not set.")
 
     USE_NULL_POOL: bool = False
     POSTGRES_HOST: str = "localhost"
@@ -112,7 +109,7 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = ""
     POSTGRES_DB: str = "carina"
-    SQLALCHEMY_DATABASE_URI: Optional[str] = None
+    SQLALCHEMY_DATABASE_URI: str = ""
     SQLALCHEMY_DATABASE_URI_ASYNC: Optional[str] = None
     DB_CONNECTION_RETRY_TIMES: int = 3
     SENTRY_DSN: Optional[HttpUrl] = None
@@ -120,20 +117,24 @@ class Settings(BaseSettings):
     SENTRY_TRACES_SAMPLE_RATE: float = 0.0
 
     @validator("SENTRY_DSN", pre=True)
+    @classmethod
     def sentry_dsn_can_be_blank(cls, v: str) -> Optional[str]:
         if v is not None and len(v) == 0:
             return None
         return v
 
     @validator("SENTRY_TRACES_SAMPLE_RATE")
+    @classmethod
     def validate_sentry_traces_sample_rate(cls, v: float) -> float:
-        if not (0 <= v <= 1):
+        if not 0 <= v <= 1:
             raise ValueError("SENTRY_TRACES_SAMPLE_RATE must be between 0.0 and 1.0")
         return v
 
     @validator("SQLALCHEMY_DATABASE_URI", pre=True)
-    def assemble_db_connection(cls, v: Optional[str], values: dict[str, Any]) -> Any:
-        if isinstance(v, str):
+    @classmethod
+    def assemble_db_connection(cls, v: str, values: dict[str, Any]) -> Any:
+
+        if v != "":
             db_uri = v
 
         else:
@@ -152,6 +153,7 @@ class Settings(BaseSettings):
         return db_uri
 
     @validator("SQLALCHEMY_DATABASE_URI_ASYNC", pre=True)
+    @classmethod
     def adapt_db_connection_to_async(cls, v: Optional[str], values: dict[str, Any]) -> Any:
         if isinstance(v, str):
             db_uri = v
@@ -168,6 +170,7 @@ class Settings(BaseSettings):
     POLARIS_BASE_URL: str = ""
 
     @validator("POLARIS_BASE_URL")
+    @classmethod
     def polaris_base_url(cls, v: str, values: dict[str, Any]) -> str:
         if v != "":
             return v
@@ -176,6 +179,7 @@ class Settings(BaseSettings):
     REDIS_URL: str
 
     @validator("REDIS_URL")
+    @classmethod
     def assemble_redis_url(cls, v: str, values: dict[str, Any]) -> str:
 
         if values["TESTING"]:
@@ -209,17 +213,19 @@ class Settings(BaseSettings):
     PROMETHEUS_HTTP_SERVER_PORT: int = 9100
 
     @validator("TASK_QUEUES")
+    @classmethod
     def task_queues(cls, v: Optional[list[str]], values: dict[str, Any]) -> Any:
         if v and isinstance(v, list):
             return v
         return (values["TASK_QUEUE_PREFIX"] + name for name in ("high", "default", "low"))
 
     JIGSAW_AGENT_USERNAME: str = "Bink_dev"
-    JIGSAW_AGENT_PASSWORD: Optional[str] = None
+    JIGSAW_AGENT_PASSWORD: str = ""
 
     @validator("JIGSAW_AGENT_PASSWORD")
-    def fetch_jigsaw_agent_password(cls, v: Optional[str], values: dict[str, Any]) -> Any:
-        if isinstance(v, str) and not values["TESTING"]:
+    @classmethod
+    def fetch_jigsaw_agent_password(cls, v: str, values: dict[str, Any]) -> Any:
+        if v != "" and not values["TESTING"]:
             return v
 
         if "KEY_VAULT_URI" in values:
@@ -227,14 +233,15 @@ class Settings(BaseSettings):
                 values["KEY_VAULT_URI"],
                 values["TESTING"] or values["MIGRATING"],
             ).get_secret("bpl-carina-agent-jigsaw-password")
-        else:
-            raise KeyError("required var KEY_VAULT_URI is not set.")
 
-    JIGSAW_AGENT_ENCRYPTION_KEY: Optional[str] = None
+        raise KeyError("required var KEY_VAULT_URI is not set.")
+
+    JIGSAW_AGENT_ENCRYPTION_KEY: str = ""
 
     @validator("JIGSAW_AGENT_ENCRYPTION_KEY")
-    def fetch_jigsaw_agent_encryption_key(cls, v: Optional[str], values: dict[str, Any]) -> Any:
-        if isinstance(v, str) and not values["TESTING"]:
+    @classmethod
+    def fetch_jigsaw_agent_encryption_key(cls, v: str, values: dict[str, Any]) -> Any:
+        if v != "" and not values["TESTING"]:
             return v
 
         if "KEY_VAULT_URI" in values:
@@ -242,8 +249,8 @@ class Settings(BaseSettings):
                 values["KEY_VAULT_URI"],
                 values["TESTING"] or values["MIGRATING"],
             ).get_secret("bpl-carina-agent-jigsaw-encryption-key")
-        else:
-            raise KeyError("required var KEY_VAULT_URI is not set.")
+
+        raise KeyError("required var KEY_VAULT_URI is not set.")
 
     class Config:
         case_sensitive = True
@@ -263,6 +270,7 @@ dictConfig(
         "disable_existing_loggers": False,
         "formatters": {
             "brief": {"format": "%(levelname)s:     %(asctime)s - %(message)s"},
+            "console": {"()": "app.core.reporting.ConsoleFormatter"},
             "json": {"()": "app.core.reporting.JSONFormatter"},
         },
         "handlers": {
@@ -288,15 +296,13 @@ dictConfig(
                 "propagate": False,
                 "handlers": ["stdout"],
             },
-            "sqlalchemy": {
+            "sqlalchemy.engine": {
                 "level": settings.QUERY_LOG_LEVEL or logging.WARN,
-                "qualname": "sqlalchemy.engine",
             },
             "alembic": {
                 "level": "INFO",
                 "handlers": ["stderr"],
                 "propagate": False,
-                "qualname": "alembic",
             },
         },
     }
@@ -330,7 +336,7 @@ redis_raw = Redis.from_url(
 )
 
 if settings.SENTRY_DSN:  # pragma: no cover
-    sentry_sdk.init(
+    sentry_sdk.init(  # pylint: disable=abstract-class-instantiated
         dsn=settings.SENTRY_DSN,
         environment=settings.SENTRY_ENV,
         release=__version__,

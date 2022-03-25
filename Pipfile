@@ -41,7 +41,7 @@ cryptography = "*"
 [dev-packages]
 isort = "*"
 black = "*"
-mypy = "==0.910"
+mypy = "*"
 ipython = "*"
 pytest = "*"
 pytest-cov = "*"
@@ -57,4 +57,4 @@ pylint = "*"
 pylint-pytest = "*"
 
 [requires]
-python_version = "3.9"
+python_version = "3.10"
