@@ -7,9 +7,6 @@ import sentry_sdk
 
 from cryptography.fernet import Fernet
 from fastapi import status
-from retry_tasks_lib.db.models import RetryTask, TaskTypeKey, TaskTypeKeyValue
-from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.future import select
 
 from app.core.config import redis_raw, settings
 from app.db.base_class import sync_run_query
@@ -19,9 +16,21 @@ from app.models import Reward
 if TYPE_CHECKING:  # pragma: no cover
     from inspect import Traceback
 
+    from retry_tasks_lib.db.models import RetryTask
     from sqlalchemy.orm import Session
+    from typing_extensions import TypedDict
 
     from app.models import RewardConfig
+
+    SpecialActionsMap = TypedDict(
+        "SpecialActionsMap",
+        {
+            "message_ids": list[str],
+            "action": Callable,
+            "max_retries": int,
+            "retried": int,
+        },
+    )
 
 
 class Jigsaw(BaseAgent):
@@ -71,18 +80,29 @@ class Jigsaw(BaseAgent):
         }
     }
     ```
+
+    Sample reversal success response payload:
+    ```json
+    {
+        "status": 2000,
+        "status_description": "OK",
+        "messages": [],
+        "PartnerRef": "",
+        "data": null
+    }
+    ```
+
     """
 
-    JIGSAW_STATUS_CODE_MAP = {
+    CARD_REF_KEY = "customer_card_ref"
+    REVERSAL_FLAG_KEY = "might_need_reversal"
+    REDIS_TOKEN_KEY = f"{settings.REDIS_KEY_PREFIX}:agent:jigsaw:auth_token"
+    STATUS_CODE_MAP = {
         "5000": status.HTTP_500_INTERNAL_SERVER_ERROR,
         "5003": status.HTTP_503_SERVICE_UNAVAILABLE,
         "4003": status.HTTP_403_FORBIDDEN,
         "4001": status.HTTP_401_UNAUTHORIZED,
     }
-    NEW_TOKEN_NEEDED_STATUS = "4001"
-    NEW_TOKEN_NEEDED_IDS = ["10003", "10006", "10007"]
-
-    redis_token_key = f"{settings.REDIS_KEY_PREFIX}:agent:jigsaw:auth_token"
 
     def __init__(
         self,
@@ -90,9 +110,12 @@ class Jigsaw(BaseAgent):
         reward_config: "RewardConfig",
         config: dict,
         *,
+        retry_task: "RetryTask",
         send_request_fn: Callable = None,
-        retry_task: RetryTask = None,
     ) -> None:
+        if retry_task is None:
+            raise AgentError("Jigsaw: RetryTask object not provided.")
+
         super().__init__(
             db_session=db_session,
             reward_config=reward_config,
@@ -104,6 +127,26 @@ class Jigsaw(BaseAgent):
         self.customer_card_ref: Optional[str] = None
         self.reward_config_required_values = reward_config.load_required_fields_values()
         self.fernet = Fernet(settings.JIGSAW_AGENT_ENCRYPTION_KEY.encode())
+        self.special_actions_map: dict[str, "SpecialActionsMap"] = {
+            # BPL-439: If Jigsaw returns a 4000 status with a message with isError set as True and the id equal to
+            # 40028 the customer_card_ref we provided is not unique and we need to generate a new one and try again.
+            # If this happens after we got another error from the register endpoint we need to send a reversal request
+            # and try again with the same card ref
+            "4000": {
+                "message_ids": ["40028"],
+                "action": self.try_again_with_new_card_ref,
+                "max_retries": 3,
+                "retried": 0,
+            },
+            # BPL-437: If jigsaw returns a 4001 status with a message with isError set as True and the id equal to
+            # one of the below ids, we need to fetch a new authorisation token and try again.
+            "4001": {
+                "message_ids": ["10003", "10006", "10007"],
+                "action": self.wipe_cached_token_and_try_again,
+                "max_retries": 3,
+                "retried": 0,
+            },
+        }
 
     @staticmethod
     def _collect_response_data(resp: requests.Response) -> tuple[dict, str, str, str, str]:
@@ -116,7 +159,7 @@ class Jigsaw(BaseAgent):
 
             if error_msg is not None:
                 msg_id = str(error_msg["id"])
-                msg_info = error_msg["info"]
+                msg_info = error_msg.get("Info")
             else:
                 msg_id = "N/A"
                 msg_info = ""
@@ -126,23 +169,64 @@ class Jigsaw(BaseAgent):
 
         return response_payload, jigsaw_status, description, msg_id, msg_info
 
+    def wipe_cached_token_and_try_again(self, try_again_call: Callable[..., requests.Response]) -> dict:
+        redis_raw.delete(self.REDIS_TOKEN_KEY)
+        new_resp = try_again_call()
+        return self._get_response_body_or_raise_for_status(new_resp, try_again_call)
+
+    def try_again_with_new_card_ref(self, try_again_call: Callable[..., requests.Response]) -> dict:
+        execute_reversal = self.agent_state_params.get(self.REVERSAL_FLAG_KEY, False)
+        msg = f"Jigsaw: non unique customer card ref: {self.customer_card_ref}, "
+
+        if execute_reversal:
+            msg += "sending reversal request and trying again."
+
+        else:
+            self.customer_card_ref = str(uuid4())
+            self.set_agent_state_params(self.agent_state_params | {self.CARD_REF_KEY: self.customer_card_ref})
+            msg += f"trying again with new customer card ref: {self.customer_card_ref}."
+
+        self.logger.error(msg)
+        sentry_sdk.capture_message(msg)
+
+        if execute_reversal:
+            resp = self._send_reversal_request()
+            self._get_response_body_or_raise_for_status(resp, self._send_reversal_request)
+
+        new_resp = try_again_call()
+        return self._get_response_body_or_raise_for_status(new_resp, try_again_call)
+
+    def _flag_for_reversal_if_needed(self, resp: requests.Response, unknown_status: bool = False) -> None:
+        # we will need to try a reversal later when retrying the register request only if we got a 3XX or 5XX
+        # from the register endpoint or an unknown jigsaw status.
+        is_3xx_or_5xx = 300 <= resp.status_code < 400 or 500 <= resp.status_code < 600
+
+        if "register" in resp.request.path_url and (is_3xx_or_5xx or unknown_status):
+            self.set_agent_state_params(self.agent_state_params | {self.REVERSAL_FLAG_KEY: True})
+
+    def _requires_special_action(self, try_again_call: Optional[Callable], jigsaw_status: str, msg_id: str) -> bool:
+        return (
+            try_again_call is not None
+            and jigsaw_status in self.special_actions_map
+            and msg_id in self.special_actions_map[jigsaw_status]["message_ids"]
+            and self.special_actions_map[jigsaw_status]["retried"]
+            < self.special_actions_map[jigsaw_status]["max_retries"]
+        )
+
     def _get_response_body_or_raise_for_status(
-        self, resp: requests.Response, try_again_call: Optional[Callable] = None
+        self, resp: requests.Response, try_again_call: Callable[..., requests.Response] = None
     ) -> dict:
         """Validates a http response based on Jigsaw specific status codes and errors ids."""
 
         response_payload, jigsaw_status, description, msg_id, msg_info = self._collect_response_data(resp)
+        execute_special_action = self._requires_special_action(try_again_call, jigsaw_status, msg_id)
 
-        # BPL-437: If jigsaw returns a 4001 status with a message with isError set as True and the id equal to
-        # one of the ids in NEW_TOKEN_NEEDED_IDS we need to fetch a new authorisation token and try again.
-        wipe_cached_token_and_try_again = (
-            try_again_call is not None
-            and jigsaw_status == self.NEW_TOKEN_NEEDED_STATUS
-            and msg_id in self.NEW_TOKEN_NEEDED_IDS
-        )
+        if not execute_special_action and jigsaw_status in self.STATUS_CODE_MAP:
 
-        if not wipe_cached_token_and_try_again and jigsaw_status in self.JIGSAW_STATUS_CODE_MAP:
-            resp.status_code = self.JIGSAW_STATUS_CODE_MAP[jigsaw_status]
+            if resp.status_code == 200:
+                resp.status_code = self.STATUS_CODE_MAP[jigsaw_status]
+
+            self._flag_for_reversal_if_needed(resp)
             raise requests.HTTPError(
                 f"Received a {jigsaw_status} {description} response. Details: {msg_id} {msg_info}",
                 response=resp,
@@ -163,12 +247,12 @@ class Jigsaw(BaseAgent):
             )
 
         # we want to capture the failed response's audit before trying again.
-        if wipe_cached_token_and_try_again:
-            redis_raw.delete(self.redis_token_key)
-            new_resp = try_again_call()  # type: ignore [misc]
-            return self._get_response_body_or_raise_for_status(new_resp)
+        if execute_special_action:
+            self.special_actions_map[jigsaw_status]["retried"] += 1
+            return self.special_actions_map[jigsaw_status]["action"](try_again_call)
 
         if jigsaw_status != "2000":
+            self._flag_for_reversal_if_needed(resp, unknown_status=True)
             raise AgentError(
                 f"Jigsaw: unknown error returned. "
                 f"status: {jigsaw_status} {description}, message: {msg_id} {msg_info}"
@@ -189,7 +273,7 @@ class Jigsaw(BaseAgent):
     def _get_and_decrypt_token(self) -> Optional[str]:
         """tries to fetch and decrypt token from redis, returns the token as a string on success and None on failure."""
 
-        raw_token = redis_raw.get(self.redis_token_key)
+        raw_token = redis_raw.get(self.REDIS_TOKEN_KEY)
         if raw_token is None:
             return None
 
@@ -198,7 +282,7 @@ class Jigsaw(BaseAgent):
         except Exception as ex:  # pylint: disable=broad-except
             sentry_sdk.capture_exception(ex)
             self.logger.exception(
-                f"Jigsaw: Unexpected value retrieved from redis for {self.redis_token_key}.", exc_info=ex
+                f"Jigsaw: Unexpected value retrieved from redis for {self.REDIS_TOKEN_KEY}.", exc_info=ex
             )
             return None
 
@@ -207,7 +291,7 @@ class Jigsaw(BaseAgent):
 
         try:
             redis_raw.set(
-                self.redis_token_key,
+                self.REDIS_TOKEN_KEY,
                 self.fernet.encrypt(token.encode()),
                 expires_in,
             )
@@ -253,7 +337,7 @@ class Jigsaw(BaseAgent):
 
         customer_card_ref: Optional[str] = None
         if self.retry_task is not None:
-            customer_card_ref = self.retry_task.get_params().get("customer_card_ref", None)
+            customer_card_ref = self.agent_state_params.get(self.CARD_REF_KEY, None)
 
         self.customer_card_ref = str(uuid4()) if customer_card_ref is None else customer_card_ref
         return self.customer_card_ref, datetime.now(tz=timezone.utc)
@@ -280,13 +364,26 @@ class Jigsaw(BaseAgent):
         """
         Registers our customer_card_ref to Jigsaw and returns a new Reward code.
         """
-        return self.send_request(
-            "POST",
-            f"{self.base_url}/order/V4/register",
+        try:
+            return self.send_request(
+                "POST",
+                f"{self.base_url}/order/V4/register",
+                json={
+                    "customer_card_ref": self.customer_card_ref,
+                    "brand_id": self.config["brand_id"],
+                    "transaction_value": self.reward_config_required_values["transaction_value"],
+                },
+                headers={"Token": self._get_auth_token()},
+            )
+        except requests.ConnectionError:
+            self.set_agent_state_params(self.agent_state_params | {self.REVERSAL_FLAG_KEY: True})
+            raise
+
+    def _send_reversal_request(self) -> requests.Response:
+        return requests.post(
+            f"{self.base_url}/order/V4/reversal",
             json={
-                "customer_card_ref": self.customer_card_ref,
-                "brand_id": self.config["brand_id"],
-                "transaction_value": self.reward_config_required_values["transaction_value"],
+                "original_customer_card_ref": self.customer_card_ref,
             },
             headers={"Token": self._get_auth_token()},
         )
@@ -315,27 +412,5 @@ class Jigsaw(BaseAgent):
                 "Exception occurred while fetching a new Jigsaw reward, exiting agent gracefully.", exc_info=exc_value
             )
 
-            if self.customer_card_ref is not None and self.retry_task is not None:
-
-                def _query() -> None:
-
-                    self.db_session.execute(
-                        insert(TaskTypeKeyValue)
-                        .on_conflict_do_nothing()
-                        .values(
-                            value=self.customer_card_ref,
-                            retry_task_id=self.retry_task.retry_task_id,  # type: ignore [union-attr]
-                            task_type_key_id=(
-                                select(TaskTypeKey.task_type_key_id)
-                                .where(
-                                    TaskTypeKey.task_type_id
-                                    == self.retry_task.task_type_id,  # type: ignore [union-attr]
-                                    TaskTypeKey.name == "customer_card_ref",
-                                )
-                                .scalar_subquery()
-                            ),
-                        )
-                    )
-                    self.db_session.commit()
-
-                sync_run_query(_query, self.db_session)
+            if self.customer_card_ref is not None and self.CARD_REF_KEY not in self.agent_state_params:
+                self.set_agent_state_params(self.agent_state_params | {self.CARD_REF_KEY: self.customer_card_ref})

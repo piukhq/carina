@@ -259,7 +259,7 @@ def reward_issuance_task_type(db_session: "Session") -> TaskType:
                 ("reward_uuid", "STRING"),
                 ("code", "STRING"),
                 ("idempotency_token", "STRING"),
-                ("customer_card_ref", "STRING"),
+                ("agent_state_params_raw", "STRING"),
             )
         ]
     )
