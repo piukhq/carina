@@ -221,7 +221,10 @@ def test_jigsaw_agent_get_token_unexpected_error_response(
     spy_logger.exception.assert_called_with(
         "Exception occurred while fetching a new Jigsaw reward, exiting agent gracefully.", exc_info=exc_info.value
     )
-    assert exc_info.value.args[0] == "Jigsaw: unknown error returned. status: 9000 OMG, message: 9000 AHHHHHHHHHHHH!!!!"
+    assert exc_info.value.args[0] == (
+        "Jigsaw: unknown error returned. status: 9000 OMG, endpoint: /order/V4/getToken, "
+        "message: 9000 AHHHHHHHHHHHH!!!!"
+    )
     assert db_session.scalar(select(Reward).where(Reward.reward_config_id == jigsaw_reward_config.id)) is None
     db_session.refresh(issuance_retry_task_no_reward)
     task_params = issuance_retry_task_no_reward.get_params()

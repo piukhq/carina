@@ -213,6 +213,13 @@ class Jigsaw(BaseAgent):
             < self.special_actions_map[jigsaw_status]["max_retries"]
         )
 
+    def _format_error_message_details(self, msg_id: str, msg_info: str, path_url: str) -> str:
+        error_msg_details = f"endpoint: {path_url}, message: {msg_id} {msg_info}"
+        if self.customer_card_ref is not None and "getToken" not in path_url:
+            error_msg_details += f", customer card ref: {self.customer_card_ref}"
+
+        return error_msg_details
+
     def _get_response_body_or_raise_for_status(
         self, resp: requests.Response, try_again_call: Callable[..., requests.Response] = None
     ) -> dict:
@@ -228,7 +235,8 @@ class Jigsaw(BaseAgent):
 
             self._flag_for_reversal_if_needed(resp)
             raise requests.HTTPError(
-                f"Received a {jigsaw_status} {description} response. Details: {msg_id} {msg_info}",
+                f"Received a {jigsaw_status} {description} response. "
+                + self._format_error_message_details(msg_id, msg_info, resp.request.path_url),
                 response=resp,
             )
 
@@ -254,8 +262,8 @@ class Jigsaw(BaseAgent):
         if jigsaw_status != "2000":
             self._flag_for_reversal_if_needed(resp, unknown_status=True)
             raise AgentError(
-                f"Jigsaw: unknown error returned. "
-                f"status: {jigsaw_status} {description}, message: {msg_id} {msg_info}"
+                f"Jigsaw: unknown error returned. status: {jigsaw_status} {description}, "
+                + self._format_error_message_details(msg_id, msg_info, resp.request.path_url)
             )
 
         return response_payload

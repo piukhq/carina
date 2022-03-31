@@ -161,6 +161,9 @@ def test_jigsaw_agent_register_unexpected_error_response(
     fernet: "Fernet",
 ) -> None:
     agent_config = jigsaw_retailer_fetch_type.load_agent_config()
+    card_ref = uuid4()
+    mock_uuid = mocker.patch("app.fetch_reward.jigsaw.uuid4")
+    mock_uuid.return_value = card_ref
     redis_raw.set(Jigsaw.REDIS_TOKEN_KEY, fernet.encrypt(b"test-token"), timedelta(days=1))
     httpretty.register_uri(
         "POST",
@@ -191,7 +194,10 @@ def test_jigsaw_agent_register_unexpected_error_response(
     spy_logger.exception.assert_called_with(
         "Exception occurred while fetching a new Jigsaw reward, exiting agent gracefully.", exc_info=exc_info.value
     )
-    assert exc_info.value.args[0] == "Jigsaw: unknown error returned. status: 9000 OMG, message: 9000 AHHHHHHHHHHHH!!!!"
+    assert exc_info.value.args[0] == (
+        "Jigsaw: unknown error returned. status: 9000 OMG, endpoint: /order/V4/register, "
+        f"message: 9000 AHHHHHHHHHHHH!!!!, customer card ref: {card_ref}"
+    )
     assert db_session.scalar(select(Reward).where(Reward.reward_config_id == jigsaw_reward_config.id)) is None
     db_session.refresh(issuance_retry_task_no_reward)
     task_params = issuance_retry_task_no_reward.get_params()
@@ -386,6 +392,9 @@ def test_jigsaw_agent_register_retry_get_token_max_retries_exceeded(
 ) -> None:
 
     agent_config = jigsaw_retailer_fetch_type.load_agent_config()
+    card_ref = uuid4()
+    mock_uuid = mocker.patch("app.fetch_reward.jigsaw.uuid4")
+    mock_uuid.return_value = card_ref
 
     class AnswerBot(AnswerBotBase):
         def response_generator(
@@ -445,7 +454,10 @@ def test_jigsaw_agent_register_retry_get_token_max_retries_exceeded(
     assert answer_bot.calls["register"] == 4
     assert answer_bot.calls["getToken"] == 4
 
-    assert exc_info.value.args[0] == "Received a 4001 Unauthorised response. Details: 10003 Token invalid"
+    assert exc_info.value.args[0] == (
+        "Received a 4001 Unauthorised response. endpoint: /order/V4/register, message: 10003 Token invalid, "
+        f"customer card ref: {card_ref}"
+    )
     task_params = issuance_retry_task_no_reward.get_params()
     assert all(val not in task_params.keys() for val in ["issued_date", "expiry_date", "reward_uuid", "reward_code"])
 
