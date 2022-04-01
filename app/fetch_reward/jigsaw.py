@@ -186,8 +186,8 @@ class Jigsaw(BaseAgent):
             self.set_agent_state_params(self.agent_state_params | {self.CARD_REF_KEY: self.customer_card_ref})
             msg += f"trying again with new customer card ref: {self.customer_card_ref}."
 
+        # logger.error is captured by sentry as event.
         self.logger.error(msg)
-        sentry_sdk.capture_message(msg)
 
         if execute_reversal:
             resp = self._send_reversal_request()
