@@ -10,6 +10,7 @@ import sentry_sdk
 from pydantic import BaseSettings, HttpUrl, PostgresDsn, validator
 from pydantic.validators import str_validator
 from redis import Redis
+from sentry_sdk.integrations.redis import RedisIntegration
 
 from app.core.key_vault import KeyVault
 from app.version import __version__
@@ -341,6 +342,9 @@ if settings.SENTRY_DSN:  # pragma: no cover
     sentry_sdk.init(  # pylint: disable=abstract-class-instantiated
         dsn=settings.SENTRY_DSN,
         environment=settings.SENTRY_ENV,
+        integrations=[
+            RedisIntegration(),
+        ],
         release=__version__,
         traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
     )
