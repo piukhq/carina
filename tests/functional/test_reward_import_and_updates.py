@@ -4,7 +4,7 @@ import logging
 
 from collections import defaultdict
 from datetime import date, datetime, time, timezone
-from typing import TYPE_CHECKING, Callable, DefaultDict, List
+from typing import TYPE_CHECKING, Callable, DefaultDict
 from unittest import mock
 
 import pytest
@@ -33,14 +33,14 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 
-def _get_reward_update_rows(db_session: "Session", reward_codes: List[str]) -> List[RewardUpdate]:
+def _get_reward_update_rows(db_session: "Session", reward_codes: list[str]) -> list[RewardUpdate]:
     reward_updates = (
         db_session.execute(select(RewardUpdate).join(Reward).where(Reward.code.in_(reward_codes))).scalars().all()
     )
     return reward_updates
 
 
-def _get_reward_rows(db_session: "Session") -> List[Reward]:
+def _get_reward_rows(db_session: "Session") -> list[Reward]:
     return db_session.execute(select(Reward)).scalars().all()
 
 
@@ -400,7 +400,7 @@ def test_updates_agent__process_updates(setup: SetupType, mocker: MockerFixture)
         date="2021-07-30",
         status=RewardUpdateStatuses("redeemed"),
     )
-    reward_update_rows_by_code: DefaultDict[str, List[RewardUpdateRow]] = defaultdict(list[RewardUpdateRow])
+    reward_update_rows_by_code: DefaultDict[str, list[RewardUpdateRow]] = defaultdict(list[RewardUpdateRow])
     reward_update_rows_by_code[reward.code].append(RewardUpdateRow(data=data, row_num=1))
 
     # WHEN
@@ -443,7 +443,7 @@ def test_updates_agent__process_updates_reward_code_not_allocated(setup: SetupTy
         date="2021-07-30",
         status=RewardUpdateStatuses("redeemed"),
     )
-    reward_update_rows_by_code: DefaultDict[str, List[RewardUpdateRow]] = defaultdict(list[RewardUpdateRow])
+    reward_update_rows_by_code: DefaultDict[str, list[RewardUpdateRow]] = defaultdict(list[RewardUpdateRow])
     reward_update_rows_by_code[reward.code].append(RewardUpdateRow(data=data, row_num=1))
 
     # WHEN
@@ -483,7 +483,7 @@ def test_updates_agent__process_updates_reward_code_does_not_exist(setup: SetupT
         date="2021-07-30",
         status=RewardUpdateStatuses("cancelled"),
     )
-    reward_update_rows_by_code: DefaultDict[str, List[RewardUpdateRow]] = defaultdict(list[RewardUpdateRow])
+    reward_update_rows_by_code: DefaultDict[str, list[RewardUpdateRow]] = defaultdict(list[RewardUpdateRow])
     reward_update_rows_by_code[bad_reward_code].append(RewardUpdateRow(data=data, row_num=1))
 
     # WHEN
