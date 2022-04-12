@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable
 from uuid import uuid4
 
 import requests
@@ -124,7 +124,7 @@ class Jigsaw(BaseAgent):
             retry_task=retry_task,
         )
         self.base_url: str = self.config["base_url"]
-        self.customer_card_ref: Optional[str] = None
+        self.customer_card_ref: str | None = None
         self.reward_config_required_values = reward_config.load_required_fields_values()
         self.fernet = Fernet(settings.JIGSAW_AGENT_ENCRYPTION_KEY.encode())
         self.special_actions_map: dict[str, "SpecialActionsMap"] = {
@@ -204,7 +204,7 @@ class Jigsaw(BaseAgent):
         if "register" in resp.request.path_url and (is_3xx_or_5xx or unknown_status):
             self.set_agent_state_params(self.agent_state_params | {self.REVERSAL_FLAG_KEY: True})
 
-    def _requires_special_action(self, try_again_call: Optional[Callable], jigsaw_status: str, msg_id: str) -> bool:
+    def _requires_special_action(self, try_again_call: Callable | None, jigsaw_status: str, msg_id: str) -> bool:
         return (
             try_again_call is not None
             and jigsaw_status in self.special_actions_map
@@ -278,7 +278,7 @@ class Jigsaw(BaseAgent):
 
         return dt.astimezone(tz=timezone.utc)
 
-    def _get_and_decrypt_token(self) -> Optional[str]:
+    def _get_and_decrypt_token(self) -> str | None:
         """tries to fetch and decrypt token from redis, returns the token as a string on success and None on failure."""
 
         raw_token = redis_raw.get(self.REDIS_TOKEN_KEY)
@@ -343,7 +343,7 @@ class Jigsaw(BaseAgent):
         If a customer_card_ref is stored as task param, returns that instead of creating a new uuid.
         """
 
-        customer_card_ref: Optional[str] = None
+        customer_card_ref: str | None = None
         if self.retry_task is not None:
             customer_card_ref = self.agent_state_params.get(self.CARD_REF_KEY, None)
 

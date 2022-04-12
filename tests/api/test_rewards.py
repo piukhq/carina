@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, List, Tuple
+from typing import TYPE_CHECKING
 
 from fastapi import status
 from fastapi.testclient import TestClient
@@ -24,8 +24,8 @@ payload = {"account_url": "http://test.url/"}
 
 def _get_retry_task_and_values(
     db_session: "Session", task_type_id: int, reward_config_id: int
-) -> Tuple[RetryTask, List[str]]:
-    values: List[str] = []
+) -> tuple[RetryTask, list[str]]:
+    values: list[str] = []
     retry_task: RetryTask = (
         db_session.execute(
             select(RetryTask).where(
