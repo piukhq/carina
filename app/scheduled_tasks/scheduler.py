@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timezone
 from functools import wraps
 from logging import Logger
-from typing import Any, Callable, Optional, Protocol
+from typing import Any, Callable, Protocol
 from uuid import uuid4
 
 from apscheduler.schedulers.background import BlockingScheduler
@@ -90,7 +90,7 @@ class CronScheduler:  # pragma: no cover
         self,
         job_func: Callable,
         schedule_fn: Callable,
-        coalesce_jobs: Optional[bool] = None,
+        coalesce_jobs: bool | None = None,
     ) -> None:
         if coalesce_jobs is None:
             coalesce_jobs = undefined

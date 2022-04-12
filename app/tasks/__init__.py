@@ -1,6 +1,6 @@
 import logging
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import requests
 
@@ -28,9 +28,9 @@ def send_request_with_metrics(
     method: str,
     url: str,
     *,
-    headers: Optional[Dict[str, Any]] = None,
-    json: Optional[Dict[str, Any]] = None,
-    timeout: Tuple[float, int] = (3.03, 10),
+    headers: dict[str, Any] | None = None,
+    json: dict[str, Any] | None = None,
+    timeout: tuple[float, int] = (3.03, 10),
 ) -> requests.Response:
 
     try:

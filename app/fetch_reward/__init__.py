@@ -1,5 +1,5 @@
 from importlib import import_module
-from typing import TYPE_CHECKING, Callable, Optional, Tuple, Type
+from typing import TYPE_CHECKING, Callable, Type
 
 from sqlalchemy.future import select
 
@@ -15,7 +15,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
 def get_allocable_reward(
     db_session: "Session", reward_config: RewardConfig, send_request_fn: Callable = None, retry_task: "RetryTask" = None
-) -> Tuple[Optional[Reward], float, float]:
+) -> tuple[Reward | None, float, float]:
 
     try:
         mod, cls = reward_config.fetch_type.path.rsplit(".", 1)

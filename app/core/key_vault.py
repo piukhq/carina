@@ -1,5 +1,7 @@
 import logging
 
+from typing import cast
+
 from azure.core.exceptions import HttpResponseError, ResourceNotFoundError, ServiceRequestError
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
@@ -24,6 +26,6 @@ class KeyVault:
             return "testing-token"
 
         try:
-            return self.client.get_secret(secret_name).value
+            return cast(str, self.client.get_secret(secret_name).value)
         except (ServiceRequestError, ResourceNotFoundError, HttpResponseError) as ex:
             raise KeyVaultError(f"Could not retrieve secret {secret_name}") from ex

@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional, Tuple
+from typing import Any
 
 from sqlalchemy.future import select
 
@@ -10,7 +10,7 @@ from .base import BaseAgent
 
 
 class PreLoaded(BaseAgent):
-    def fetch_reward(self) -> Tuple[Optional[Reward], float, float]:
+    def fetch_reward(self) -> tuple[Reward | None, float, float]:
         validity_days = self.reward_config.load_required_fields_values().get("validity_days", 0)
         now = datetime.now(tz=timezone.utc)
         issued = now.timestamp()
@@ -22,8 +22,8 @@ class PreLoaded(BaseAgent):
     def fetch_balance(self) -> Any:  # pragma: no cover
         return NotImplementedError
 
-    def _get_allocable_reward(self) -> Optional[Reward]:
-        def _query() -> Optional[Reward]:
+    def _get_allocable_reward(self) -> Reward | None:
+        def _query() -> Reward | None:
             return (
                 self.db_session.execute(
                     select(Reward)

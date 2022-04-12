@@ -7,7 +7,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from functools import lru_cache
 from io import StringIO
-from typing import TYPE_CHECKING, DefaultDict, NamedTuple, Optional, Union, cast
+from typing import TYPE_CHECKING, DefaultDict, NamedTuple, cast
 
 import sentry_sdk
 
@@ -99,7 +99,7 @@ class BlobFileAgent:
         src_blob_client: "BlobClient",
         src_blob_lease: "BlobLeaseClient",
         *,
-        dst_blob_name: Optional[str] = None,
+        dst_blob_name: str | None = None,
     ) -> None:
 
         try:
@@ -381,7 +381,7 @@ class RewardUpdatesAgent(BlobFileAgent):
     @staticmethod
     def _report_unknown_codes(
         reward_codes_in_file: list[str],
-        db_reward_data_by_code: dict[str, dict[str, Union[str, bool]]],
+        db_reward_data_by_code: dict[str, dict[str, str | bool]],
         reward_update_rows_by_code: DefaultDict[str, list[RewardUpdateRow]],
         blob_name: str,
     ) -> None:
@@ -405,7 +405,7 @@ class RewardUpdatesAgent(BlobFileAgent):
         retailer: Retailer,
         blob_name: str,
         reward_codes_in_file: list[str],
-        db_reward_data_by_code: dict[str, dict[str, Union[str, bool]]],
+        db_reward_data_by_code: dict[str, dict[str, str | bool]],
         reward_update_rows_by_code: DefaultDict[str, list[RewardUpdateRow]],
     ) -> None:
         unallocated_reward_codes = list(
@@ -458,7 +458,7 @@ class RewardUpdatesAgent(BlobFileAgent):
         )
         # Provides a dict in the following format:
         # {'<code>': {'id': 'f2c44cf7-9d0f-45d0-b199-44a3c8b72db3', 'allocated': True}}
-        db_reward_data_by_code: dict[str, dict[str, Union[str, bool]]] = {
+        db_reward_data_by_code: dict[str, dict[str, str | bool]] = {
             reward_data["code"]: {"id": str(reward_data["id"]), "allocated": reward_data["allocated"]}
             for reward_data in reward_datas
         }
