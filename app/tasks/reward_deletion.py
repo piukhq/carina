@@ -21,7 +21,9 @@ if TYPE_CHECKING:  # pragma: no cover
 # it is relevantly reflected in the TaskType table
 @retryable_task(db_session_factory=SyncSessionMaker)
 def delete_unallocated_rewards(retry_task: RetryTask, db_session: "Session") -> None:
-    tasks_run_total.labels(app=settings.PROJECT_NAME, task_name=settings.DELETE_UNALLOCATED_REWARDS_TASK_NAME).inc()
+    if settings.ACTIVATE_TASKS_METRICS:
+        tasks_run_total.labels(app=settings.PROJECT_NAME, task_name=settings.DELETE_UNALLOCATED_REWARDS_TASK_NAME).inc()
+
     task_params = retry_task.get_params()
 
     def _delete_rewards() -> int:

@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 import sentry_sdk
 
@@ -33,10 +34,24 @@ EXPIRY = "expiry_date"
 def _process_issuance(task_params: dict) -> dict:
     logger.info(f"Processing allocation for reward: {task_params['reward_uuid']}")
     response_audit: dict = {"timestamp": datetime.now(tz=timezone.utc).isoformat()}
+    parsed_url = urlparse(task_params["account_url"])
+    url_template = "{scheme}://{netloc}{path}"
+    url_kwargs = {
+        "scheme": parsed_url.scheme,
+        "netloc": parsed_url.netloc,
+        "path": parsed_url.path,
+    }
+    exclude = ["path"]
+    if parsed_url.query:
+        url_template += "?{query}"
+        url_kwargs["query"] = parsed_url.query
+        exclude.append("query")
 
     resp = send_request_with_metrics(
         "POST",
-        task_params["account_url"],
+        url_template=url_template,
+        url_kwargs=url_kwargs,
+        exclude_from_label_url=exclude,
         json={
             "code": task_params["code"],
             "issued_date": task_params["issued_date"],
@@ -48,7 +63,6 @@ def _process_issuance(task_params: dict) -> dict:
             "Authorization": f"Token {settings.POLARIS_API_AUTH_TOKEN}",
             "Idempotency-Token": task_params["idempotency_token"],
         },
-        timeout=(3.03, 10),
     )
     resp.raise_for_status()
     response_audit["response"] = {"status": resp.status_code, "body": resp.text}
@@ -125,7 +139,9 @@ def _process_and_issue_reward(db_session: "Session", retry_task: RetryTask) -> N
 @retryable_task(db_session_factory=SyncSessionMaker)
 def issue_reward(retry_task: RetryTask, db_session: "Session") -> None:
     """Try to fetch and issue a reward, unless the campaign has been cancelled"""
-    tasks_run_total.labels(app=settings.PROJECT_NAME, task_name=settings.REWARD_ISSUANCE_TASK_NAME).inc()
+    if settings.ACTIVATE_TASKS_METRICS:
+        tasks_run_total.labels(app=settings.PROJECT_NAME, task_name=settings.REWARD_ISSUANCE_TASK_NAME).inc()
+
     reward_config = _get_reward_config(db_session, retry_task.get_params()["reward_config_id"])
     if reward_config.status == RewardTypeStatuses.CANCELLED:
         _cancel_task(db_session, retry_task)
@@ -135,9 +151,7 @@ def issue_reward(retry_task: RetryTask, db_session: "Session") -> None:
     if "reward_uuid" in retry_task.get_params():
         _process_and_issue_reward(db_session, retry_task)
     else:
-        allocable_reward, issued, expiry = get_allocable_reward(
-            db_session, reward_config, send_request_with_metrics, retry_task
-        )
+        allocable_reward, issued, expiry = get_allocable_reward(db_session, reward_config, retry_task)
 
         if allocable_reward is not None:
             key_ids = retry_task.task_type.get_key_ids_by_name()

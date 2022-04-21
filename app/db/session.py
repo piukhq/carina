@@ -16,11 +16,7 @@ async_engine = create_async_engine(
     settings.SQLALCHEMY_DATABASE_URI_ASYNC, pool_pre_ping=True, future=True, echo=settings.SQL_DEBUG, **null_pool
 )
 sync_engine = create_engine(
-    settings.SQLALCHEMY_DATABASE_URI,
-    pool_pre_ping=True,
-    poolclass=NullPool,
-    echo=settings.SQL_DEBUG,
-    future=True,
+    settings.SQLALCHEMY_DATABASE_URI, pool_pre_ping=True, echo=settings.SQL_DEBUG, future=True, **null_pool
 )
 AsyncSessionMaker = sessionmaker(bind=async_engine, future=True, expire_on_commit=False, class_=AsyncSession)
 SyncSessionMaker = sessionmaker(bind=sync_engine, future=True, expire_on_commit=False)

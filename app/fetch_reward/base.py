@@ -2,14 +2,13 @@ import json
 import logging
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Callable
-
-import requests
+from typing import TYPE_CHECKING, Any
 
 from retry_tasks_lib.db.models import TaskTypeKey, TaskTypeKeyValue
 from sqlalchemy.future import select
 
 from app.db.base_class import sync_run_query
+from app.tasks import send_request_with_metrics
 
 if TYPE_CHECKING:  # pragma: no cover
     from inspect import Traceback
@@ -24,26 +23,16 @@ class BaseAgent(ABC):
     logger = logging.getLogger("agents")
 
     def __init__(
-        self,
-        db_session: "Session",
-        reward_config: "RewardConfig",
-        config: dict,
-        *,
-        retry_task: "RetryTask",
-        send_request_fn: Callable = None,
+        self, db_session: "Session", reward_config: "RewardConfig", config: dict, *, retry_task: "RetryTask"
     ) -> None:
         self.db_session = db_session
         self.reward_config = reward_config
         self.config = config
         self.retry_task = retry_task
+        self.send_request = send_request_with_metrics
         self._agent_state_params_raw_instance: TaskTypeKeyValue
         self.agent_state_params: dict
         self._load_agent_state_params_raw_instance()
-
-        if send_request_fn is None:
-            self.send_request = requests.request
-        else:
-            self.send_request = send_request_fn
 
     def __enter__(self) -> "BaseAgent":
         return self

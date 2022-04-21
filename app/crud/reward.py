@@ -1,4 +1,3 @@
-from typing import List, Optional
 from uuid import uuid4
 
 from retry_tasks_lib.db.models import RetryTask
@@ -18,7 +17,7 @@ async def get_reward_config(
     reward_slug: str,
     for_update: bool = False,
 ) -> RewardConfig:
-    async def _query() -> List[RewardConfig]:
+    async def _query() -> list[RewardConfig]:
         stmt = select(RewardConfig).where(
             RewardConfig.retailer_id == retailer.id, RewardConfig.reward_slug == reward_slug
         )
@@ -63,13 +62,13 @@ async def create_reward_issuance_retry_task(
 async def create_delete_and_cancel_rewards_tasks(
     db_session: AsyncSession, *, retailer: Retailer, reward_slug: str, create_cancel_task: bool
 ) -> list[int]:
-    async def _query() -> tuple[RetryTask, Optional[RetryTask]]:
+    async def _query() -> tuple[RetryTask, RetryTask | None]:
         delete_task: RetryTask = await async_create_task(
             db_session=db_session,
             task_type_name=settings.DELETE_UNALLOCATED_REWARDS_TASK_NAME,
             params={"retailer_id": retailer.id, "reward_slug": reward_slug},
         )
-        cancel_task: Optional[RetryTask] = (
+        cancel_task: RetryTask | None = (
             await async_create_task(
                 db_session=db_session,
                 task_type_name=settings.CANCEL_REWARDS_TASK_NAME,

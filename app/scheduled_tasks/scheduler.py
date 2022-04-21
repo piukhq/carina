@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timezone
 from functools import wraps
 from logging import Logger
-from typing import Any, Callable, Optional, Protocol
+from typing import Any, Callable, Protocol
 from uuid import uuid4
 
 from apscheduler.schedulers.background import BlockingScheduler
@@ -89,16 +89,23 @@ class CronScheduler:  # pragma: no cover
     def add_job(
         self,
         job_func: Callable,
+        *,
         schedule_fn: Callable,
-        coalesce_jobs: Optional[bool] = None,
+        coalesce_jobs: bool | None = None,
+        args: list | tuple | None = None,
+        kwargs: dict | None = None,
     ) -> None:
         if coalesce_jobs is None:
             coalesce_jobs = undefined
+
         schedule = schedule_fn()
         if not schedule:
             self.log.warning((f"No schedule provided! Reverting to default of '{self.default_schedule}'."))
             schedule = self.default_schedule
-        self._scheduler.add_job(job_func, trigger=self._get_trigger(schedule), coalesce=coalesce_jobs)
+
+        self._scheduler.add_job(
+            job_func, trigger=self._get_trigger(schedule), coalesce=coalesce_jobs, args=args, kwargs=kwargs
+        )
 
     def run(self) -> None:
         self._scheduler.start()

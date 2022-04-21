@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy.future import select
 
@@ -12,7 +12,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 async def get_retailer_by_slug(db_session: "AsyncSession", retailer_slug: str) -> Retailer:
-    async def _query() -> Optional[Retailer]:
+    async def _query() -> Retailer | None:
         return (await db_session.execute(select(Retailer).where(Retailer.slug == retailer_slug))).scalar_one_or_none()
 
     retailer = await async_run_query(_query, db_session, rollback_on_exc=False)
