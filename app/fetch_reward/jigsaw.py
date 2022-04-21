@@ -105,24 +105,12 @@ class Jigsaw(BaseAgent):
     }
 
     def __init__(
-        self,
-        db_session: "Session",
-        reward_config: "RewardConfig",
-        config: dict,
-        *,
-        retry_task: "RetryTask",
-        send_request_fn: Callable = None,
+        self, db_session: "Session", reward_config: "RewardConfig", config: dict, *, retry_task: "RetryTask"
     ) -> None:
         if retry_task is None:
             raise AgentError("Jigsaw: RetryTask object not provided.")
 
-        super().__init__(
-            db_session=db_session,
-            reward_config=reward_config,
-            config=config,
-            send_request_fn=send_request_fn,
-            retry_task=retry_task,
-        )
+        super().__init__(db_session=db_session, reward_config=reward_config, config=config, retry_task=retry_task)
         self.base_url: str = self.config["base_url"]
         self.customer_card_ref: str | None = None
         self.reward_config_required_values = reward_config.load_required_fields_values()
@@ -319,7 +307,9 @@ class Jigsaw(BaseAgent):
 
         resp = self.send_request(
             "POST",
-            f"{self.base_url}/order/V4/getToken",
+            url_template="{base_url}/order/V4/getToken",
+            url_kwargs={"base_url": self.base_url},
+            exclude_from_label_url=[],
             json={
                 "Username": settings.JIGSAW_AGENT_USERNAME,
                 "Password": settings.JIGSAW_AGENT_PASSWORD,
@@ -375,7 +365,9 @@ class Jigsaw(BaseAgent):
         try:
             return self.send_request(
                 "POST",
-                f"{self.base_url}/order/V4/register",
+                url_template="{base_url}/order/V4/register",
+                url_kwargs={"base_url": self.base_url},
+                exclude_from_label_url=[],
                 json={
                     "customer_card_ref": self.customer_card_ref,
                     "brand_id": self.config["brand_id"],
@@ -388,8 +380,11 @@ class Jigsaw(BaseAgent):
             raise
 
     def _send_reversal_request(self) -> requests.Response:
-        return requests.post(
-            f"{self.base_url}/order/V4/reversal",
+        return self.send_request(
+            "POST",
+            url_template="{base_url}/order/V4/reversal",
+            url_kwargs={"base_url": self.base_url},
+            exclude_from_label_url=[],
             json={
                 "original_customer_card_ref": self.customer_card_ref,
             },

@@ -5,11 +5,14 @@ import typer
 from prometheus_client import CollectorRegistry
 from prometheus_client import start_http_server as start_prometheus_server
 from prometheus_client.multiprocess import MultiProcessCollector
+from retry_tasks_lib.reporting import report_anomalous_tasks
 from retry_tasks_lib.utils.error_handler import job_meta_handler
 
 from app.core.config import redis_raw, settings
+from app.db.session import SyncSessionMaker
 from app.imports.agents.file_agent import RewardImportAgent, RewardUpdatesAgent
 from app.scheduled_tasks.scheduler import cron_scheduler as carina_cron_scheduler
+from app.tasks.prometheus import task_statuses
 from app.tasks.worker import RetryTaskWorker
 
 cli = typer.Typer()
@@ -33,7 +36,12 @@ def task_worker(burst: bool = False) -> None:
 
 
 @cli.command()
-def cron_scheduler(imports: bool = True, updates: bool = True) -> None:  # pragma: no cover
+def cron_scheduler(imports: bool = True, updates: bool = True, report_tasks: bool = True) -> None:  # pragma: no cover
+    registry = CollectorRegistry()
+    MultiProcessCollector(registry)
+    logger.info("Starting prometheus metrics server...")
+    start_prometheus_server(settings.PROMETHEUS_HTTP_SERVER_PORT, registry=registry)
+
     logger.info("Initialising scheduler...")
     if imports:
         carina_cron_scheduler.add_job(
@@ -48,6 +56,15 @@ def cron_scheduler(imports: bool = True, updates: bool = True) -> None:  # pragm
             schedule_fn=lambda: settings.BLOB_IMPORT_SCHEDULE,
             coalesce_jobs=True,
         )
+
+    if report_tasks:
+        carina_cron_scheduler.add_job(
+            report_anomalous_tasks,
+            kwargs={"session_maker": SyncSessionMaker, "project_name": settings.PROJECT_NAME, "gauge": task_statuses},
+            schedule_fn=lambda: settings.REPORT_ANOMALOUS_TASKS_SCHEDULE,
+            coalesce_jobs=True,
+        )
+
     logger.info(f"Starting scheduler {carina_cron_scheduler}...")
     carina_cron_scheduler.run()
 
