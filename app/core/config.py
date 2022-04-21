@@ -42,7 +42,7 @@ class LogLevel(str):
 
 
 class Settings(BaseSettings):
-    API_PREFIX: str = "/bpl/rewards"
+    API_PREFIX: str = "/rewards"
     TESTING: bool = False
     SQL_DEBUG: bool = False
 
@@ -176,7 +176,7 @@ class Settings(BaseSettings):
     def polaris_base_url(cls, v: str, values: dict[str, Any]) -> str:
         if v != "":
             return v
-        return f"{values['POLARIS_HOST']}/bpl/loyalty"
+        return f"{values['POLARIS_HOST']}/loyalty"
 
     REDIS_URL: str
 
