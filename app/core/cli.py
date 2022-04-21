@@ -21,10 +21,12 @@ logger = logging.getLogger(__name__)
 
 @cli.command()
 def task_worker(burst: bool = False) -> None:
-    registry = CollectorRegistry()
-    MultiProcessCollector(registry)
-    logger.info("Starting prometheus metrics server...")
-    start_prometheus_server(settings.PROMETHEUS_HTTP_SERVER_PORT, registry=registry)
+    if settings.ACTIVATE_TASKS_METRICS:
+        registry = CollectorRegistry()
+        MultiProcessCollector(registry)
+        logger.info("Starting prometheus metrics server...")
+        start_prometheus_server(settings.PROMETHEUS_HTTP_SERVER_PORT, registry=registry)
+
     worker = RetryTaskWorker(
         queues=settings.TASK_QUEUES,
         connection=redis_raw,
@@ -37,10 +39,6 @@ def task_worker(burst: bool = False) -> None:
 
 @cli.command()
 def cron_scheduler(imports: bool = True, updates: bool = True, report_tasks: bool = True) -> None:  # pragma: no cover
-    registry = CollectorRegistry()
-    MultiProcessCollector(registry)
-    logger.info("Starting prometheus metrics server...")
-    start_prometheus_server(settings.PROMETHEUS_HTTP_SERVER_PORT, registry=registry)
 
     logger.info("Initialising scheduler...")
     if imports:
@@ -58,6 +56,11 @@ def cron_scheduler(imports: bool = True, updates: bool = True, report_tasks: boo
         )
 
     if report_tasks:
+        registry = CollectorRegistry()
+        MultiProcessCollector(registry)
+        logger.info("Starting prometheus metrics server...")
+        start_prometheus_server(settings.PROMETHEUS_HTTP_SERVER_PORT, registry=registry)
+
         carina_cron_scheduler.add_job(
             report_anomalous_tasks,
             kwargs={"session_maker": SyncSessionMaker, "project_name": settings.PROJECT_NAME, "gauge": task_statuses},
