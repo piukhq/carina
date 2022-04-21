@@ -254,6 +254,8 @@ class Settings(BaseSettings):
 
         raise KeyError("required var KEY_VAULT_URI is not set.")
 
+    REPORT_ANOMALOUS_TASKS_SCHEDULE = "*/10 * * * *"
+
     class Config:
         case_sensitive = True
         # env var settings priority ie priority 1 will override priority 2:

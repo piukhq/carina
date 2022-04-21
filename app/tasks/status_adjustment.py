@@ -21,17 +21,18 @@ def _process_status_adjustment(task_params: dict) -> dict:
 
     resp = send_request_with_metrics(
         "PATCH",
-        "{base_url}/{retailer_slug}/rewards/{reward_uuid}/status".format(
-            base_url=settings.POLARIS_BASE_URL,
-            retailer_slug=task_params["retailer_slug"],
-            reward_uuid=task_params["reward_uuid"],
-        ),
+        url_template="{base_url}/{retailer_slug}/rewards/{reward_uuid}/status",
+        url_kwargs={
+            "base_url": settings.POLARIS_BASE_URL,
+            "retailer_slug": task_params["retailer_slug"],
+            "reward_uuid": task_params["reward_uuid"],
+        },
+        exclude_from_label_url=["reward_uuid"],
         json={
             "status": task_params["status"],
             "date": task_params["date"],
         },
         headers={"Authorization": f"Token {settings.POLARIS_API_AUTH_TOKEN}"},
-        timeout=(3.03, 10),
     )
     resp.raise_for_status()
     response_audit["response"] = {"status": resp.status_code, "body": resp.text}

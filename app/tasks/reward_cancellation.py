@@ -21,13 +21,14 @@ def _process_rewards_cancellation(task_params: dict) -> dict:
 
     resp = send_request_with_metrics(
         "POST",
-        "{base_url}/{retailer_slug}/rewards/{reward_slug}/cancel".format(
-            base_url=settings.POLARIS_BASE_URL,
-            retailer_slug=task_params["retailer_slug"],
-            reward_slug=task_params["reward_slug"],
-        ),
+        url_template="{base_url}/{retailer_slug}/rewards/{reward_slug}/cancel",
+        url_kwargs={
+            "base_url": settings.POLARIS_BASE_URL,
+            "retailer_slug": task_params["retailer_slug"],
+            "reward_slug": task_params["reward_slug"],
+        },
+        exclude_from_label_url=["reward_slug"],
         headers={"Authorization": f"Token {settings.POLARIS_API_AUTH_TOKEN}"},
-        timeout=(3.03, 10),
     )
     resp.raise_for_status()
     response_audit["response"] = {"status": resp.status_code, "body": resp.text}

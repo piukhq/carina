@@ -26,20 +26,76 @@ logger = logging.getLogger("tasks")
 )
 def send_request_with_metrics(
     method: str,
-    url: str,
+    url_template: str,
+    url_kwargs: dict,
     *,
-    headers: dict[str, Any] | None = None,
-    json: dict[str, Any] | None = None,
+    exclude_from_label_url: list[str],
+    headers: dict | None = None,
+    json: dict | None = None,
     timeout: tuple[float, int] = (3.03, 10),
 ) -> requests.Response:
+    """
+    url_template: the url before any dymanic value is formatted into it.
+    ex:
+    ```python
+    "{base_url}/{retailer_slug}/sample/url"
+    ```
+
+    url_kwargs: the values to be substitued into the template.
+    ex:
+    ```python
+    {"base_url": "http://polaris-api/", "retailer_slug": "asos"}
+    ```
+
+    exclude_from_label_url: the url_kwargs' keys that we do not want to be substitued in the label url.
+    ex:
+    ```python
+    ["retailer_slug"]
+    ```
+
+    **IMPORTANT**
+
+    It is important that we exclude from the label url any unique field like account_holder_uuids.
+    Not doing this leads to a build up of unique metrics that will lead to resource exhaustion,
+    application failure, apocalypse, dragons (not the cool ones), and death.
+
+    DO:
+    ```python
+    url_template="{base_url}/{account_holder_uuid}/sample/url"
+    url_kwargs={"base_url": "http://polaris-api/", "account_holder_uuid": "e3ae1323-8587-4609-b32b-bd3343d42395"}
+    exclude_from_label_url=["account_holder_uuid"]
+    ```
+
+    DO NOT DO:
+    ```python
+    url_template="{base_url}/{account_holder_uuid}/sample/url"
+    url_kwargs={"base_url": "http://polaris-api/", "account_holder_uuid": "e3ae1323-8587-4609-b32b-bd3343d42395"}
+    exclude_from_label_url=["base_url"] | []
+    ```
+
+    """
+
+    label_kwargs: dict = {}
+    for k, v in url_kwargs.items():
+        if k in exclude_from_label_url:
+            label_kwargs[k] = f"[{k}]"
+        else:
+            label_kwargs[k] = v
+
+    label_url = url_template.format(**label_kwargs)
 
     try:
         return requests.request(
-            method, url, hooks={"response": update_metrics_hook}, headers=headers, json=json, timeout=timeout
+            method,
+            url_template.format(**url_kwargs),
+            hooks={"response": update_metrics_hook(label_url)},
+            headers=headers,
+            json=json,
+            timeout=timeout,
         )
-    except requests.HTTPError as ex:  # pragma: no cover
-        update_metrics_hook(ex.response)
+    except requests.HTTPError as ex:
+        update_metrics_hook(label_url)(ex.response)
         raise
-    except requests.RequestException as ex:  # pragma: no cover
-        update_metrics_exception_handler(ex, method, url)
+    except requests.RequestException as ex:
+        update_metrics_exception_handler(ex, method, label_url)
         raise
