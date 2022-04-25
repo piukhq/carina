@@ -1,9 +1,11 @@
 import logging
+import os
 
 import typer
 
 from prometheus_client import CollectorRegistry
 from prometheus_client import start_http_server as start_prometheus_server
+from prometheus_client import values
 from prometheus_client.multiprocess import MultiProcessCollector
 from retry_tasks_lib.reporting import report_anomalous_tasks
 from retry_tasks_lib.utils.error_handler import job_meta_handler
@@ -22,6 +24,9 @@ logger = logging.getLogger(__name__)
 @cli.command()
 def task_worker(burst: bool = False) -> None:
     if settings.ACTIVATE_TASKS_METRICS:
+        # -------- this is the prometheus monkey patch ------- #
+        values.ValueClass = values.MultiProcessValue(os.getppid)
+        # ---------------------------------------------------- #
         registry = CollectorRegistry()
         MultiProcessCollector(registry)
         logger.info("Starting prometheus metrics server...")
