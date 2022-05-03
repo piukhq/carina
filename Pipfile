@@ -19,7 +19,7 @@ psycopg2-binary = "*"
 prettyprinter = "*"
 ujson = "*"
 sentry-sdk = "*"
-prometheus-client = "*"
+prometheus-client = "==0.12.0" # make sure app.core.cli monkeypatch is still needed and functioning
 blinker = "*"
 gunicorn = "*"
 requests = "*"
