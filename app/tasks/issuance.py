@@ -15,7 +15,7 @@ from app.core.config import redis_raw, settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
 from app.enums import RewardTypeStatuses
-from app.fetch_reward import get_allocable_reward
+from app.fetch_reward import get_allocable_reward, get_associated_url
 from app.models import Reward, RewardConfig
 
 from . import logger, send_request_with_metrics
@@ -58,6 +58,7 @@ def _process_issuance(task_params: dict) -> dict:
             "expiry_date": task_params["expiry_date"],
             "reward_slug": task_params["reward_slug"],
             "reward_uuid": task_params["reward_uuid"],
+            "associated_url": get_associated_url(task_params),
         },
         headers={
             "Authorization": f"Token {settings.POLARIS_API_AUTH_TOKEN}",

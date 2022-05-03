@@ -1,5 +1,7 @@
+import json
+
 from importlib import import_module
-from typing import TYPE_CHECKING, Callable, Type
+from typing import TYPE_CHECKING, Type
 
 from sqlalchemy.future import select
 
@@ -41,3 +43,13 @@ def get_allocable_reward(
         reward, issued, expiry = agent.fetch_reward()
 
     return reward, issued, expiry
+
+
+def get_associated_url(task_params: dict) -> str:
+    associated_url: str = ""
+    if BaseAgent.AGENT_STATE_PARAMS_RAW_KEY in task_params:
+        associated_url = json.loads(task_params[BaseAgent.AGENT_STATE_PARAMS_RAW_KEY]).get(
+            BaseAgent.ASSOCIATED_URL_KEY, ""
+        )
+
+    return associated_url

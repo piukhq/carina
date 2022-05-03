@@ -96,6 +96,7 @@ def issuance_expected_payload(reward_issuance_task_params: dict) -> dict:
         "expiry_date": reward_issuance_task_params["expiry_date"],
         "reward_slug": reward_issuance_task_params["reward_slug"],
         "reward_uuid": reward_issuance_task_params["reward_uuid"],
+        "associated_url": "",
     }
 
 
