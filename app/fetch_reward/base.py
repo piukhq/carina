@@ -22,6 +22,9 @@ if TYPE_CHECKING:  # pragma: no cover
 class BaseAgent(ABC):
     logger = logging.getLogger("agents")
 
+    ASSOCIATED_URL_KEY = "associated_url"
+    AGENT_STATE_PARAMS_RAW_KEY = "agent_state_params_raw"
+
     def __init__(
         self, db_session: "Session", reward_config: "RewardConfig", config: dict, *, retry_task: "RetryTask"
     ) -> None:
@@ -47,7 +50,7 @@ class BaseAgent(ABC):
                     TaskTypeKeyValue.retry_task_id == self.retry_task.retry_task_id,
                     TaskTypeKeyValue.task_type_key_id == TaskTypeKey.task_type_key_id,
                     TaskTypeKey.task_type_id == self.retry_task.task_type_id,
-                    TaskTypeKey.name == "agent_state_params_raw",
+                    TaskTypeKey.name == self.AGENT_STATE_PARAMS_RAW_KEY,
                 )
             )
 
@@ -72,7 +75,7 @@ class BaseAgent(ABC):
                     task_type_key_id=self.db_session.execute(
                         select(TaskTypeKey.task_type_key_id).where(
                             TaskTypeKey.task_type_id == self.retry_task.task_type_id,
-                            TaskTypeKey.name == "agent_state_params_raw",
+                            TaskTypeKey.name == self.AGENT_STATE_PARAMS_RAW_KEY,
                         )
                     ).scalar_one(),
                 )
