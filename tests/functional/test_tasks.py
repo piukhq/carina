@@ -34,6 +34,9 @@ fake_now = datetime.now(tz=timezone.utc)
 def test__process_issuance_ok(
     mock_datetime: mock.Mock, reward_issuance_task_params: dict, issuance_expected_payload: dict
 ) -> None:
+    sample_url = "http://sample.url"
+    issuance_expected_payload["associated_url"] = sample_url
+    reward_issuance_task_params["agent_state_params_raw"] = json.dumps({"associated_url": sample_url})
 
     mock_datetime.now.return_value = fake_now
     httpretty.register_uri("POST", reward_issuance_task_params["account_url"], body="OK", status=200)

@@ -402,6 +402,9 @@ class Jigsaw(BaseAgent):
             raise AgentError("Jigsaw: fetched reward balance and transaction value do not match.")  # pragma: no cover
 
         expiry = self._get_tz_aware_datetime_from_isoformat(response_payload["data"]["expiry_date"])
+        self.set_agent_state_params(
+            self.agent_state_params | {self.ASSOCIATED_URL_KEY: response_payload["data"]["voucher_url"]}
+        )
         reward = self._save_reward(customer_card_ref, response_payload["data"]["number"])
         return reward, issued.timestamp(), expiry.timestamp()
 

@@ -36,6 +36,7 @@ def test_jigsaw_agent_ok(
     issuance_retry_task_no_reward: "RetryTask",
     fernet: "Fernet",
 ) -> None:
+    sample_url = "http://sample.url"
     agent_config = jigsaw_retailer_fetch_type.load_agent_config()
     tx_value = jigsaw_reward_config.load_required_fields_values()["transaction_value"]
     card_ref = uuid4()
@@ -81,7 +82,7 @@ def test_jigsaw_agent_ok(
                     "transaction_value": tx_value,
                     "expiry_date": (now + timedelta(days=1)).isoformat(),
                     "balance": tx_value,
-                    "voucher_url": "https://sample.url",
+                    "voucher_url": sample_url,
                     "card_status": 1,
                 },
             }
@@ -108,7 +109,7 @@ def test_jigsaw_agent_ok(
     assert fernet.decrypt(cast(bytes, redis_raw.get(Jigsaw.REDIS_TOKEN_KEY))).decode() == test_token
 
     task_params = issuance_retry_task_no_reward.get_params()
-    assert "agent_state_params_raw" not in task_params
+    assert json.loads(task_params["agent_state_params_raw"]) == {"associated_url": sample_url}
 
 
 @httpretty.activate
@@ -124,6 +125,7 @@ def test_jigsaw_agent_ok_token_already_set(
     tx_value = jigsaw_reward_config.load_required_fields_values()["transaction_value"]
     card_ref = uuid4()
     card_num = "NEW-REWARD-CODE"
+    sample_url = "http://sample.url"
     # deepcode ignore HardcodedNonCryptoSecret/test: this is a test value
     test_token = "test-token"
     now = datetime.now(tz=timezone.utc)
@@ -145,7 +147,7 @@ def test_jigsaw_agent_ok_token_already_set(
                     "transaction_value": tx_value,
                     "expiry_date": (now + timedelta(days=1)).isoformat(),
                     "balance": tx_value,
-                    "voucher_url": "https://sample.url",
+                    "voucher_url": sample_url,
                     "card_status": 1,
                 },
             }
@@ -174,7 +176,7 @@ def test_jigsaw_agent_ok_token_already_set(
     spy_redis_set.assert_not_called()
 
     task_params = issuance_retry_task_no_reward.get_params()
-    assert "agent_state_params_raw" not in task_params
+    assert json.loads(task_params["agent_state_params_raw"]) == {"associated_url": sample_url}
 
 
 @httpretty.activate
