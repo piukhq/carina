@@ -206,7 +206,7 @@ class BlobFileAgent:
 
 
 class RewardImportAgent(BlobFileAgent):
-    blob_path_template = string.Template("$retailer_slug/available-rewards/")
+    blob_path_template = string.Template("$retailer_slug/available-rewards-")
     scheduler_name = "carina-reward-import-scheduler"
 
     def __init__(self) -> None:
@@ -290,11 +290,12 @@ class RewardImportAgent(BlobFileAgent):
 
     # pylint: disable=too-many-locals
     def process_csv(self, retailer: Retailer, blob_name: str, blob_content: str, db_session: "Session") -> None:
-        _, sub_path = blob_name.split(self.blob_path_template.substitute(retailer_slug=retailer.slug))
+        _, sub_blob_name = blob_name.split(self.blob_path_template.substitute(retailer_slug=retailer.slug))
+
         try:
-            reward_slug, _ = sub_path.split("/", maxsplit=1)
+            reward_slug, _ = sub_blob_name.split("-imports-", maxsplit=1)
         except ValueError as ex:
-            raise BlobProcessingError(f"No reward_slug path section found ({ex})")  # pylint: disable=raise-missing-from
+            raise BlobProcessingError(f"Invalid filename, no reward_slug found for blob: {blob_name}") from ex
 
         try:
             reward_config = self.reward_configs_by_reward_id(retailer.id, db_session)[reward_slug]
@@ -331,7 +332,7 @@ class RewardImportAgent(BlobFileAgent):
 
 
 class RewardUpdatesAgent(BlobFileAgent):
-    blob_path_template = string.Template("$retailer_slug/reward-updates/")
+    blob_path_template = string.Template("$retailer_slug/reward-updates-")
     scheduler_name = "carina-reward-update-scheduler"
 
     def __init__(self) -> None:
