@@ -68,7 +68,7 @@ def test_import_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> N
 
     reward_agent.process_csv(
         retailer=reward_config.retailer,
-        blob_name="test-retailer/available-rewards/test-reward/new-reward.csv",
+        blob_name="test-retailer/available-rewards-test-reward-imports-new-reward.csv",
         blob_content=blob_content,
         db_session=db_session,
     )
@@ -79,13 +79,13 @@ def test_import_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> N
     # We should be sentry warned about the existing token
     assert capture_message_spy.call_count == 2  # Errors should all be rolled up in to one call per error category
     assert (
-        "Invalid rows found in test-retailer/available-rewards/test-reward/new-reward.csv:\nrows: 5, 6"
+        "Invalid rows found in test-retailer/available-rewards-test-reward-imports-new-reward.csv:\nrows: 5, 6"
         == capture_message_spy.call_args_list[0][0][0]
     )
     assert (
-        "Pre-existing reward codes found in test-retailer/available-rewards/test-reward/new-reward.csv:\nrows: 4"
-        == capture_message_spy.call_args_list[1][0][0]
-    )
+        "Pre-existing reward codes found in test-retailer/available-rewards-test-reward-imports-new-reward.csv:"
+        "\nrows: 4"
+    ) == capture_message_spy.call_args_list[1][0][0]
 
 
 def test_import_agent__process_csv_soft_deleted(
@@ -118,7 +118,7 @@ def test_import_agent__process_csv_soft_deleted(
 
     reward_agent.process_csv(
         retailer=reward_config.retailer,
-        blob_name="test-retailer/available-rewards/test-reward/new-reward.csv",
+        blob_name="test-retailer/available-rewards-test-reward-imports-new-reward.csv",
         blob_content=blob_content,
         db_session=db_session,
     )
@@ -157,7 +157,7 @@ def test_import_agent__process_csv_not_soft_deleted(
 
     reward_agent.process_csv(
         retailer=reward_config.retailer,
-        blob_name="test-retailer/available-rewards/test-reward/new-reward.csv",
+        blob_name="test-retailer/available-rewards-test-reward-imports-new-reward.csv",
         blob_content=blob_content,
         db_session=db_session,
     )
@@ -168,9 +168,9 @@ def test_import_agent__process_csv_not_soft_deleted(
     # We should be sentry warned about the existing token
     assert capture_message_spy.call_count == 1
     assert (
-        "Pre-existing reward codes found in test-retailer/available-rewards/test-reward/new-reward.csv:\nrows: 4"
-        == capture_message_spy.call_args_list[0][0][0]
-    )
+        "Pre-existing reward codes found in test-retailer/available-rewards-test-reward-imports-new-reward.csv:"
+        "\nrows: 4"
+    ) == capture_message_spy.call_args_list[0][0][0]
 
 
 def test_import_agent__process_csv_same_reward_slug_not_soft_deleted(setup: SetupType, mocker: MockerFixture) -> None:
@@ -196,7 +196,7 @@ def test_import_agent__process_csv_same_reward_slug_not_soft_deleted(setup: Setu
 
     reward_agent.process_csv(
         retailer=reward_config.retailer,
-        blob_name="test-retailer/available-rewards/test-reward/new-reward.csv",
+        blob_name="test-retailer/available-rewards-test-reward-imports-new-reward.csv",
         blob_content=blob_content,
         db_session=db_session,
     )
@@ -207,9 +207,9 @@ def test_import_agent__process_csv_same_reward_slug_not_soft_deleted(setup: Setu
     # We should be sentry warned about the existing token
     assert capture_message_spy.call_count == 1
     assert (
-        "Pre-existing reward codes found in test-retailer/available-rewards/test-reward/new-reward.csv:\nrows: 4"
-        == capture_message_spy.call_args_list[0][0][0]
-    )
+        "Pre-existing reward codes found in test-retailer/available-rewards-test-reward-imports-new-reward.csv:"
+        "\nrows: 4"
+    ) == capture_message_spy.call_args_list[0][0][0]
 
 
 def test_import_agent__process_csv_no_reward_config(setup: SetupType, mocker: MockerFixture) -> None:
@@ -220,7 +220,7 @@ def test_import_agent__process_csv_no_reward_config(setup: SetupType, mocker: Mo
     with pytest.raises(BlobProcessingError) as exc_info:
         reward_agent.process_csv(
             retailer=reward_config.retailer,
-            blob_name="test-retailer/available-rewards/incorrect-reward-type/new-rewards.csv",
+            blob_name="test-retailer/available-rewards-incorrect-reward-type-imports-new-rewards.csv",
             blob_content="reward1\nreward2\nreward3",
             db_session=db_session,
         )
@@ -235,12 +235,12 @@ def test_import_agent__process_csv_no_reward_type_in_path(setup: SetupType, mock
     with pytest.raises(BlobProcessingError) as exc_info:
         reward_agent.process_csv(
             retailer=reward_config.retailer,
-            blob_name="test-retailer/available-rewards/new-rewards.csv",
+            blob_name="test-retailer/available-rewards-new-rewards.csv",
             blob_content="reward1\nreward2\nreward3",
             db_session=db_session,
         )
     assert exc_info.value.args == (
-        "No reward_slug path section found (not enough values to unpack (expected 2, got 1))",
+        "Invalid filename, no reward_slug found for blob: test-retailer/available-rewards-new-rewards.csv",
     )
 
 
@@ -251,7 +251,7 @@ def test_updates_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> 
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
     reward_agent = RewardUpdatesAgent()
     mock__process_updates = mocker.patch.object(reward_agent, "_process_updates")
-    blob_name = "/test-retailer/reward-updates/test.csv"
+    blob_name = "/test-retailer/reward-updates-test.csv"
     content = """
 TEST12345678,2021-07-30,cancelled
 TEST87654321,2021-07-21,redeemed
@@ -325,7 +325,7 @@ def test_updates_agent__process_csv_reward_code_fails_non_validating_rows(
     mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     reward_agent = RewardUpdatesAgent()
-    blob_name = "/test-retailer/reward-updates/test.csv"
+    blob_name = "/test-retailer/reward-updates-test.csv"
     bad_date = "20210830"
     bad_status = "nosuchstatus"
     content = f"""
@@ -364,7 +364,7 @@ def test_updates_agent__process_csv_reward_code_fails_malformed_csv_rows(
     mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     reward_agent = RewardUpdatesAgent()
-    blob_name = "/test-retailer/reward-updates/test.csv"
+    blob_name = "/test-retailer/reward-updates-test.csv"
     content = "TEST87654321,2021-07-30\nTEST12345678,redeemed\n"
 
     # WHEN
@@ -394,7 +394,7 @@ def test_updates_agent__process_updates(setup: SetupType, mocker: MockerFixture)
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
     reward_agent = RewardUpdatesAgent()
-    blob_name = "/test-retailer/reward-updates/test.csv"
+    blob_name = "/test-retailer/reward-updates-test.csv"
     data = RewardUpdateSchema(
         code=reward.code,
         date="2021-07-30",
@@ -437,7 +437,7 @@ def test_updates_agent__process_updates_reward_code_not_allocated(setup: SetupTy
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     reward_agent = RewardUpdatesAgent()
     mocker.patch.object(reward_agent, "_report_unknown_codes", autospec=True)
-    blob_name = "/test-retailer/reward-updates/test.csv"
+    blob_name = "/test-retailer/reward-updates-test.csv"
     data = RewardUpdateSchema(
         code=reward.code,
         date="2021-07-30",
@@ -476,7 +476,7 @@ def test_updates_agent__process_updates_reward_code_does_not_exist(setup: SetupT
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     reward_agent = RewardUpdatesAgent()
     mocker.patch.object(reward_agent, "_process_unallocated_codes", autospec=True)
-    blob_name = "/test-retailer/reward-updates/test.csv"
+    blob_name = "/test-retailer/reward-updates-test.csv"
     bad_reward_code = "IDONOTEXIST"
     data = RewardUpdateSchema(
         code=bad_reward_code,
@@ -499,7 +499,7 @@ def test_updates_agent__process_updates_reward_code_does_not_exist(setup: SetupT
     assert capture_message_spy.call_count == 1  # Errors should all be rolled up in to a single call
     expected_error_msg: str = capture_message_spy.call_args.args[0]
     assert (
-        "Unknown reward codes found while processing /test-retailer/reward-updates/test.csv, rows: 1"
+        "Unknown reward codes found while processing /test-retailer/reward-updates-test.csv, rows: 1"
         in expected_error_msg
     )
     assert len(reward_update_rows) == 0
@@ -520,7 +520,7 @@ def test_process_blobs(setup: SetupType, mocker: MockerFixture) -> None:
     container_client = mocker.patch.object(reward_agent, "container_client", spec=ContainerClient)
     mock_process_csv = mocker.patch.object(reward_agent, "process_csv")
     mock_move_blob = mocker.patch.object(reward_agent, "move_blob")
-    file_name = "test-retailer/reward-updates/update.csv"
+    file_name = "test-retailer/reward-updates-update.csv"
     container_client.list_blobs = mocker.MagicMock(
         return_value=[
             Blob(file_name),
@@ -551,7 +551,7 @@ def test_process_blobs_unicodedecodeerror(capture: LogCapture, setup: SetupType,
     container_client = mocker.patch.object(reward_agent, "container_client", spec=ContainerClient)
     mock_process_csv = mocker.patch.object(reward_agent, "process_csv")
     mock_move_blob = mocker.patch.object(reward_agent, "move_blob")
-    blob_filename = "test-retailer/reward-updates/update.csv"
+    blob_filename = "test-retailer/reward-updates-update.csv"
     container_client.list_blobs = mocker.MagicMock(
         return_value=[
             Blob(blob_filename),
@@ -584,7 +584,7 @@ def test_process_blobs_not_csv(setup: SetupType, mocker: MockerFixture) -> None:
     mock_move_blob = mocker.patch.object(reward_agent, "move_blob")
     container_client.list_blobs = mocker.MagicMock(
         return_value=[
-            Blob("test-retailer/reward-updates/update.docx"),
+            Blob("test-retailer/reward-updates-update.docx"),
         ]
     )
     mock_blob_service_client.get_blob_client.return_value = mocker.MagicMock(spec=BlobClient)
@@ -594,7 +594,7 @@ def test_process_blobs_not_csv(setup: SetupType, mocker: MockerFixture) -> None:
     reward_agent.process_blobs(reward_config.retailer, db_session=db_session)
     assert capture_message_spy.call_count == 1  # Errors should all be rolled up in to a single call
     assert (
-        "test-retailer/reward-updates/update.docx does not have .csv ext. Moving to ERROR-CONTAINER for checking"
+        "test-retailer/reward-updates-update.docx does not have .csv ext. Moving to ERROR-CONTAINER for checking"
         == capture_message_spy.call_args.args[0]
     )
     mock_move_blob.assert_called_once()
@@ -604,7 +604,7 @@ def test_process_blobs_not_csv(setup: SetupType, mocker: MockerFixture) -> None:
 
 def test_process_blobs_filename_is_duplicate(setup: SetupType, mocker: MockerFixture) -> None:
     db_session, reward_config, _ = setup
-    file_name = "test-retailer/reward-updates/update.csv"
+    file_name = "test-retailer/reward-updates-update.csv"
     db_session.add(
         RewardFileLog(
             file_name=file_name,
@@ -635,7 +635,7 @@ def test_process_blobs_filename_is_duplicate(setup: SetupType, mocker: MockerFix
     reward_agent.process_blobs(reward_config.retailer, db_session=db_session)
     assert capture_message_spy.call_count == 1  # Errors should all be rolled up in to a single call
     assert (
-        "test-retailer/reward-updates/update.csv is a duplicate. Moving to ERROR-CONTAINER for checking"
+        "test-retailer/reward-updates-update.csv is a duplicate. Moving to ERROR-CONTAINER for checking"
         == capture_message_spy.call_args.args[0]
     )
     mock_move_blob.assert_called_once()
@@ -646,7 +646,7 @@ def test_process_blobs_filename_is_duplicate(setup: SetupType, mocker: MockerFix
 def test_process_blobs_filename_is_not_duplicate(setup: SetupType, mocker: MockerFixture) -> None:
     """A filename exists in the log, but the file agent type is different"""
     db_session, reward_config, _ = setup
-    file_name = "test-retailer/reward-updates/update.csv"
+    file_name = "test-retailer/reward-updates-update.csv"
     db_session.add(
         RewardFileLog(
             file_name=file_name,
@@ -662,7 +662,7 @@ def test_process_blobs_filename_is_not_duplicate(setup: SetupType, mocker: Mocke
     container_client = mocker.patch.object(reward_agent, "container_client", spec=ContainerClient)
     mock_process_csv = mocker.patch.object(reward_agent, "process_csv")
     mock_move_blob = mocker.patch.object(reward_agent, "move_blob")
-    file_name = "test-retailer/reward-updates/update.csv"
+    file_name = "test-retailer/reward-updates-update.csv"
     container_client.list_blobs = mocker.MagicMock(
         return_value=[
             Blob(file_name),
@@ -692,7 +692,7 @@ def test_move_blob(mocker: MockerFixture) -> None:
     src_blob_lease_client = mocker.patch("app.imports.agents.file_agent.BlobLeaseClient", autospec=True)
 
     reward_agent = RewardUpdatesAgent()
-    mock_src_blob_client.blob_name = blob_name = "/test-retailer/reward-updates/test.csv"
+    mock_src_blob_client.blob_name = blob_name = "/test-retailer/reward-updates-test.csv"
 
     blob_service_client = mocker.patch.object(reward_agent, "blob_service_client")
     mock_dst_blob_client = mocker.MagicMock()
