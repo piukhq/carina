@@ -229,7 +229,7 @@ def test_reward_issuance_no_reward_and_allocation_is_requeued(
     db_session.refresh(issuance_retry_task_no_reward)
     db_session.refresh(reward)
     mock_queue.assert_called_once()  # should not have been called again
-    assert issuance_retry_task_no_reward.attempts == 2
+    assert issuance_retry_task_no_reward.attempts == 1
     assert issuance_retry_task_no_reward.next_attempt_time is None
     assert issuance_retry_task_no_reward.status == RetryTaskStatuses.SUCCESS
     assert issuance_retry_task_no_reward.get_params()["reward_uuid"] == str(reward.id)

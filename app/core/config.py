@@ -255,6 +255,7 @@ class Settings(BaseSettings):
         raise KeyError("required var KEY_VAULT_URI is not set.")
 
     REPORT_ANOMALOUS_TASKS_SCHEDULE = "*/10 * * * *"
+    REPORT_TASKS_SUMMARY_SCHEDULE: str = "5,20,35,50 */1 * * *"
     ACTIVATE_TASKS_METRICS: bool = True
 
     class Config:
