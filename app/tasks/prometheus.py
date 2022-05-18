@@ -27,6 +27,12 @@ task_statuses = Gauge(
     labelnames=("app", "task_name", "status"),
 )
 
+tasks_summary = Gauge(
+    name=f"{METRIC_NAME_PREFIX}task_summary",
+    documentation="The current number of tasks and their status",
+    labelnames=("app", "task_name", "status"),
+)
+
 
 def update_metrics_hook(url_label: str) -> Callable:  # pragma: no cover
     # pylint: disable=unused-argument
