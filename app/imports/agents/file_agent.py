@@ -201,7 +201,7 @@ class BlobFileAgent:
                 blob=blob,
                 blob_client=blob_client,
                 lease=lease,
-                byte_content=byte_content,
+                byte_content=byte_content,  # type: ignore
             )
 
 
