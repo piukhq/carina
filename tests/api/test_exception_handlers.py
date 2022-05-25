@@ -27,14 +27,10 @@ def client(exc: Exception) -> TestClient:
 
 
 @mock.patch("app.core.exception_handlers.logger")
-@mock.patch("app.core.exception_handlers.sentry_sdk")
-def test_unexpected_exception_handler(
-    mock_sentry_sdk: mock.MagicMock, mock_logger: mock.MagicMock, client: TestClient, exc: Exception
-) -> None:
+def test_unexpected_exception_handler(mock_logger: mock.MagicMock, client: TestClient, exc: Exception) -> None:
     resp = client.get("/boom")
     assert resp.json() == {
         "display_message": "An unexpected system error occurred, please try again later.",
         "code": "INTERNAL_ERROR",
     }
-    mock_logger.exception.assert_called_once_with(exc)
-    mock_sentry_sdk.capture_exception.assert_called_once_with(exc)
+    mock_logger.exception.assert_called_once_with("Unexpected System Error", exc_info=exc)
