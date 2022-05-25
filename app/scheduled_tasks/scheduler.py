@@ -41,7 +41,7 @@ def acquire_lock(runner: Runner) -> Callable:
                 try:
                     func(*args, **kwargs)
                 except Exception as ex:  # pylint: disable=broad-except
-                    logger.exception(ex)
+                    logger.exception("Unexpected error occurred while running '%s'", func.__qualname__, exc_info=ex)
                 finally:
                     redis.delete(func_lock_key)
             else:
