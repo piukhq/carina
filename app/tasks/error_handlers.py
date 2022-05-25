@@ -3,7 +3,6 @@
 from typing import TYPE_CHECKING, Any, Callable
 
 import rq
-import sentry_sdk
 
 from retry_tasks_lib.utils.error_handler import handle_request_exception
 
@@ -21,8 +20,7 @@ def log_internal_exception(func: Callable) -> Any:
         try:
             return func(*args, **kwargs)
         except Exception as ex:
-            logger.exception(ex)
-            sentry_sdk.capture_exception(ex)
+            logger.exception("Unexpected error occurred while running '%s'", func.__qualname__, exc_info=ex)
             raise
 
     return wrapper
