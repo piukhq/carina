@@ -240,6 +240,7 @@ def test_reward_issuance_no_reward_and_allocation_is_requeued(
 @mock.patch("app.tasks.status_adjustment.datetime")
 def test__process_status_adjustment_ok(
     mock_datetime: mock.Mock,
+    db_session: "Session",
     reward_status_adjustment_retry_task: RetryTask,
     adjustment_expected_payload: dict,
     adjustment_url: str,
@@ -250,7 +251,7 @@ def test__process_status_adjustment_ok(
 
     httpretty.register_uri("PATCH", adjustment_url, body="OK", status=200)
 
-    response_audit = _process_status_adjustment(reward_status_adjustment_retry_task.get_params())
+    response_audit = _process_status_adjustment(db_session, reward_status_adjustment_retry_task.get_params())
 
     last_request = httpretty.last_request()
     assert last_request.method == "PATCH"
@@ -266,7 +267,10 @@ def test__process_status_adjustment_ok(
 
 @httpretty.activate
 def test__process_status_adjustment_http_errors(
-    reward_status_adjustment_retry_task: RetryTask, adjustment_expected_payload: dict, adjustment_url: str
+    db_session: "Session",
+    reward_status_adjustment_retry_task: RetryTask,
+    adjustment_expected_payload: dict,
+    adjustment_url: str,
 ) -> None:
 
     for status, body in [
@@ -276,7 +280,7 @@ def test__process_status_adjustment_http_errors(
         httpretty.register_uri("PATCH", adjustment_url, body=body, status=status)
 
         with pytest.raises(requests.RequestException) as excinfo:
-            _process_status_adjustment(reward_status_adjustment_retry_task.get_params())
+            _process_status_adjustment(db_session, reward_status_adjustment_retry_task.get_params())
 
         assert isinstance(excinfo.value, requests.RequestException)
         assert excinfo.value.response.status_code == status
@@ -286,15 +290,46 @@ def test__process_status_adjustment_http_errors(
         assert json.loads(last_request.body) == adjustment_expected_payload
 
 
+@httpretty.activate
+def test__process_status_adjustment_404_not_found_soft_delete(
+    db_session: "Session",
+    reward_status_adjustment_retry_task: RetryTask,
+    adjustment_expected_payload: dict,
+    adjustment_url: str,
+    reward: Reward,
+) -> None:
+    reward.allocated = True
+
+    for status, body in [
+        (404, "Not Found for Url"),
+    ]:
+        httpretty.register_uri("PATCH", adjustment_url, body=body, status=status)
+
+        with pytest.raises(requests.RequestException) as excinfo:
+            _process_status_adjustment(db_session, reward_status_adjustment_retry_task.get_params())
+
+        assert isinstance(excinfo.value, requests.RequestException)
+        assert excinfo.value.response.status_code == status
+
+        last_request = httpretty.last_request()
+        assert last_request.method == "PATCH"
+        assert json.loads(last_request.body) == adjustment_expected_payload
+
+    db_session.refresh(reward)
+    assert reward.deleted is True
+
+
 @mock.patch("app.tasks.status_adjustment.send_request_with_metrics")
 def test__process_status_adjustment_connection_error(
-    mock_send_request_with_metrics: mock.MagicMock, reward_status_adjustment_retry_task: RetryTask
+    mock_send_request_with_metrics: mock.MagicMock,
+    db_session: "Session",
+    reward_status_adjustment_retry_task: RetryTask,
 ) -> None:
 
     mock_send_request_with_metrics.side_effect = requests.Timeout("Request timed out")
 
     with pytest.raises(requests.RequestException) as excinfo:
-        _process_status_adjustment(reward_status_adjustment_retry_task.get_params())
+        _process_status_adjustment(db_session, reward_status_adjustment_retry_task.get_params())
 
     assert isinstance(excinfo.value, requests.Timeout)
     assert excinfo.value.response is None
