@@ -1,12 +1,17 @@
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
+from uuid import UUID
 
+from fastapi import status
 from retry_tasks_lib.db.models import RetryTask
 from retry_tasks_lib.enums import RetryTaskStatuses
 from retry_tasks_lib.utils.synchronous import retryable_task
+from sqlalchemy import update
 
 from app.core.config import settings
+from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
+from app.models import Reward
 
 from . import logger, send_request_with_metrics
 from .prometheus import tasks_run_total
@@ -15,7 +20,24 @@ if TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy.orm import Session
 
 
-def _process_status_adjustment(task_params: dict) -> dict:
+def _soft_delete_reward(db_session: "Session", reward_uuid: str) -> None:
+    def _query() -> None:
+        db_session.execute(
+            update(Reward)
+            .where(
+                Reward.allocated.is_(True),
+                Reward.id == UUID(reward_uuid),
+            )
+            .values(deleted=True)
+            .execution_options(synchronize_session=False)
+        )
+        db_session.commit()
+
+    sync_run_query(_query, db_session)
+    logger.info("Soft deleted reward with uuid %s", reward_uuid)
+
+
+def _process_status_adjustment(db_session: "Session", task_params: dict) -> dict:
     logger.info(f"Processing status adjustment for reward: {task_params['reward_uuid']}")
     response_audit: dict = {"timestamp": datetime.now(tz=timezone.utc).isoformat()}
 
@@ -34,6 +56,8 @@ def _process_status_adjustment(task_params: dict) -> dict:
         },
         headers={"Authorization": f"Token {settings.POLARIS_API_AUTH_TOKEN}"},
     )
+    if resp.status_code == status.HTTP_404_NOT_FOUND:
+        _soft_delete_reward(db_session, task_params["reward_uuid"])
     resp.raise_for_status()
     response_audit["response"] = {"status": resp.status_code, "body": resp.text}
     logger.info(f"Status adjustment succeeded for reward: {task_params['reward_uuid']}")
@@ -48,7 +72,7 @@ def status_adjustment(retry_task: RetryTask, db_session: "Session") -> None:
     if settings.ACTIVATE_TASKS_METRICS:
         tasks_run_total.labels(app=settings.PROJECT_NAME, task_name=settings.REWARD_STATUS_ADJUSTMENT_TASK_NAME).inc()
 
-    response_audit = _process_status_adjustment(retry_task.get_params())
+    response_audit = _process_status_adjustment(db_session, retry_task.get_params())
     retry_task.update_task(
         db_session, response_audit=response_audit, status=RetryTaskStatuses.SUCCESS, clear_next_attempt_time=True
     )
