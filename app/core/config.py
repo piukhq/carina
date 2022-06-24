@@ -137,7 +137,7 @@ class Settings(BaseSettings):
     def assemble_db_connection(cls, v: str, values: dict[str, Any]) -> Any:
 
         if v != "":
-            db_uri = v
+            db_uri = v.format(values["POSTGRES_DB"])
 
         else:
             db_uri = PostgresDsn.build(
@@ -158,7 +158,7 @@ class Settings(BaseSettings):
     @classmethod
     def adapt_db_connection_to_async(cls, v: str | None, values: dict[str, Any]) -> Any:
         if isinstance(v, str):
-            db_uri = v
+            db_uri = v.format(values["POSTGRES_DB"])
         else:
             db_uri = (
                 values["SQLALCHEMY_DATABASE_URI"]
