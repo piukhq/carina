@@ -256,6 +256,7 @@ class Settings(BaseSettings):
 
     REPORT_ANOMALOUS_TASKS_SCHEDULE = "*/10 * * * *"
     REPORT_TASKS_SUMMARY_SCHEDULE: str = "5,20,35,50 */1 * * *"
+    REPORT_JOB_QUEUE_LENGTH_SCHEDULE: str = "*/10 * * * *"
     ACTIVATE_TASKS_METRICS: bool = True
 
     class Config:
