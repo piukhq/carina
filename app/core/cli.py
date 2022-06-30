@@ -7,7 +7,7 @@ from prometheus_client import CollectorRegistry
 from prometheus_client import start_http_server as start_prometheus_server
 from prometheus_client import values
 from prometheus_client.multiprocess import MultiProcessCollector
-from retry_tasks_lib.reporting import report_anomalous_tasks, report_tasks_summary
+from retry_tasks_lib.reporting import report_anomalous_tasks, report_queue_lengths, report_tasks_summary
 from retry_tasks_lib.utils.error_handler import job_meta_handler
 from rq import Worker
 
@@ -15,7 +15,7 @@ from app.core.config import redis_raw, settings
 from app.db.session import SyncSessionMaker
 from app.imports.agents.file_agent import RewardImportAgent, RewardUpdatesAgent
 from app.scheduled_tasks.scheduler import cron_scheduler as carina_cron_scheduler
-from app.tasks.prometheus import task_statuses, tasks_summary
+from app.tasks.prometheus import job_queue_summary, task_statuses, tasks_summary
 
 cli = typer.Typer()
 logger = logging.getLogger(__name__)
@@ -43,7 +43,9 @@ def task_worker(burst: bool = False) -> None:
 
 
 @cli.command()
-def cron_scheduler(imports: bool = True, updates: bool = True, report_tasks: bool = True) -> None:  # pragma: no cover
+def cron_scheduler(
+    imports: bool = True, updates: bool = True, report_tasks: bool = True, report_rq_queues: bool = True
+) -> None:  # pragma: no cover
 
     logger.info("Initialising scheduler...")
     if imports:
@@ -80,6 +82,19 @@ def cron_scheduler(imports: bool = True, updates: bool = True, report_tasks: boo
                 "gauge": tasks_summary,
             },
             schedule_fn=lambda: settings.REPORT_TASKS_SUMMARY_SCHEDULE,
+            coalesce_jobs=True,
+        )
+
+    if report_rq_queues:
+        carina_cron_scheduler.add_job(
+            report_queue_lengths,
+            kwargs={
+                "redis": redis_raw,
+                "project_name": settings.PROJECT_NAME,
+                "queue_names": settings.TASK_QUEUES,
+                "gauge": job_queue_summary,
+            },
+            schedule_fn=lambda: settings.REPORT_JOB_QUEUE_LENGTH_SCHEDULE,
             coalesce_jobs=True,
         )
 
