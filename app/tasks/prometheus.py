@@ -33,6 +33,12 @@ tasks_summary = Gauge(
     labelnames=("app", "task_name", "status"),
 )
 
+job_queue_summary = Gauge(
+    name=f"{METRIC_NAME_PREFIX}job_queue_length",
+    documentation="The current number of jobs in each RQ queue",
+    labelnames=("app", "queue_name"),
+)
+
 
 def update_metrics_hook(url_label: str) -> Callable:  # pragma: no cover
     # pylint: disable=unused-argument
