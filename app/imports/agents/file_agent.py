@@ -218,9 +218,7 @@ class RewardImportAgent(BlobFileAgent):
         super()._do_import()
 
     @lru_cache()
-    def reward_configs_by_reward_id(  # pylint: disable=no-self-use
-        self, retailer_id: int, db_session: "Session"
-    ) -> dict[str, RewardConfig]:
+    def reward_configs_by_reward_id(self, retailer_id: int, db_session: "Session") -> dict[str, RewardConfig]:
         reward_configs = sync_run_query(
             lambda: db_session.execute(select(RewardConfig).where(RewardConfig.retailer_id == retailer_id))
             .scalars()
