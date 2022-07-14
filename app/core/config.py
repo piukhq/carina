@@ -221,6 +221,7 @@ class Settings(BaseSettings):
             return v
         return (values["TASK_QUEUE_PREFIX"] + name for name in ("high", "default", "low"))
 
+    PRE_LOADED_REWARD_BASE_URL: str = "https://bpl.gb.bink.com"
     JIGSAW_AGENT_USERNAME: str = "Bink_dev"
     JIGSAW_AGENT_PASSWORD: str = ""
 

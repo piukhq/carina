@@ -10,6 +10,7 @@ from retry_tasks_lib.db.models import RetryTask, TaskTypeKey, TaskTypeKeyValue
 from retry_tasks_lib.enums import RetryTaskStatuses
 from retry_tasks_lib.utils.synchronous import enqueue_retry_task_delay, retryable_task
 from sqlalchemy.future import select
+from sqlalchemy.orm import joinedload
 
 from app.core.config import redis_raw, settings
 from app.db.base_class import sync_run_query
@@ -73,8 +74,11 @@ def _process_issuance(task_params: dict) -> dict:
 
 
 def _get_reward_config(db_session: "Session", reward_config_id: int) -> RewardConfig:
+
     return sync_run_query(
-        lambda: db_session.execute(select(RewardConfig).where(RewardConfig.id == reward_config_id)).scalar_one(),
+        lambda: db_session.execute(
+            select(RewardConfig).options(joinedload(RewardConfig.retailer)).where(RewardConfig.id == reward_config_id)
+        ).scalar_one(),
         db_session,
     )
 
