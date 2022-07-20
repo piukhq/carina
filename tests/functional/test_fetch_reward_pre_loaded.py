@@ -1,30 +1,45 @@
+import json
+
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
-from unittest import mock
 
 import pytest
 
+from app.core.config import settings
 from app.fetch_reward import get_allocable_reward
 from app.fetch_reward.base import BaseAgent
 
 if TYPE_CHECKING:  # pragma: no cover
     from pytest_mock import MockerFixture
+    from retry_tasks_lib.db.models import RetryTask
 
     from app.models import RetailerFetchType
     from tests.conftest import SetupType
 
 
 def test_get_allocable_reward_ok(
-    mocker: "MockerFixture", setup: "SetupType", pre_loaded_retailer_fetch_type: "RetailerFetchType"
+    mocker: "MockerFixture",
+    setup: "SetupType",
+    pre_loaded_retailer_fetch_type: "RetailerFetchType",
+    issuance_retry_task_no_reward: "RetryTask",
 ) -> None:
     db_session, reward_config, reward = setup
-    expected_result = (reward, 10, 20)
-    mock_agent_instance = mock.MagicMock(fetch_reward=lambda: expected_result)
-    mock_agent_class = mocker.patch(pre_loaded_retailer_fetch_type.fetch_type.path)
-    mock_agent_class.return_value.__enter__.return_value = mock_agent_instance
+    now = datetime.now(tz=timezone.utc)
+    validity_days = reward_config.load_required_fields_values().get("validity_days", 0)
+    mock_datetime = mocker.patch("app.fetch_reward.pre_loaded.datetime")
+    mock_datetime.now.return_value = now
+    expected_result = (reward, now.timestamp(), (now + timedelta(days=validity_days)).timestamp())
 
-    reward, issued, expiry = get_allocable_reward(db_session, reward_config)
+    reward, issued, expiry = get_allocable_reward(db_session, reward_config, issuance_retry_task_no_reward)
 
     assert (reward, issued, expiry) == expected_result
+    db_session.refresh(issuance_retry_task_no_reward)
+    agent_params = json.loads(issuance_retry_task_no_reward.get_params().get("agent_state_params_raw", "{}"))
+
+    assert (
+        agent_params.get("associated_url")
+        == f"{settings.PRE_LOADED_REWARD_BASE_URL}/reward?retailer={reward.retailer.slug}&reward={reward.id}"
+    )
 
 
 def test_get_allocable_reward_wrong_path(mocker: "MockerFixture", setup: "SetupType") -> None:

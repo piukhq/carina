@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from urllib.parse import urlencode
 
 from sqlalchemy.future import select
 
+from app.core.config import settings
 from app.db.base_class import sync_run_query
 from app.models import Reward
 
@@ -16,6 +18,16 @@ class PreLoaded(BaseAgent):
         issued = now.timestamp()
         expiry = (now + timedelta(days=validity_days)).timestamp()
         reward = self._get_allocable_reward()
+        if reward:
+            self.set_agent_state_params(
+                self.agent_state_params
+                | {
+                    self.ASSOCIATED_URL_KEY: "{base_url}/reward?{query_params}".format(
+                        base_url=settings.PRE_LOADED_REWARD_BASE_URL,
+                        query_params=urlencode({"retailer": self.reward_config.retailer.slug, "reward": reward.id}),
+                    )
+                }
+            )
 
         return reward, issued, expiry
 
