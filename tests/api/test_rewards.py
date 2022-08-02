@@ -161,7 +161,7 @@ def test_reward_type_status_ok(
                 RetryTask.task_type_id == reward_deletion_task_type.task_type_id
             )
         )
-        == 2
+        == 1
     )
     assert (
         db_session.scalar(
