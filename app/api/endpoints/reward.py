@@ -59,12 +59,13 @@ async def reward_type_status(
 
     await async_run_query(_query, db_session)
 
-    retry_tasks_ids = await crud.create_delete_and_cancel_rewards_tasks(
-        db_session,
-        retailer=retailer,
-        reward_slug=reward_slug,
-        create_cancel_task=payload.status == RewardTypeStatuses.CANCELLED,
-    )
+    if payload.status == RewardTypeStatuses.CANCELLED:
+        retry_tasks_ids = await crud.create_delete_and_cancel_rewards_tasks(
+            db_session,
+            retailer=retailer,
+            reward_slug=reward_slug,
+        )
 
-    asyncio.create_task(enqueue_many_tasks(retry_tasks_ids=retry_tasks_ids))
+        asyncio.create_task(enqueue_many_tasks(retry_tasks_ids=retry_tasks_ids))
+
     return {}
