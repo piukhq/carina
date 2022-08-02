@@ -132,7 +132,7 @@ def test_post_reward_allocation_no_more_rewards(
     assert str(reward_config.id) in task_params_values
 
 
-def test_reward_type_status_ok(
+def test_reward_type_cancelled_status_ok(
     setup: SetupType,
     mocker: MockerFixture,
     reward_deletion_task_type: TaskType,
@@ -141,19 +141,18 @@ def test_reward_type_status_ok(
     db_session, reward_config, _ = setup
     mocker.patch("app.api.tasks.enqueue_many_retry_tasks")
 
-    for transition_status in ("cancelled", "ended"):
-        reward_config.status = RewardTypeStatuses.ACTIVE
-        db_session.commit()
+    reward_config.status = RewardTypeStatuses.ACTIVE
+    db_session.commit()
 
-        resp = client.patch(
-            f"{settings.API_PREFIX}/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/status",
-            json={"status": transition_status},
-            headers=auth_headers,
-        )
-        assert resp.status_code == status.HTTP_202_ACCEPTED
-        assert resp.json() == {}
-        db_session.refresh(reward_config)
-        assert reward_config.status == RewardTypeStatuses(transition_status)
+    resp = client.patch(
+        f"{settings.API_PREFIX}/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/status",
+        json={"status": RewardTypeStatuses.CANCELLED},
+        headers=auth_headers,
+    )
+    assert resp.status_code == status.HTTP_202_ACCEPTED
+    assert resp.json() == {}
+    db_session.refresh(reward_config)
+    assert reward_config.status == RewardTypeStatuses.CANCELLED
 
     assert (
         db_session.scalar(
@@ -161,7 +160,7 @@ def test_reward_type_status_ok(
                 RetryTask.task_type_id == reward_deletion_task_type.task_type_id
             )
         )
-        == 2
+        == 1
     )
     assert (
         db_session.scalar(
@@ -170,6 +169,41 @@ def test_reward_type_status_ok(
             )
         )
         == 1
+    )
+
+
+def test_reward_type_ended_status_ok(
+    setup: SetupType,
+    mocker: MockerFixture,
+    reward_deletion_task_type: TaskType,
+    reward_cancellation_task_type: TaskType,
+) -> None:
+    db_session, reward_config, _ = setup
+    mocker.patch("app.api.tasks.enqueue_many_retry_tasks")
+
+    reward_config.status = RewardTypeStatuses.ACTIVE
+    db_session.commit()
+
+    resp = client.patch(
+        f"{settings.API_PREFIX}/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/status",
+        json={"status": RewardTypeStatuses.ENDED},
+        headers=auth_headers,
+    )
+    assert resp.status_code == status.HTTP_202_ACCEPTED
+    assert resp.json() == {}
+    db_session.refresh(reward_config)
+    assert reward_config.status == RewardTypeStatuses.ENDED
+
+    assert not db_session.scalar(
+        select(func.count(RetryTask.retry_task_id)).where(
+            RetryTask.task_type_id == reward_deletion_task_type.task_type_id
+        )
+    )
+
+    assert not db_session.scalar(
+        select(func.count(RetryTask.retry_task_id)).where(
+            RetryTask.task_type_id == reward_cancellation_task_type.task_type_id
+        )
     )
 
 
