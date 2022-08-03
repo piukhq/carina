@@ -1,11 +1,15 @@
+import logging
+
 from typing import TYPE_CHECKING, Any, Callable
 
-from prometheus_client import Counter, Gauge
+from prometheus_client import Counter, Gauge, Histogram
 
 from app.core.config import settings
 
 if TYPE_CHECKING:  # pragma: no cover
     from requests import RequestException, Response  # pragma: no cover
+
+logger = logging.getLogger(__name__)
 
 METRIC_NAME_PREFIX = "bpl_"
 
@@ -39,6 +43,12 @@ job_queue_summary = Gauge(
     labelnames=("app", "queue_name"),
 )
 
+tasks_processing_time_histogram = Histogram(
+    name=f"{METRIC_NAME_PREFIX}tasks_processing_time",
+    documentation="Total time taken by a task to process",
+    labelnames=("app", "task_name"),
+)
+
 
 def update_metrics_hook(url_label: str) -> Callable:  # pragma: no cover
     # pylint: disable=unused-argument
@@ -62,3 +72,8 @@ def update_metrics_exception_handler(ex: "RequestException", method: str, url: s
         exception=ex.__class__.__name__,
         url=url,
     ).inc()
+
+
+def task_processing_time_callback_fn(task_processing_time: float, task_name: str) -> None:
+    logger.info(f"Updating {tasks_processing_time_histogram} metrics...")
+    tasks_processing_time_histogram.labels(app=settings.PROJECT_NAME, task_name=task_name).observe(task_processing_time)
