@@ -11,7 +11,7 @@ from app.db.session import SyncSessionMaker
 from app.models import Reward, RewardConfig
 
 from . import logger
-from .prometheus import tasks_run_total
+from .prometheus import task_processing_time_callback_fn, tasks_run_total
 
 if TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy.orm import Session
@@ -19,7 +19,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
 # NOTE: Inter-dependency: If this function's name or module changes, ensure that
 # it is relevantly reflected in the TaskType table
-@retryable_task(db_session_factory=SyncSessionMaker)
+@retryable_task(db_session_factory=SyncSessionMaker, metrics_callback_fn=task_processing_time_callback_fn)
 def delete_unallocated_rewards(retry_task: RetryTask, db_session: "Session") -> None:
     if settings.ACTIVATE_TASKS_METRICS:
         tasks_run_total.labels(app=settings.PROJECT_NAME, task_name=settings.DELETE_UNALLOCATED_REWARDS_TASK_NAME).inc()
