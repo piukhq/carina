@@ -17,7 +17,7 @@ from sqlalchemy import func
 from sqlalchemy.future import select
 from testfixtures import LogCapture
 
-from app.enums import FileAgentType, RewardUpdateStatuses
+from app.enums import FileAgentType, RewardTypeStatuses, RewardUpdateStatuses
 from app.imports.agents.file_agent import (
     BlobProcessingError,
     RewardFileLog,
@@ -26,6 +26,7 @@ from app.imports.agents.file_agent import (
     RewardUpdatesAgent,
 )
 from app.models import Reward, RewardUpdate
+from app.models.retailer import Retailer
 from app.schemas import RewardUpdateSchema
 from tests.conftest import SetupType
 
@@ -210,6 +211,35 @@ def test_import_agent__process_csv_same_reward_slug_not_soft_deleted(setup: Setu
         "Pre-existing reward codes found in test-retailer/available-rewards-test-reward-imports-new-reward.csv:"
         "\nrows: 4"
     ) == capture_message_spy.call_args_list[0][0][0]
+
+
+def test_import_agent__reward_config_non_active_status_error(
+    capture: LogCapture, setup: SetupType, mocker: MockerFixture
+) -> None:
+    db_session, reward_config, _ = setup
+    reward_config.status = RewardTypeStatuses.ENDED
+    db_session.commit()
+    MockBlobServiceClient = mocker.patch("app.imports.agents.file_agent.BlobServiceClient", autospec=True)
+    mock_blob_service_client = mocker.MagicMock(spec=BlobServiceClient)
+
+    MockBlobServiceClient.from_connection_string.return_value = mock_blob_service_client
+    reward_agent = RewardImportAgent()
+    container_client = mocker.patch.object(reward_agent, "container_client", spec=ContainerClient)
+    retailer: Retailer = reward_config.retailer
+    mock_move_blob = mocker.patch.object(reward_agent, "move_blob")
+    blob_filename = "test-retailer/available-rewards-test-reward-imports-new-reward.csv"
+    container_client.list_blobs = mocker.MagicMock(
+        return_value=[
+            Blob(blob_filename),
+        ]
+    )
+    reward_agent.process_blobs(reward_config.retailer, db_session=db_session)
+    message = (
+        f"Received invalid set of {retailer.slug} reward codes to import due to non-active reward "
+        f"type: {reward_config.reward_slug}, moving to errors blob container for manual fix"
+    )
+    assert any(message in record.msg for record in capture.records)
+    mock_move_blob.assert_called_once()
 
 
 def test_import_agent__process_csv_no_reward_config(setup: SetupType, mocker: MockerFixture) -> None:
