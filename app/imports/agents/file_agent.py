@@ -22,7 +22,7 @@ from sqlalchemy.sql import and_, not_, or_
 from app.core.config import redis_raw, settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
-from app.enums import FileAgentType, RewardUpdateStatuses
+from app.enums import FileAgentType, RewardTypeStatuses, RewardUpdateStatuses
 from app.models import Retailer, Reward, RewardConfig, RewardFileLog, RewardUpdate
 from app.scheduled_tasks.scheduler import acquire_lock, cron_scheduler
 from app.schemas import RewardUpdateSchema
@@ -41,6 +41,12 @@ class RewardUpdateRow(NamedTuple):
 
 class BlobProcessingError(Exception):
     pass
+
+
+class RewardConfigNotActiveError(Exception):
+    def __init__(self, reward_slug: str, *args: object) -> None:
+        self.reward_slug = reward_slug
+        super().__init__(*args)
 
 
 class BlobFileAgent:
@@ -150,6 +156,14 @@ class BlobFileAgent:
             )
             self.move_blob(settings.BLOB_ERROR_CONTAINER, blob_client, lease)
             sync_run_query(lambda: db_session.rollback(), db_session)  # pylint: disable=unnecessary-lambda
+        except RewardConfigNotActiveError as ex:
+            self._log_and_capture_msg(
+                (
+                    f"Received invalid set of {retailer.slug} reward codes to import due to non-active reward "
+                    f"type: {ex.reward_slug}, moving to errors blob container for manual fix"
+                )
+            )
+            self.move_blob(settings.BLOB_ERROR_CONTAINER, blob_client, lease)
         else:
             logger.debug(f"Archiving blob {blob.name}.")
             self.move_blob(settings.BLOB_ARCHIVE_CONTAINER, blob_client, lease)
@@ -301,6 +315,9 @@ class RewardImportAgent(BlobFileAgent):
             raise BlobProcessingError(  # pylint: disable=raise-missing-from
                 f"No RewardConfig found for reward_slug {reward_slug}"
             )
+
+        if reward_config.status != RewardTypeStatuses.ACTIVE:
+            raise RewardConfigNotActiveError(reward_slug=reward_slug)
 
         db_reward_codes, row_nums_by_code = self._get_reward_codes_and_report_invalid(
             db_session, retailer=retailer, reward_config=reward_config, blob_name=blob_name, blob_content=blob_content
