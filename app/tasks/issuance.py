@@ -20,7 +20,7 @@ from app.fetch_reward import get_allocable_reward, get_associated_url
 from app.models import Reward, RewardConfig
 
 from . import logger, send_request_with_metrics
-from .prometheus import tasks_run_total
+from .prometheus import task_processing_time_callback_fn, tasks_run_total
 
 if TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy.orm import Session
@@ -141,7 +141,7 @@ def _process_and_issue_reward(db_session: "Session", retry_task: RetryTask) -> N
 
 # NOTE: Inter-dependency: If this function's name or module changes, ensure that
 # it is relevantly reflected in the TaskType table
-@retryable_task(db_session_factory=SyncSessionMaker)
+@retryable_task(db_session_factory=SyncSessionMaker, metrics_callback_fn=task_processing_time_callback_fn)
 def issue_reward(retry_task: RetryTask, db_session: "Session") -> None:
     """Try to fetch and issue a reward, unless the campaign has been cancelled"""
     if settings.ACTIVATE_TASKS_METRICS:
