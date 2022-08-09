@@ -177,9 +177,9 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_max_retries_exceede
             agent.fetch_reward()
 
     assert answer_bot.calls["register"] == 4
-    assert answer_bot.calls["reversal"] == 3
+    assert answer_bot.calls["reversal"] == 1
 
-    assert mock_uuid.call_count == 1
+    assert mock_uuid.call_count == 4
     spy_redis_set.assert_not_called()
     task_params = issuance_retry_task_no_reward.get_params()
     assert all(val not in task_params for val in ["issued_date", "expiry_date", "reward_uuid", "reward_code"])
@@ -199,12 +199,13 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_need_new_token(
 ) -> None:
     agent_config = jigsaw_retailer_fetch_type.load_agent_config()
     card_ref = uuid4()
+    success_card_ref = uuid4()
     card_num = "sample-reward-code"
     tx_value = jigsaw_reward_config.load_required_fields_values()["transaction_value"]
     redis_raw.set(Jigsaw.REDIS_TOKEN_KEY, fernet.encrypt(b"test-token"), timedelta(days=1))
     spy_redis_set = mocker.spy(redis_raw, "set")
     mock_uuid = mocker.patch("app.fetch_reward.jigsaw.uuid4")
-    mock_uuid.return_value = card_ref
+    mock_uuid.side_effect = [card_ref, success_card_ref]
     success_token = "test-token-success"
     now = datetime.now(tz=timezone.utc)
     mock_datetime = mocker.patch("app.fetch_reward.jigsaw.datetime")
@@ -350,11 +351,11 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_need_new_token(
     assert answer_bot.calls["reversal"] == 2
     assert answer_bot.calls["getToken"] == 1
 
-    assert mock_uuid.call_count == 1
+    assert mock_uuid.call_count == 2
     spy_redis_set.assert_called_once()
 
     assert reward is not None
-    assert str(reward.id) == str(card_ref)
+    assert str(reward.id) == str(success_card_ref)
     assert reward.code == card_num
     assert issued == now.timestamp()
     assert expiry == (now + timedelta(days=1)).timestamp()
@@ -362,8 +363,10 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_need_new_token(
     task_params = issuance_retry_task_no_reward.get_params()
     assert all(val not in task_params for val in ["issued_date", "expiry_date", "reward_uuid", "reward_code"])
     agent_state_params = json.loads(task_params["agent_state_params_raw"])
-    assert "customer_card_ref" not in agent_state_params
-    assert agent_state_params["might_need_reversal"] is True
+
+    assert agent_state_params["customer_card_ref"] == str(success_card_ref)
+    assert agent_state_params["reversal_customer_card_ref"] == str(card_ref)
+    assert agent_state_params["might_need_reversal"] is False
 
 
 @httpretty.activate
@@ -419,7 +422,7 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_retry_paths(
         ),
         status=200,
     )
-
+    expected_call_count = 2
     for jigsaw_status, description, expected_status in (
         (5000, "Internal Server Error", status.HTTP_500_INTERNAL_SERVER_ERROR),
         (5003, "Service Unavailable", status.HTTP_503_SERVICE_UNAVAILABLE),
@@ -451,7 +454,8 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_retry_paths(
 
         assert exc_info.value.response.status_code == expected_status
 
-        assert mock_uuid.call_count == 1
+        assert mock_uuid.call_count == expected_call_count
+        expected_call_count += 1
         spy_redis_set.assert_not_called()
         task_params = issuance_retry_task_no_reward.get_params()
         assert all(val not in task_params for val in ["issued_date", "expiry_date", "reward_uuid", "reward_code"])
@@ -514,6 +518,7 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_failure_paths(
         status=200,
     )
 
+    expected_call_count = 2
     for jigsaw_status, description, expected_status in (
         (4003, "Forbidden", status.HTTP_403_FORBIDDEN),
         (4001, "Unauthorised", status.HTTP_401_UNAUTHORIZED),
@@ -545,7 +550,8 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_failure_paths(
 
         assert exc_info.value.response.status_code == expected_status
 
-        assert mock_uuid.call_count == 1
+        assert mock_uuid.call_count == expected_call_count
+        expected_call_count += 1
         spy_redis_set.assert_not_called()
         task_params = issuance_retry_task_no_reward.get_params()
         assert all(val not in task_params for val in ["issued_date", "expiry_date", "reward_uuid", "reward_code"])

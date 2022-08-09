@@ -348,7 +348,7 @@ def test_jigsaw_agent_register_reversal_paths_no_previous_error_ok(
     assert answer_bot.calls["register"] == 2
     assert "reversal" not in answer_bot.calls
     assert reward is not None
-    assert str(reward.id) == str(card_ref)
+    assert str(reward.id) == str(successful_card_ref)
     assert reward.code == card_num
     assert issued == now.timestamp()
     assert expiry == (now + timedelta(days=1)).timestamp()
@@ -379,7 +379,8 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_ok(
     spy_redis_set = mocker.spy(redis_raw, "set")
 
     mock_uuid = mocker.patch("app.fetch_reward.jigsaw.uuid4")
-    mock_uuid.return_value = card_ref
+    successful_card_ref = uuid4()
+    mock_uuid.side_effect = [card_ref, successful_card_ref]
     mock_datetime = mocker.patch("app.fetch_reward.jigsaw.datetime")
     mock_datetime.now.return_value = now
     mock_datetime.fromisoformat = datetime.fromisoformat
@@ -408,8 +409,9 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_ok(
             endpoint = self._update_calls_end_get_endpoint(uri)
 
             if endpoint == "register":
+                requests_card_ref = json.loads(request.body)["customer_card_ref"]
 
-                if self.calls["reversal"] < 1:
+                if requests_card_ref == str(card_ref):
                     return (
                         200,
                         response_headers,
@@ -441,7 +443,7 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_ok(
                             "PartnerRef": "",
                             "data": {
                                 "__type": "Response_Data.cardData:#Order_V4",
-                                "customer_card_ref": json.loads(request.body)["customer_card_ref"],
+                                "customer_card_ref": requests_card_ref,
                                 "reference": "339069",
                                 "number": card_num,
                                 "pin": "",
@@ -482,14 +484,15 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_ok(
     assert answer_bot.calls["register"] == 2
     assert answer_bot.calls["reversal"] == 1
     assert reward is not None
-    assert str(reward.id) == str(card_ref)
+    assert str(reward.id) == str(successful_card_ref)
     assert reward.code == card_num
     assert issued == now.timestamp()
     assert expiry == (now + timedelta(days=1)).timestamp()
 
-    assert mock_uuid.call_count == 1
+    assert mock_uuid.call_count == 2
     spy_redis_set.assert_not_called()
     task_params = issuance_retry_task_no_reward.get_params()
     agent_state_params = json.loads(task_params["agent_state_params_raw"])
-    assert "customer_card_ref" not in agent_state_params
-    assert agent_state_params["might_need_reversal"] is True
+    assert agent_state_params.get("customer_card_ref") == str(successful_card_ref)
+    assert agent_state_params.get("reversal_customer_card_ref") == str(card_ref)
+    assert agent_state_params["might_need_reversal"] is False
