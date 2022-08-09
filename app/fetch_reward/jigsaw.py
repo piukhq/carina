@@ -1,9 +1,8 @@
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, cast
 from uuid import uuid4
 
 import requests
-import sentry_sdk
 
 from cryptography.fernet import Fernet
 from fastapi import status
@@ -95,6 +94,7 @@ class Jigsaw(BaseAgent):
     """
 
     CARD_REF_KEY = "customer_card_ref"
+    REVERSAL_CARD_REF_KEY = "reversal_customer_card_ref"
     REVERSAL_FLAG_KEY = "might_need_reversal"
     REDIS_TOKEN_KEY = f"{settings.REDIS_KEY_PREFIX}:agent:jigsaw:auth_token"
     STATUS_CODE_MAP = {
@@ -118,8 +118,8 @@ class Jigsaw(BaseAgent):
         self.special_actions_map: dict[str, "SpecialActionsMap"] = {
             # BPL-439: If Jigsaw returns a 4000 status with a message with isError set as True and the id equal to
             # 40028 the customer_card_ref we provided is not unique and we need to generate a new one and try again.
-            # If this happens after we got another error from the register endpoint we need to send a reversal request
-            # and try again with the same card ref
+            # BPL-668: If this happens after we got another error from the register endpoint we need to send a
+            # reversal request before trying again with the new card ref
             "4000": {
                 "message_ids": ["40028"],
                 "action": self.try_again_with_new_card_ref,
@@ -162,24 +162,30 @@ class Jigsaw(BaseAgent):
         new_resp = try_again_call()
         return self._get_response_body_or_raise_for_status(new_resp, try_again_call)
 
+    def _get_reversal_customer_card_ref(self) -> str:
+        try:
+            return cast(str, self.agent_state_params[self.REVERSAL_CARD_REF_KEY])
+        except KeyError as ex:
+            raise AgentError("Jigsaw: Trying to execute a reversal without a reversal_customer_card_ref.") from ex
+
     def try_again_with_new_card_ref(self, try_again_call: Callable[..., requests.Response]) -> dict:
         execute_reversal = self.agent_state_params.get(self.REVERSAL_FLAG_KEY, False)
         msg = f"Jigsaw: non unique customer card ref: {self.customer_card_ref}, "
+        agent_params_updates: dict = {self.CARD_REF_KEY: str(uuid4())}
 
         if execute_reversal:
-            msg += "sending reversal request and trying again."
+            agent_params_updates[self.REVERSAL_CARD_REF_KEY] = self.customer_card_ref
+            msg += "sending reversal request and "
 
-        else:
-            self.customer_card_ref = str(uuid4())
-            self.set_agent_state_params(self.agent_state_params | {self.CARD_REF_KEY: self.customer_card_ref})
-            msg += f"trying again with new customer card ref: {self.customer_card_ref}."
-
-        # logger.error is captured by sentry as event.
+        self.customer_card_ref = agent_params_updates[self.CARD_REF_KEY]
+        self.set_agent_state_params(self.agent_state_params | agent_params_updates)
+        msg += f"trying again with new customer card ref: {self.customer_card_ref}."
         self.logger.error(msg)
 
         if execute_reversal:
             resp = self._send_reversal_request()
             self._get_response_body_or_raise_for_status(resp, self._send_reversal_request)
+            self.set_agent_state_params(self.agent_state_params | {self.REVERSAL_FLAG_KEY: False})
 
         new_resp = try_again_call()
         return self._get_response_body_or_raise_for_status(new_resp, try_again_call)
@@ -276,7 +282,6 @@ class Jigsaw(BaseAgent):
         try:
             return self.fernet.decrypt(raw_token).decode()
         except Exception as ex:  # pylint: disable=broad-except
-            sentry_sdk.capture_exception(ex)
             self.logger.exception(
                 f"Jigsaw: Unexpected value retrieved from redis for {self.REDIS_TOKEN_KEY}.", exc_info=ex
             )
@@ -292,7 +297,6 @@ class Jigsaw(BaseAgent):
                 expires_in,
             )
         except Exception as ex:  # pylint: disable=broad-except
-            sentry_sdk.capture_exception(ex)
             self.logger.exception("Jigsaw: Unexpected error while encrypting and saving token to redis.", exc_info=ex)
 
     def _get_auth_token(self) -> str:
@@ -327,7 +331,7 @@ class Jigsaw(BaseAgent):
         self._encrypt_and_set_token(token, expires_in)
         return token
 
-    def _generate_customer_card_ref(self) -> tuple[str, datetime]:
+    def _generate_customer_card_ref(self) -> datetime:
         """
         Generates a new customer_card_ref uuid and a datetime now utc.
         If a customer_card_ref is stored as task param, returns that instead of creating a new uuid.
@@ -338,7 +342,7 @@ class Jigsaw(BaseAgent):
             customer_card_ref = self.agent_state_params.get(self.CARD_REF_KEY, None)
 
         self.customer_card_ref = str(uuid4()) if customer_card_ref is None else customer_card_ref
-        return self.customer_card_ref, datetime.now(tz=timezone.utc)
+        return datetime.now(tz=timezone.utc)
 
     def _save_reward(self, customer_card_ref: str, reward_code: str) -> Reward:
         """Stores the Reward data returned by Jigsaw in the DB"""
@@ -386,26 +390,27 @@ class Jigsaw(BaseAgent):
             url_kwargs={"base_url": self.base_url},
             exclude_from_label_url=[],
             json={
-                "original_customer_card_ref": self.customer_card_ref,
+                "original_customer_card_ref": self._get_reversal_customer_card_ref(),
             },
             headers={"Token": self._get_auth_token()},
         )
 
     def fetch_reward(self) -> tuple[Reward, float, float]:
-        customer_card_ref, issued = self._generate_customer_card_ref()
+        issued = self._generate_customer_card_ref()
+        if not self.customer_card_ref:
+            raise AgentError("Jigsaw: failed to create or fetch customer_card_ref")
 
         resp = self._register_reward()
         response_payload = self._get_response_body_or_raise_for_status(resp, try_again_call=self._register_reward)
 
         if response_payload["data"]["balance"] != self.reward_config_required_values["transaction_value"]:
-            # this logic will be expanded in BPL-438, remove # pragma: no cover once implemented
-            raise AgentError("Jigsaw: fetched reward balance and transaction value do not match.")  # pragma: no cover
+            raise AgentError("Jigsaw: fetched reward balance and transaction value do not match.")
 
         expiry = self._get_tz_aware_datetime_from_isoformat(response_payload["data"]["expiry_date"])
         self.set_agent_state_params(
             self.agent_state_params | {self.ASSOCIATED_URL_KEY: response_payload["data"]["voucher_url"]}
         )
-        reward = self._save_reward(customer_card_ref, response_payload["data"]["number"])
+        reward = self._save_reward(self.customer_card_ref, response_payload["data"]["number"])
         return reward, issued.timestamp(), expiry.timestamp()
 
     def fetch_balance(self) -> Any:  # pragma: no cover
