@@ -1,6 +1,5 @@
 import json
 
-from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 import pytest
@@ -24,15 +23,14 @@ def test_get_allocable_reward_ok(
     issuance_retry_task_no_reward: "RetryTask",
 ) -> None:
     db_session, reward_config, reward = setup
-    now = datetime.now(tz=timezone.utc)
-    validity_days = reward_config.load_required_fields_values().get("validity_days", 0)
-    mock_datetime = mocker.patch("app.fetch_reward.pre_loaded.datetime")
-    mock_datetime.now.return_value = now
-    expected_result = (reward, now.timestamp(), (now + timedelta(days=validity_days)).timestamp())
+    expected_validity_days = reward_config.load_required_fields_values()["validity_days"]
+    expected_result = (reward, None, None, expected_validity_days)
 
-    reward, issued, expiry = get_allocable_reward(db_session, reward_config, issuance_retry_task_no_reward)
+    fetched_reward, issued_date, expiry_date, validity_days = get_allocable_reward(
+        db_session, reward_config, issuance_retry_task_no_reward
+    )
 
-    assert (reward, issued, expiry) == expected_result
+    assert (fetched_reward, issued_date, expiry_date, validity_days) == expected_result
     db_session.refresh(issuance_retry_task_no_reward)
     agent_params = json.loads(issuance_retry_task_no_reward.get_params().get("agent_state_params_raw", "{}"))
 

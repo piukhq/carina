@@ -8,7 +8,7 @@ from sqlalchemy.future import select
 from app.db.base_class import sync_run_query
 from app.models import RetailerFetchType, Reward, RewardConfig
 
-from .base import BaseAgent
+from .base import BaseAgent, RewardData
 
 if TYPE_CHECKING:  # pragma: no cover
     from retry_tasks_lib.db.models import RetryTask
@@ -17,7 +17,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
 def get_allocable_reward(
     db_session: "Session", reward_config: RewardConfig, retry_task: "RetryTask" = None
-) -> tuple[Reward | None, float, float]:
+) -> RewardData:
 
     try:
         mod, cls = reward_config.fetch_type.path.rsplit(".", 1)
@@ -40,9 +40,9 @@ def get_allocable_reward(
     agent_config: dict = sync_run_query(_query, db_session).load_agent_config()
 
     with Agent(db_session, reward_config, agent_config, retry_task=retry_task) as agent:
-        reward, issued, expiry = agent.fetch_reward()
+        reward, issued, expiry, validity_days = agent.fetch_reward()
 
-    return reward, issued, expiry
+    return RewardData(reward=reward, issued_date=issued, expiry_date=expiry, validity_days=validity_days)
 
 
 def get_associated_url(task_params: dict) -> str:

@@ -2,12 +2,13 @@ import json
 import logging
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from retry_tasks_lib.db.models import TaskTypeKey, TaskTypeKeyValue
 from sqlalchemy.future import select
 
 from app.db.base_class import sync_run_query
+from app.models.reward import Reward
 from app.tasks import send_request_with_metrics
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -17,6 +18,13 @@ if TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy.orm import Session
 
     from app.models import RewardConfig
+
+
+class RewardData(NamedTuple):
+    reward: Reward | None
+    issued_date: float | None
+    expiry_date: float | None
+    validity_days: int | None
 
 
 class BaseAgent(ABC):
@@ -96,7 +104,7 @@ class BaseAgent(ABC):
             ) from ex
 
     @abstractmethod
-    def fetch_reward(self) -> Any:  # pragma: no cover
+    def fetch_reward(self) -> RewardData:
         ...
 
     @abstractmethod

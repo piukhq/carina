@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
@@ -32,7 +32,7 @@ ISSUED = "issued_date"
 EXPIRY = "expiry_date"
 
 
-def _process_issuance(task_params: dict) -> dict:
+def _process_issuance(task_params: dict, validity_days: int | None = None) -> dict:
     logger.info(f"Processing allocation for reward: {task_params['reward_uuid']}")
     response_audit: dict = {"timestamp": datetime.now(tz=timezone.utc).isoformat()}
     parsed_url = urlparse(task_params["account_url"])
@@ -48,6 +48,11 @@ def _process_issuance(task_params: dict) -> dict:
         url_kwargs["query"] = parsed_url.query
         exclude.append("query")
 
+    # Set issued date and expiry date for pre-loaded rewards else get them from task_params
+    now = datetime.now(tz=timezone.utc)
+    issued_date = now.timestamp() if validity_days else task_params["issued_date"]
+    expiry_date = (now + timedelta(days=validity_days)).timestamp() if validity_days else task_params["expiry_date"]
+
     resp = send_request_with_metrics(
         "POST",
         url_template=url_template,
@@ -55,8 +60,8 @@ def _process_issuance(task_params: dict) -> dict:
         exclude_from_label_url=exclude,
         json={
             "code": task_params["code"],
-            "issued_date": task_params["issued_date"],
-            "expiry_date": task_params["expiry_date"],
+            "issued_date": issued_date,
+            "expiry_date": expiry_date,
             "reward_slug": task_params["reward_slug"],
             "reward_uuid": task_params["reward_uuid"],
             "associated_url": get_associated_url(task_params),
@@ -123,10 +128,10 @@ def _set_reward_and_delete_from_task(db_session: "Session", retry_task: RetryTas
     sync_run_query(_query, db_session)
 
 
-def _process_and_issue_reward(db_session: "Session", retry_task: RetryTask) -> None:
+def _process_and_issue_reward(db_session: "Session", retry_task: RetryTask, validity_days: int | None = None) -> None:
     task_params = retry_task.get_params()
     try:
-        response_audit = _process_issuance(task_params)
+        response_audit = _process_issuance(task_params, validity_days)
     except HTTPError as ex:
         if ex.response.status_code == status.HTTP_409_CONFLICT:
             _set_reward_and_delete_from_task(
@@ -154,31 +159,31 @@ def issue_reward(retry_task: RetryTask, db_session: "Session") -> None:
 
     # Process the allocation if it has a reward, else try to get a reward - requeue that if necessary
     if "reward_uuid" in retry_task.get_params():
-        _process_and_issue_reward(db_session, retry_task)
+        validity_days = reward_config.load_required_fields_values().get("validity_days")
+        _process_and_issue_reward(db_session, retry_task, validity_days)
     else:
-        allocable_reward, issued, expiry = get_allocable_reward(db_session, reward_config, retry_task)
+        allocable_reward, issued, expiry, validity_days = get_allocable_reward(db_session, reward_config, retry_task)
 
         if allocable_reward is not None:
             key_ids = retry_task.task_type.get_key_ids_by_name()
 
             def _add_reward_to_task_values_and_set_allocated(reward: Reward) -> None:
                 reward.allocated = True
-                db_session.add_all(
-                    retry_task.get_task_type_key_values(
-                        [
-                            (key_ids[REWARD_ID], str(reward.id)),
-                            (key_ids[CODE], reward.code),
-                            (key_ids[ISSUED], issued),
-                            (key_ids[EXPIRY], expiry),
-                        ]
-                    )
-                )
+                key_ids_to_add = [
+                    (key_ids[REWARD_ID], str(reward.id)),
+                    (key_ids[CODE], reward.code),
+                ]
 
+                # If issued and expiry are available which they can be e.g. jigsaw, add them to task_type_key_values
+                if issued and expiry:
+                    key_ids_to_add.extend([(key_ids[ISSUED], issued), (key_ids[EXPIRY], expiry)])
+
+                db_session.add_all(retry_task.get_task_type_key_values(key_ids_to_add))
                 db_session.commit()
 
             sync_run_query(_add_reward_to_task_values_and_set_allocated, db_session, reward=allocable_reward)
             db_session.refresh(retry_task)  # Ensure retry_task represents latest DB changes
-            _process_and_issue_reward(db_session, retry_task)
+            _process_and_issue_reward(db_session, retry_task, validity_days)
         else:  # requeue the allocation attempt
             if retry_task.status != RetryTaskStatuses.WAITING:
                 # Only do a Sentry alert for the first allocation failure (when status is changing to WAITING)

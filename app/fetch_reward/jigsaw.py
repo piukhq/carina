@@ -9,7 +9,7 @@ from fastapi import status
 
 from app.core.config import redis_raw, settings
 from app.db.base_class import sync_run_query
-from app.fetch_reward.base import AgentError, BaseAgent
+from app.fetch_reward.base import AgentError, BaseAgent, RewardData
 from app.models import Reward
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -395,7 +395,15 @@ class Jigsaw(BaseAgent):
             headers={"Token": self._get_auth_token()},
         )
 
-    def fetch_reward(self) -> tuple[Reward, float, float]:
+    def fetch_reward(self) -> RewardData:
+        """
+        Fetch jigsaw reward
+
+        issued_date is set at the time of generating a new customer card ref
+        expiry date is provided by jigsaw in a successful request to register reward
+
+        returns (Reward data, issued_date, expirty_date, validity_days = None)
+        """
         issued = self._generate_customer_card_ref()
         if not self.customer_card_ref:
             raise AgentError("Jigsaw: failed to create or fetch customer_card_ref")
@@ -411,7 +419,9 @@ class Jigsaw(BaseAgent):
             self.agent_state_params | {self.ASSOCIATED_URL_KEY: response_payload["data"]["voucher_url"]}
         )
         reward = self._save_reward(self.customer_card_ref, response_payload["data"]["number"])
-        return reward, issued.timestamp(), expiry.timestamp()
+        return RewardData(
+            reward=reward, issued_date=issued.timestamp(), expiry_date=expiry.timestamp(), validity_days=None
+        )
 
     def fetch_balance(self) -> Any:  # pragma: no cover
         return NotImplementedError
