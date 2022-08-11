@@ -50,10 +50,10 @@ async def reward_type_status(
 ) -> Any:
     reward_config = await crud.get_reward_config(db_session, retailer, reward_slug, for_update=True)
 
-    if reward_config.status != RewardTypeStatuses.ACTIVE:  # pragma: coverage bug 1012
+    if reward_config.status != RewardTypeStatuses.ACTIVE:
         raise HttpErrors.STATUS_UPDATE_FAILED.value
 
-    async def _query() -> None:  # pragma: coverage bug 1012
+    async def _query() -> None:
         reward_config.status = payload.status
         return await db_session.commit()
 
