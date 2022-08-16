@@ -96,13 +96,14 @@ def test_jigsaw_agent_ok(
     mock_datetime.fromisoformat = datetime.fromisoformat
 
     with Jigsaw(db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward) as agent:
-        reward, issued, expiry = agent.fetch_reward()
+        reward, issued, expiry, validity_days = agent.fetch_reward()
 
     assert reward is not None
     assert str(reward.id) == str(card_ref)
     assert reward.code == card_num
     assert issued == now.timestamp()
     assert expiry == (now + timedelta(days=1)).timestamp()
+    assert validity_days is None
 
     mock_uuid.assert_called_once()
     spy_redis_set.assert_called_once_with(Jigsaw.REDIS_TOKEN_KEY, mock.ANY, timedelta(days=1))
@@ -164,13 +165,14 @@ def test_jigsaw_agent_ok_token_already_set(
     mock_datetime.fromisoformat = datetime.fromisoformat
 
     with Jigsaw(db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward) as agent:
-        reward, issued, expiry = agent.fetch_reward()
+        reward, issued, expiry, validity_days = agent.fetch_reward()
 
     assert reward is not None
     assert str(reward.id) == str(card_ref)
     assert reward.code == card_num
     assert issued == now.timestamp()
     assert expiry == (now + timedelta(days=1)).timestamp()
+    assert validity_days is None
 
     mock_uuid.assert_called_once()
     spy_redis_set.assert_not_called()
@@ -244,13 +246,14 @@ def test_jigsaw_agent_ok_card_ref_in_task_params(
     db_session.commit()
 
     with Jigsaw(db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward) as agent:
-        reward, issued, expiry = agent.fetch_reward()
+        reward, issued, expiry, validity_days = agent.fetch_reward()
 
     assert reward is not None
     assert str(reward.id) == str(card_ref)
     assert reward.code == card_num
     assert issued == now.timestamp()
     assert expiry == (now + timedelta(days=1)).timestamp()
+    assert validity_days is None
 
     mock_uuid.assert_not_called()
     spy_redis_set.assert_not_called()
@@ -343,7 +346,7 @@ def test_jigsaw_agent_register_reversal_paths_no_previous_error_ok(
     httpretty.register_uri("POST", f"{agent_config['base_url']}/order/V4/register", body=answer_bot.response_generator)
 
     with Jigsaw(db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward) as agent:
-        reward, issued, expiry = agent.fetch_reward()
+        reward, issued, expiry, validity_days = agent.fetch_reward()
 
     assert answer_bot.calls["register"] == 2
     assert "reversal" not in answer_bot.calls
@@ -352,6 +355,7 @@ def test_jigsaw_agent_register_reversal_paths_no_previous_error_ok(
     assert reward.code == card_num
     assert issued == now.timestamp()
     assert expiry == (now + timedelta(days=1)).timestamp()
+    assert validity_days is None
 
     assert mock_uuid.call_count == 2
     spy_redis_set.assert_not_called()
@@ -479,7 +483,7 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_ok(
     httpretty.register_uri("POST", f"{agent_config['base_url']}/order/V4/reversal", body=answer_bot.response_generator)
 
     with Jigsaw(db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward) as agent:
-        reward, issued, expiry = agent.fetch_reward()
+        reward, issued, expiry, validity_days = agent.fetch_reward()
 
     assert answer_bot.calls["register"] == 2
     assert answer_bot.calls["reversal"] == 1
@@ -488,6 +492,7 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_ok(
     assert reward.code == card_num
     assert issued == now.timestamp()
     assert expiry == (now + timedelta(days=1)).timestamp()
+    assert validity_days is None
 
     assert mock_uuid.call_count == 2
     spy_redis_set.assert_not_called()

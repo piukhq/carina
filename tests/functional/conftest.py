@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable
 from uuid import uuid4
 
@@ -18,14 +18,10 @@ if TYPE_CHECKING:
 
 @pytest.fixture(scope="function")
 def reward_issuance_task_params(reward: Reward) -> dict:
-    now = datetime.now(tz=timezone.utc)
-    validity_days = reward.reward_config.load_required_fields_values().get("validity_days", 0)
     return {
         "account_url": "http://test.url/",
         "reward_uuid": str(reward.id),
         "code": reward.code,
-        "issued_date": str(now.timestamp()),
-        "expiry_date": str((now + timedelta(days=validity_days)).timestamp()),
         "reward_config_id": str(reward.reward_config_id),
         "reward_slug": reward.reward_config.reward_slug,
         "idempotency_token": str(uuid4()),
@@ -92,8 +88,6 @@ def issuance_retry_task_no_reward(
 def issuance_expected_payload(reward_issuance_task_params: dict) -> dict:
     return {
         "code": reward_issuance_task_params["code"],
-        "issued_date": reward_issuance_task_params["issued_date"],
-        "expiry_date": reward_issuance_task_params["expiry_date"],
         "reward_slug": reward_issuance_task_params["reward_slug"],
         "reward_uuid": reward_issuance_task_params["reward_uuid"],
         "associated_url": "",
