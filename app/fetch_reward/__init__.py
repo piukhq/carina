@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Type
 from sqlalchemy.future import select
 
 from app.db.base_class import sync_run_query
-from app.models import RetailerFetchType, Reward, RewardConfig
+from app.models import RetailerFetchType, RewardConfig
 
 from .base import BaseAgent, RewardData
 
@@ -40,9 +40,7 @@ def get_allocable_reward(
     agent_config: dict = sync_run_query(_query, db_session).load_agent_config()
 
     with Agent(db_session, reward_config, agent_config, retry_task=retry_task) as agent:
-        reward, issued, expiry, validity_days = agent.fetch_reward()
-
-    return RewardData(reward=reward, issued_date=issued, expiry_date=expiry, validity_days=validity_days)
+        return agent.fetch_reward()
 
 
 def get_associated_url(task_params: dict) -> str:

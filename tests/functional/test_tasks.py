@@ -67,6 +67,43 @@ def test__process_issuance_ok(
 
 @httpretty.activate
 @mock.patch("app.tasks.issuance.datetime")
+def test__process_issuance_fixed_expiry_date_ok(
+    mock_datetime: mock.Mock,
+    reward_config: RewardConfig,
+    reward_issuance_task_params: dict,
+    issuance_expected_payload: dict,
+) -> None:
+    sample_url = "http://sample.url"
+    issuance_expected_payload["associated_url"] = sample_url
+    validity_days = reward_config.load_required_fields_values()["validity_days"]
+    reward_issuance_task_params["agent_state_params_raw"] = json.dumps({"associated_url": sample_url})
+
+    mock_datetime.now.return_value = fake_now
+    mock_issued_date = fake_now.timestamp()
+    mock_expiry_date = (fake_now + timedelta(days=validity_days + 5)).timestamp()
+    issuance_expected_payload["issued_date"] = mock_issued_date
+    issuance_expected_payload["expiry_date"] = mock_expiry_date
+    reward_issuance_task_params["expiry_date"] = mock_expiry_date
+
+    httpretty.register_uri("POST", reward_issuance_task_params["account_url"], body="OK", status=200)
+
+    response_audit = _process_issuance(reward_issuance_task_params, validity_days)
+
+    last_request = httpretty.last_request()
+    assert last_request.method == "POST"
+    assert last_request.url == reward_issuance_task_params["account_url"]
+    assert json.loads(last_request.body) == issuance_expected_payload
+    assert response_audit == {
+        "timestamp": fake_now.isoformat(),
+        "response": {
+            "status": 200,
+            "body": "OK",
+        },
+    }
+
+
+@httpretty.activate
+@mock.patch("app.tasks.issuance.datetime")
 def test__process_issuance_http_errors(
     mock_datetime: mock.Mock,
     reward_config: RewardConfig,

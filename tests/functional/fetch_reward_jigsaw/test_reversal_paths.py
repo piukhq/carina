@@ -345,7 +345,7 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_need_new_token(
     httpretty.register_uri("POST", f"{agent_config['base_url']}/order/V4/getToken", body=answer_bot.response_generator)
 
     with Jigsaw(db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward) as agent:
-        reward, issued, expiry, validity_days = agent.fetch_reward()
+        reward_data = agent.fetch_reward()
 
     assert answer_bot.calls["register"] == 2
     assert answer_bot.calls["reversal"] == 2
@@ -354,12 +354,12 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_need_new_token(
     assert mock_uuid.call_count == 2
     spy_redis_set.assert_called_once()
 
-    assert reward is not None
-    assert str(reward.id) == str(success_card_ref)
-    assert reward.code == card_num
-    assert issued == now.timestamp()
-    assert expiry == (now + timedelta(days=1)).timestamp()
-    assert validity_days is None
+    assert reward_data.reward is not None
+    assert str(reward_data.reward.id) == str(success_card_ref)
+    assert reward_data.reward.code == card_num
+    assert reward_data.issued_date == now.timestamp()
+    assert reward_data.expiry_date == (now + timedelta(days=1)).timestamp()
+    assert reward_data.validity_days is None
 
     task_params = issuance_retry_task_no_reward.get_params()
     assert all(val not in task_params for val in ["issued_date", "expiry_date", "reward_uuid", "reward_code"])
