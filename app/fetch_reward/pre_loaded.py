@@ -1,4 +1,3 @@
-from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlencode
 
@@ -8,15 +7,19 @@ from app.core.config import settings
 from app.db.base_class import sync_run_query
 from app.models import Reward
 
-from .base import BaseAgent
+from .base import BaseAgent, RewardData
 
 
 class PreLoaded(BaseAgent):
-    def fetch_reward(self) -> tuple[Reward | None, float, float]:
-        validity_days = self.reward_config.load_required_fields_values().get("validity_days", 0)
-        now = datetime.now(tz=timezone.utc)
-        issued = now.timestamp()
-        expiry = (now + timedelta(days=validity_days)).timestamp()
+    def fetch_reward(self) -> RewardData:
+        """
+        Fetch pre-loaded reward
+
+        issued_date and expiry_date are set at the time of allocation
+
+        returns (Reward data, issued_date = None, expirty_date = None, validity_days)
+        """
+        validity_days = self.reward_config.load_required_fields_values()["validity_days"]
         reward = self._get_allocable_reward()
         if reward:
             self.set_agent_state_params(
@@ -29,7 +32,7 @@ class PreLoaded(BaseAgent):
                 }
             )
 
-        return reward, issued, expiry
+        return RewardData(reward=reward, issued_date=None, expiry_date=None, validity_days=validity_days)
 
     def fetch_balance(self) -> Any:  # pragma: no cover
         return NotImplementedError

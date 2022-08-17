@@ -355,7 +355,7 @@ def test_jigsaw_agent_register_retry_get_token_success(
     for _ in retry_error_ids:
 
         with Jigsaw(db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward) as agent:
-            reward, issued, expiry = agent.fetch_reward()
+            reward, issued, expiry, validity_days = agent.fetch_reward()
 
         mock_uuid.assert_called()
         mock_redis.set.assert_called()
@@ -376,6 +376,7 @@ def test_jigsaw_agent_register_retry_get_token_success(
         assert reward.code == card_num
         assert issued == now.timestamp()
         assert expiry == (now + timedelta(days=1)).timestamp()
+        assert validity_days is None
         issuance_retry_task_no_reward.audit_data = []
         db_session.delete(reward)
         db_session.commit()

@@ -2,7 +2,7 @@
 
 import json
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Callable
 from unittest import mock
 
@@ -32,16 +32,25 @@ fake_now = datetime.now(tz=timezone.utc)
 @httpretty.activate
 @mock.patch("app.tasks.issuance.datetime")
 def test__process_issuance_ok(
-    mock_datetime: mock.Mock, reward_issuance_task_params: dict, issuance_expected_payload: dict
+    mock_datetime: mock.Mock,
+    reward_config: RewardConfig,
+    reward_issuance_task_params: dict,
+    issuance_expected_payload: dict,
 ) -> None:
     sample_url = "http://sample.url"
     issuance_expected_payload["associated_url"] = sample_url
+    validity_days = reward_config.load_required_fields_values()["validity_days"]
     reward_issuance_task_params["agent_state_params_raw"] = json.dumps({"associated_url": sample_url})
 
     mock_datetime.now.return_value = fake_now
+    mock_issued_date = fake_now.timestamp()
+    mock_expiry_date = (fake_now + timedelta(days=validity_days)).timestamp()
+    issuance_expected_payload["issued_date"] = mock_issued_date
+    issuance_expected_payload["expiry_date"] = mock_expiry_date
+
     httpretty.register_uri("POST", reward_issuance_task_params["account_url"], body="OK", status=200)
 
-    response_audit = _process_issuance(reward_issuance_task_params)
+    response_audit = _process_issuance(reward_issuance_task_params, validity_days)
 
     last_request = httpretty.last_request()
     assert last_request.method == "POST"
@@ -57,16 +66,29 @@ def test__process_issuance_ok(
 
 
 @httpretty.activate
-def test__process_issuance_http_errors(reward_issuance_task_params: dict, issuance_expected_payload: dict) -> None:
+@mock.patch("app.tasks.issuance.datetime")
+def test__process_issuance_http_errors(
+    mock_datetime: mock.Mock,
+    reward_config: RewardConfig,
+    reward_issuance_task_params: dict,
+    issuance_expected_payload: dict,
+) -> None:
 
     for status, body in [
         (401, "Unauthorized"),
         (500, "Internal Server Error"),
     ]:
+        validity_days = reward_config.load_required_fields_values()["validity_days"]
+        mock_datetime.now.return_value = fake_now
+        mock_issued_date = fake_now.timestamp()
+        mock_expiry_date = (fake_now + timedelta(days=validity_days)).timestamp()
+        issuance_expected_payload["issued_date"] = mock_issued_date
+        issuance_expected_payload["expiry_date"] = mock_expiry_date
+
         httpretty.register_uri("POST", reward_issuance_task_params["account_url"], body=body, status=status)
 
         with pytest.raises(requests.RequestException) as excinfo:
-            _process_issuance(reward_issuance_task_params)
+            _process_issuance(reward_issuance_task_params, validity_days)
 
         assert isinstance(excinfo.value, requests.RequestException)
         assert excinfo.value.response.status_code == status
@@ -80,18 +102,17 @@ def test__process_issuance_http_errors(reward_issuance_task_params: dict, issuan
 def test__process_issuance_connection_error(
     mock_send_request_with_metrics: mock.MagicMock, reward_issuance_task_params: dict
 ) -> None:
-
     mock_send_request_with_metrics.side_effect = requests.Timeout("Request timed out")
 
     with pytest.raises(requests.RequestException) as excinfo:
-        _process_issuance(reward_issuance_task_params)
+        _process_issuance(reward_issuance_task_params, 1)
 
     assert isinstance(excinfo.value, requests.Timeout)
     assert excinfo.value.response is None
 
 
 @httpretty.activate
-def test_reward_issuance(db_session: "Session", issuance_retry_task: RetryTask) -> None:
+def test_reward_issuance(db_session: "Session", reward_config: RewardConfig, issuance_retry_task: RetryTask) -> None:
 
     httpretty.register_uri("POST", issuance_retry_task.get_params()["account_url"], body="OK", status=200)
 
@@ -473,10 +494,8 @@ def test_reward_issuance_409_from_polaris(
     db_session.commit()
     db_session.refresh(reward)
 
-    assert all(
-        (item not in issuance_retry_task.get_params() for item in ["reward_uuid", "code", "issued_date", "expiry_date"])
-    )
-    assert all((item in control_task.get_params() for item in ["reward_uuid", "code", "issued_date", "expiry_date"]))
+    assert all((item not in issuance_retry_task.get_params() for item in ["reward_uuid", "code"]))
+    assert all((item in control_task.get_params() for item in ["reward_uuid", "code"]))
 
     assert issuance_retry_task.attempts == 1
     assert issuance_retry_task.next_attempt_time is None  # Will be set by error handler

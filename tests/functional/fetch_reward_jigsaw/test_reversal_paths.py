@@ -345,7 +345,7 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_need_new_token(
     httpretty.register_uri("POST", f"{agent_config['base_url']}/order/V4/getToken", body=answer_bot.response_generator)
 
     with Jigsaw(db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward) as agent:
-        reward, issued, expiry = agent.fetch_reward()
+        reward, issued, expiry, validity_days = agent.fetch_reward()
 
     assert answer_bot.calls["register"] == 2
     assert answer_bot.calls["reversal"] == 2
@@ -359,6 +359,7 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_need_new_token(
     assert reward.code == card_num
     assert issued == now.timestamp()
     assert expiry == (now + timedelta(days=1)).timestamp()
+    assert validity_days is None
 
     task_params = issuance_retry_task_no_reward.get_params()
     assert all(val not in task_params for val in ["issued_date", "expiry_date", "reward_uuid", "reward_code"])
