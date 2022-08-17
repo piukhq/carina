@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlencode
 
@@ -19,7 +20,9 @@ class PreLoaded(BaseAgent):
 
         returns (Reward data, issued_date = None, expirty_date = None, validity_days)
         """
+        expiry_date: float | None = None
         validity_days = self.reward_config.load_required_fields_values()["validity_days"]
+
         reward = self._get_allocable_reward()
         if reward:
             self.set_agent_state_params(
@@ -31,8 +34,15 @@ class PreLoaded(BaseAgent):
                     )
                 }
             )
+            if reward.expiry_date:
+                expiry_date = datetime(
+                    year=reward.expiry_date.year,
+                    month=reward.expiry_date.month,
+                    day=reward.expiry_date.day,
+                    tzinfo=timezone.utc,
+                ).timestamp()
 
-        return RewardData(reward=reward, issued_date=None, expiry_date=None, validity_days=validity_days)
+        return RewardData(reward=reward, issued_date=None, expiry_date=expiry_date, validity_days=validity_days)
 
     def fetch_balance(self) -> Any:  # pragma: no cover
         return NotImplementedError
