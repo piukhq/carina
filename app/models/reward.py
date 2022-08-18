@@ -19,6 +19,7 @@ class Reward(Base, TimestampMixin):
     deleted = Column(Boolean, default=False, nullable=False)
     reward_config_id = Column(Integer, ForeignKey("reward_config.id"), nullable=False)
     retailer_id = Column(Integer, ForeignKey("retailer.id", ondelete="CASCADE"), nullable=False)
+    expiry_date = Column(Date, nullable=True)
 
     reward_config = relationship("RewardConfig", back_populates="rewards")
     retailer = relationship("Retailer", back_populates="rewards")

@@ -4,7 +4,7 @@ import string
 import uuid
 
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from functools import lru_cache
 from io import StringIO
 from typing import TYPE_CHECKING, DefaultDict, NamedTuple, cast
@@ -220,7 +220,7 @@ class BlobFileAgent:
 
 
 class RewardImportAgent(BlobFileAgent):
-    blob_path_template = string.Template("$retailer_slug/available-rewards-")
+    blob_path_template = string.Template("$retailer_slug/rewards.import.")
     scheduler_name = "carina-reward-import-scheduler"
 
     def __init__(self) -> None:
@@ -240,6 +240,18 @@ class RewardImportAgent(BlobFileAgent):
             db_session,
         )
         return {reward_config.reward_slug: reward_config for reward_config in reward_configs}
+
+    @staticmethod
+    def _get_expiry_date(sub_blob_name: str, blob_name: str) -> date | None:
+        if ".expires." in sub_blob_name:
+            try:
+                extracted_date = sub_blob_name.split(".expires.")[1].split(".")[0]
+                expiry_date = datetime.strptime(extracted_date, "%Y-%m-%d").date()
+            except ValueError as ex:
+                raise BlobProcessingError(f"Invalid filename, expiry date is invalid: {blob_name}") from ex
+        else:
+            expiry_date = None
+        return expiry_date
 
     @staticmethod
     def _report_pre_existing_codes(
@@ -302,14 +314,12 @@ class RewardImportAgent(BlobFileAgent):
 
     # pylint: disable=too-many-locals
     def process_csv(self, retailer: Retailer, blob_name: str, blob_content: str, db_session: "Session") -> None:
-        _, sub_blob_name = blob_name.split(self.blob_path_template.substitute(retailer_slug=retailer.slug))
-
         try:
-            reward_slug, _ = sub_blob_name.split("-imports-", maxsplit=1)
+            _, sub_blob_name = blob_name.split(self.blob_path_template.substitute(retailer_slug=retailer.slug))
         except ValueError as ex:
-            raise BlobProcessingError(f"Invalid filename, no reward_slug found for blob: {blob_name}") from ex
-
+            raise BlobProcessingError(f"Invalid filename, path does not match blob path template: {blob_name}") from ex
         try:
+            reward_slug = sub_blob_name.split(".", 1)[0]
             reward_config = self.reward_configs_by_reward_id(retailer.id, db_session)[reward_slug]
         except KeyError:
             raise BlobProcessingError(  # pylint: disable=raise-missing-from
@@ -318,6 +328,8 @@ class RewardImportAgent(BlobFileAgent):
 
         if reward_config.status != RewardTypeStatuses.ACTIVE:
             raise RewardConfigNotActiveError(reward_slug=reward_slug)
+
+        expiry_date = self._get_expiry_date(sub_blob_name, blob_name)
 
         db_reward_codes, row_nums_by_code = self._get_reward_codes_and_report_invalid(
             db_session, retailer=retailer, reward_config=reward_config, blob_name=blob_name, blob_content=blob_content
@@ -334,6 +346,7 @@ class RewardImportAgent(BlobFileAgent):
                 code=code,
                 reward_config_id=reward_config.id,
                 retailer_id=retailer.id,
+                expiry_date=expiry_date,
             )
             for code in set(row_nums_by_code)
             if code  # caters for blank lines
@@ -347,7 +360,7 @@ class RewardImportAgent(BlobFileAgent):
 
 
 class RewardUpdatesAgent(BlobFileAgent):
-    blob_path_template = string.Template("$retailer_slug/reward-updates-")
+    blob_path_template = string.Template("$retailer_slug/rewards.update.")
     scheduler_name = "carina-reward-update-scheduler"
 
     def __init__(self) -> None:
