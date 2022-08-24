@@ -6,7 +6,7 @@ import pytest
 
 from app.core.config import settings
 from app.fetch_reward import get_allocable_reward
-from app.fetch_reward.base import BaseAgent
+from app.fetch_reward.base import BaseAgent, RewardData
 
 if TYPE_CHECKING:  # pragma: no cover
     from pytest_mock import MockerFixture
@@ -24,13 +24,11 @@ def test_get_allocable_reward_ok(
 ) -> None:
     db_session, reward_config, reward = setup
     expected_validity_days = reward_config.load_required_fields_values()["validity_days"]
-    expected_result = (reward, None, None, expected_validity_days)
+    expected_result = RewardData(reward, None, None, expected_validity_days)
 
-    fetched_reward, issued_date, expiry_date, validity_days = get_allocable_reward(
-        db_session, reward_config, issuance_retry_task_no_reward
-    )
+    reward_data = get_allocable_reward(db_session, reward_config, issuance_retry_task_no_reward)
 
-    assert (fetched_reward, issued_date, expiry_date, validity_days) == expected_result
+    assert reward_data == expected_result
     db_session.refresh(issuance_retry_task_no_reward)
     agent_params = json.loads(issuance_retry_task_no_reward.get_params().get("agent_state_params_raw", "{}"))
 
