@@ -2,7 +2,8 @@ import json
 import logging
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, NamedTuple
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from retry_tasks_lib.db.models import TaskTypeKey, TaskTypeKeyValue
 from sqlalchemy.future import select
@@ -20,7 +21,8 @@ if TYPE_CHECKING:  # pragma: no cover
     from app.models import RewardConfig
 
 
-class RewardData(NamedTuple):
+@dataclass
+class RewardData:
     reward: Reward | None
     issued_date: float | None
     expiry_date: float | None

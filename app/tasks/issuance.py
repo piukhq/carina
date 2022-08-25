@@ -50,8 +50,13 @@ def _process_issuance(task_params: dict, validity_days: int | None = None) -> di
 
     # Set issued date and expiry date for pre-loaded rewards else get them from task_params
     now = datetime.now(tz=timezone.utc)
-    issued_date = now.timestamp() if validity_days else task_params["issued_date"]
-    expiry_date = (now + timedelta(days=validity_days)).timestamp() if validity_days else task_params["expiry_date"]
+    issued_date: float = task_params.get("issued_date", now.timestamp())
+    expiry_date: float | None = task_params.get("expiry_date", None)
+    if not expiry_date:
+        if not validity_days:
+            raise ValueError("Both validity_days and expiry_date are None")
+
+        expiry_date = (now + timedelta(days=validity_days)).timestamp()
 
     resp = send_request_with_metrics(
         "POST",
@@ -162,9 +167,9 @@ def issue_reward(retry_task: RetryTask, db_session: "Session") -> None:
         validity_days = reward_config.load_required_fields_values().get("validity_days")
         _process_and_issue_reward(db_session, retry_task, validity_days)
     else:
-        allocable_reward, issued, expiry, validity_days = get_allocable_reward(db_session, reward_config, retry_task)
+        reward_data = get_allocable_reward(db_session, reward_config, retry_task)
 
-        if allocable_reward is not None:
+        if reward_data.reward is not None:
             key_ids = retry_task.task_type.get_key_ids_by_name()
 
             def _add_reward_to_task_values_and_set_allocated(reward: Reward) -> None:
@@ -174,16 +179,21 @@ def issue_reward(retry_task: RetryTask, db_session: "Session") -> None:
                     (key_ids[CODE], reward.code),
                 ]
 
-                # If issued and expiry are available which they can be e.g. jigsaw, add them to task_type_key_values
-                if issued and expiry:
-                    key_ids_to_add.extend([(key_ids[ISSUED], issued), (key_ids[EXPIRY], expiry)])
+                # If expiry_date is available e.g. jigsaw or pre_loaded with fixed expiry,
+                # add it to task_type_key_values
+                if reward_data.expiry_date:
+                    key_ids_to_add.append((key_ids[EXPIRY], reward_data.expiry_date))
+
+                # If issued_date is available e.g. jigsaw, add it to task_type_key_values
+                if reward_data.issued_date:
+                    key_ids_to_add.append((key_ids[ISSUED], reward_data.issued_date))
 
                 db_session.add_all(retry_task.get_task_type_key_values(key_ids_to_add))
                 db_session.commit()
 
-            sync_run_query(_add_reward_to_task_values_and_set_allocated, db_session, reward=allocable_reward)
+            sync_run_query(_add_reward_to_task_values_and_set_allocated, db_session, reward=reward_data.reward)
             db_session.refresh(retry_task)  # Ensure retry_task represents latest DB changes
-            _process_and_issue_reward(db_session, retry_task, validity_days)
+            _process_and_issue_reward(db_session, retry_task, reward_data.validity_days)
         else:  # requeue the allocation attempt
             if retry_task.status != RetryTaskStatuses.WAITING:
                 # Only do a Sentry alert for the first allocation failure (when status is changing to WAITING)
