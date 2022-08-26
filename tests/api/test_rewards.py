@@ -1,10 +1,10 @@
+from copy import deepcopy
 from typing import TYPE_CHECKING
 
 from fastapi import status
 from fastapi.testclient import TestClient
 from pytest_mock import MockerFixture
 from retry_tasks_lib.db.models import RetryTask, TaskType, TaskTypeKeyValue
-from sqlalchemy import func
 from sqlalchemy.future import select
 
 from app.core.config import settings
@@ -43,11 +43,28 @@ def _get_retry_task_and_values(
     return retry_task, values
 
 
+def _get_retry_tasks_ids_by_task_type_id(
+    db_session: "Session", task_type_id: int, reward_config_id: int
+) -> list[RetryTask]:
+    retry_tasks = (
+        db_session.execute(
+            select(RetryTask).where(
+                RetryTask.task_type_id == task_type_id,
+                TaskTypeKeyValue.value == str(reward_config_id),
+            )
+        )
+        .unique()
+        .scalars()
+        .all()
+    )
+    return [task.retry_task_id for task in retry_tasks]
+
+
 def test_post_reward_allocation_happy_path(
     setup: SetupType, mocker: MockerFixture, reward_issuance_task_type: TaskType
 ) -> None:
     db_session, reward_config, reward = setup
-    mocker.patch("app.api.tasks.enqueue_retry_task")
+    mock_enqueue_tasks = mocker.patch("app.api.endpoints.reward.enqueue_many_tasks")
 
     assert reward.allocated is False
 
@@ -71,6 +88,33 @@ def test_post_reward_allocation_happy_path(
     assert str(reward_config.id) in task_params_values
     assert str(reward.id) not in task_params_values
     assert reward.allocated is False
+    mock_enqueue_tasks.assert_called_once_with(retry_tasks_ids=[retry_task.retry_task_id])
+
+
+def test_post_reward_allocation_with_count(
+    setup: SetupType, mocker: MockerFixture, reward_issuance_task_type: TaskType
+) -> None:
+    db_session, reward_config, _ = setup
+    mock_enqueue_tasks = mocker.patch("app.api.endpoints.reward.enqueue_many_tasks")
+    reward_allocation_count = 3
+
+    payload_with_count = deepcopy(payload)
+    payload_with_count["count"] = str(reward_allocation_count)
+
+    resp = client.post(
+        f"{settings.API_PREFIX}/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/allocation",
+        json=payload_with_count,
+        headers=auth_headers,
+    )
+
+    assert resp.status_code == status.HTTP_202_ACCEPTED
+    assert resp.json() == {}
+    retry_task_ids = _get_retry_tasks_ids_by_task_type_id(
+        db_session, reward_issuance_task_type.task_type_id, reward_config.id
+    )
+
+    assert len(retry_task_ids) == reward_allocation_count
+    mock_enqueue_tasks.assert_called_once_with(retry_tasks_ids=retry_task_ids)
 
 
 def test_post_reward_allocation_wrong_retailer(setup: SetupType, reward_issuance_task_type: TaskType) -> None:
@@ -112,7 +156,7 @@ def test_post_reward_allocation_no_more_rewards(
     reward.allocated = True
     db_session.commit()
 
-    mocker.patch("app.api.tasks.enqueue_retry_task")
+    mock_enqueue_tasks = mocker.patch("app.api.endpoints.reward.enqueue_many_tasks")
 
     resp = client.post(
         f"{settings.API_PREFIX}/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/allocation",
@@ -130,6 +174,7 @@ def test_post_reward_allocation_no_more_rewards(
     assert retry_task is not None
     assert payload["account_url"] in task_params_values
     assert str(reward_config.id) in task_params_values
+    mock_enqueue_tasks.assert_called_once_with(retry_tasks_ids=[retry_task.retry_task_id])
 
 
 def test_reward_type_cancelled_status_ok(
@@ -139,7 +184,7 @@ def test_reward_type_cancelled_status_ok(
     reward_cancellation_task_type: TaskType,
 ) -> None:
     db_session, reward_config, _ = setup
-    mocker.patch("app.api.tasks.enqueue_many_retry_tasks")
+    mock_enqueue_tasks = mocker.patch("app.api.endpoints.reward.enqueue_many_tasks")
 
     reward_config.status = RewardTypeStatuses.ACTIVE
     db_session.commit()
@@ -154,21 +199,18 @@ def test_reward_type_cancelled_status_ok(
     db_session.refresh(reward_config)
     assert reward_config.status == RewardTypeStatuses.CANCELLED
 
-    assert (
-        db_session.scalar(
-            select(func.count(RetryTask.retry_task_id)).where(
-                RetryTask.task_type_id == reward_deletion_task_type.task_type_id
-            )
-        )
-        == 1
+    reward_deletion_tasks_ids = _get_retry_tasks_ids_by_task_type_id(
+        db_session, reward_deletion_task_type.task_type_id, reward_config.id
     )
-    assert (
-        db_session.scalar(
-            select(func.count(RetryTask.retry_task_id)).where(
-                RetryTask.task_type_id == reward_cancellation_task_type.task_type_id
-            )
-        )
-        == 1
+    assert len(reward_deletion_tasks_ids) == 1
+
+    reward_cancellation_tasks_ids = _get_retry_tasks_ids_by_task_type_id(
+        db_session, reward_cancellation_task_type.task_type_id, reward_config.id
+    )
+    assert len(reward_cancellation_tasks_ids) == 1
+
+    mock_enqueue_tasks.assert_called_once_with(
+        retry_tasks_ids=[*reward_deletion_tasks_ids, *reward_cancellation_tasks_ids]
     )
 
 
@@ -179,7 +221,7 @@ def test_reward_type_ended_status_ok(
     reward_cancellation_task_type: TaskType,
 ) -> None:
     db_session, reward_config, _ = setup
-    mocker.patch("app.api.tasks.enqueue_many_retry_tasks")
+    mock_enqueue_tasks = mocker.patch("app.api.endpoints.reward.enqueue_many_tasks")
 
     reward_config.status = RewardTypeStatuses.ACTIVE
     db_session.commit()
@@ -194,17 +236,17 @@ def test_reward_type_ended_status_ok(
     db_session.refresh(reward_config)
     assert reward_config.status == RewardTypeStatuses.ENDED
 
-    assert not db_session.scalar(
-        select(func.count(RetryTask.retry_task_id)).where(
-            RetryTask.task_type_id == reward_deletion_task_type.task_type_id
-        )
+    reward_deletion_tasks_ids = _get_retry_tasks_ids_by_task_type_id(
+        db_session, reward_deletion_task_type.task_type_id, reward_config.id
     )
+    assert len(reward_deletion_tasks_ids) == 0
 
-    assert not db_session.scalar(
-        select(func.count(RetryTask.retry_task_id)).where(
-            RetryTask.task_type_id == reward_cancellation_task_type.task_type_id
-        )
+    reward_cancellation_tasks_ids = _get_retry_tasks_ids_by_task_type_id(
+        db_session, reward_cancellation_task_type.task_type_id, reward_config.id
     )
+    assert len(reward_cancellation_tasks_ids) == 0
+
+    mock_enqueue_tasks.assert_not_called()
 
 
 def test_reward_type_status_bad_status(setup: SetupType) -> None:
