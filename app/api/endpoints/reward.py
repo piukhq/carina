@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import crud
 from app.api.deps import get_session, retailer_is_valid, user_is_authorised
-from app.api.tasks import enqueue_many_tasks, enqueue_task
+from app.api.tasks import enqueue_many_tasks
 from app.db.base_class import async_run_query
 from app.enums import HttpErrors, RewardTypeStatuses
 from app.models import Retailer
@@ -29,11 +29,12 @@ async def allocation(
     db_session: AsyncSession = Depends(get_session),
 ) -> Any:
     reward_config = await crud.get_reward_config(db_session, retailer, reward_slug)
-    retry_task = await crud.create_reward_issuance_retry_task(
-        db_session, reward_config=reward_config, account_url=payload.account_url
+    reward_issuance_task_ids = await crud.create_reward_issuance_retry_tasks(
+        db_session, reward_config=reward_config, account_url=payload.account_url, count=payload.count
     )
 
-    asyncio.create_task(enqueue_task(retry_task_id=retry_task.retry_task_id))
+    asyncio.create_task(enqueue_many_tasks(retry_tasks_ids=reward_issuance_task_ids))
+
     return {}
 
 
