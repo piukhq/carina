@@ -9,6 +9,7 @@ from app.enums import RewardTypeStatuses, RewardUpdateStatuses
 
 class RewardAllocationSchema(BaseModel):  # pragma: no cover
     account_url: AnyHttpUrl
+    count: int = 1
 
 
 class RewardStatusSchema(BaseModel):

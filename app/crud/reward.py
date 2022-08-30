@@ -42,21 +42,27 @@ async def _create_retry_task(db_session: AsyncSession, task_type_name: str, task
     return await async_run_query(_query, db_session)
 
 
-async def create_reward_issuance_retry_task(
+async def create_reward_issuance_retry_tasks(
     db_session: AsyncSession,
     *,
     reward_config: RewardConfig,
     account_url: str,
-) -> RetryTask:
-
+    count: int,
+) -> list[int]:
+    task_name = settings.REWARD_ISSUANCE_TASK_NAME
     task_params = {
         "account_url": account_url,
         "reward_config_id": reward_config.id,
         "reward_slug": reward_config.reward_slug,
-        "idempotency_token": uuid4(),
     }
 
-    return await _create_retry_task(db_session, settings.REWARD_ISSUANCE_TASK_NAME, task_params)
+    reward_issuance_tasks = []
+    for _ in range(count):
+        task_params["idempotency_token"] = uuid4()
+        reward_issuance_task = await _create_retry_task(db_session, task_type_name=task_name, task_params=task_params)
+        reward_issuance_tasks.append(reward_issuance_task)
+
+    return [task.retry_task_id for task in reward_issuance_tasks]
 
 
 async def create_delete_and_cancel_rewards_tasks(
