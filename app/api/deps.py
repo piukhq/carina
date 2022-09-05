@@ -1,4 +1,5 @@
 from typing import TYPE_CHECKING, AsyncGenerator
+from uuid import UUID
 
 from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,3 +41,14 @@ def user_is_authorised(token: str = Depends(get_authorization_token)) -> None:
 
 async def retailer_is_valid(retailer_slug: str, db_session: AsyncSession = Depends(get_session)) -> "Retailer":
     return await crud.get_retailer_by_slug(db_session, retailer_slug)
+
+
+def get_idempotency_token(idempotency_token: str = Header(None)) -> UUID | None:
+    token = None
+    if idempotency_token:
+        try:
+            token = UUID(idempotency_token)
+        except (TypeError, ValueError):
+            raise HttpErrors.INVALID_IDEMPOTENCY_TOKEN_HEADER.value  # pylint: disable=raise-missing-from
+
+    return token

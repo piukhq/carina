@@ -2,7 +2,7 @@ import uuid
 
 import yaml
 
-from sqlalchemy import Boolean, Column, Date, Enum, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Column, Date, Enum, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -89,3 +89,19 @@ class RewardFileLog(Base, TimestampMixin):
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"{self.__class__.__name__}({self.id})"
+
+
+IDEMPOTENCY_TOKEN_REWARD_ALLOCATION_UNQ_CONSTRAINT_NAME = "idempotency_token_reward_allocation_unq"
+
+
+class Allocation(Base, TimestampMixin):
+    __tablename__ = "allocation"
+
+    id = Column(BigInteger, primary_key=True)
+    idempotency_token = Column(String, nullable=False)
+    count = Column(Integer, nullable=False)
+    account_url = Column(String, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("idempotency_token", name=IDEMPOTENCY_TOKEN_REWARD_ALLOCATION_UNQ_CONSTRAINT_NAME),
+    )
