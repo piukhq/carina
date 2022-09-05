@@ -4,7 +4,7 @@ verify_ssl = true
 name = "pypi"
 
 [[source]]
-url = "https://269fdc63-af3d-4eca-8101-8bddc22d6f14:b694b5b1-f97e-49e4-959e-f3c202e3ab91@pypi.uksouth.bink.sh/simple"
+url = "https://269fdc63-af3d-4eca-8101-8bddc22d6f14:b694b5b1-f97e-49e4-959e-f3c202e3ab91@pypi.tools.uksouth.bink.sh/simple"
 verify_ssl = true
 name = "pypi-cloud"
 
@@ -18,7 +18,7 @@ asyncpg = "*"
 psycopg2-binary = "*"
 prettyprinter = "*"
 ujson = "*"
-sentry-sdk = "*"
+sentry-sdk = ">=1.9.6" # adds fastapi integration
 prometheus-client = "==0.12.0" # make sure app.core.cli monkeypatch is still needed and functioning
 blinker = "*"
 gunicorn = "*"
@@ -29,9 +29,8 @@ hiredis = "*"
 tenacity = "*"
 azure-identity = "*"
 azure-keyvault = "*"
-azure-storage-blob = "!=12.9.0"  # version 12.9.0 has bad type annotations
+azure-storage-blob = "==12.8.1"  # version 12.9.0 & 12.10.0 have bad type annotations
 apscheduler = "*"
-testfixtures = "*"
 retry-tasks-lib = {version=">=1.15.0", index="pypi-cloud"}
 fastapi-prometheus-metrics = {version=">=0.2.2", index="pypi-cloud"}
 pyyaml = "*"
@@ -55,6 +54,7 @@ types-requests = "*"
 types-pyyaml = "*"
 pylint = "*"
 pylint-pytest = "*"
+testfixtures = "*"
 
 [requires]
 python_version = "3.10"

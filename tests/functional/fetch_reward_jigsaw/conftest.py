@@ -17,7 +17,7 @@ def clean_redis() -> Generator:
 
 @pytest.fixture(scope="module", autouse=True)
 def populate_fernet_key() -> Generator:
-    settings.JIGSAW_AGENT_ENCRYPTION_KEY = Fernet.generate_key().decode()
+    setattr(settings, "JIGSAW_AGENT_ENCRYPTION_KEY", Fernet.generate_key().decode())
     yield
 
 
