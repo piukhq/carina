@@ -1,3 +1,5 @@
+import uuid
+
 from copy import deepcopy
 from typing import TYPE_CHECKING
 from uuid import uuid4
@@ -83,10 +85,12 @@ def test_post_reward_allocation_happy_path(
     retry_task, task_params_values = _get_retry_task_and_values(
         db_session, reward_issuance_task_type.task_type_id, reward_config.id
     )
+    task_params = retry_task.get_params()
 
     db_session.refresh(reward)
 
     assert retry_task is not None
+    assert "pending_reward_id" not in task_params
     assert payload["account_url"] in task_params_values
     assert str(reward_config.id) in task_params_values
     assert str(reward.id) not in task_params_values
@@ -117,6 +121,36 @@ def test_post_reward_allocation_with_count(
     )
 
     assert len(retry_task_ids) == reward_allocation_count
+    mock_enqueue_tasks.assert_called_once_with(retry_tasks_ids=retry_task_ids)
+
+
+def test_post_reward_allocation_with_pending_reward_id(
+    setup: SetupType, mocker: MockerFixture, reward_issuance_task_type: TaskType
+) -> None:
+    db_session, reward_config, _ = setup
+    mock_enqueue_tasks = mocker.patch("app.api.endpoints.reward.enqueue_many_tasks")
+
+    payload_with_pending_reward_id = deepcopy(payload)
+    payload_with_pending_reward_id["pending_reward_id"] = str(uuid.uuid4())
+
+    resp = client.post(
+        f"{settings.API_PREFIX}/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/allocation",
+        json=payload_with_pending_reward_id,
+        headers=auth_headers,
+    )
+
+    assert resp.status_code == status.HTTP_202_ACCEPTED
+    assert resp.json() == {}
+
+    retry_task, task_params_values = _get_retry_task_and_values(
+        db_session, reward_issuance_task_type.task_type_id, reward_config.id
+    )
+
+    assert retry_task is not None
+    assert payload_with_pending_reward_id["pending_reward_id"] in task_params_values
+    retry_task_ids = _get_retry_tasks_ids_by_task_type_id(
+        db_session, reward_issuance_task_type.task_type_id, reward_config.id
+    )
     mock_enqueue_tasks.assert_called_once_with(retry_tasks_ids=retry_task_ids)
 
 
