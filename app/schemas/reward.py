@@ -1,4 +1,5 @@
 import datetime as dt
+import uuid
 
 from typing import Literal
 
@@ -10,6 +11,7 @@ from app.enums import RewardTypeStatuses, RewardUpdateStatuses
 class RewardAllocationSchema(BaseModel):  # pragma: no cover
     account_url: AnyHttpUrl
     count: int = 1
+    pending_reward_id: uuid.UUID | None
 
 
 class RewardStatusSchema(BaseModel):

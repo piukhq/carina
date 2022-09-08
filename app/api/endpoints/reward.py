@@ -39,6 +39,7 @@ async def allocation(  # pylint: disable=too-many-arguments
         account_url=payload.account_url,
         count=payload.count,
         idempotency_token=idempotency_token,
+        pending_reward_id=payload.pending_reward_id,
     )
 
     if reward_issuance_task_ids:

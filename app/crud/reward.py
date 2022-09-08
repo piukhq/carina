@@ -1,4 +1,5 @@
 import logging
+import uuid
 
 from uuid import UUID, uuid4
 
@@ -49,6 +50,7 @@ async def create_reward_issuance_retry_tasks(
     account_url: str,
     count: int,
     idempotency_token: UUID | None = None,
+    pending_reward_id: uuid.UUID | None,
 ) -> tuple[int, list[int]]:
     async def _query() -> tuple[int, list[int]]:
         task_name = settings.REWARD_ISSUANCE_TASK_NAME
@@ -56,8 +58,10 @@ async def create_reward_issuance_retry_tasks(
         task_params = {
             "account_url": account_url,
             "reward_config_id": reward_config.id,
-            "reward_slug": reward_slug,
+            "reward_slug": reward_config.reward_slug,
         }
+        if pending_reward_id is not None:
+            task_params["pending_reward_id"] = pending_reward_id
 
         reward_issuance_tasks = []
         status_code = http_status.HTTP_202_ACCEPTED
