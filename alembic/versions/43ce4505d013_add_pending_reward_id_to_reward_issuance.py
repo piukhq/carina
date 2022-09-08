@@ -1,7 +1,7 @@
 """add pending reward id to reward issuance
 
 Revision ID: 43ce4505d013
-Revises: c62b5f22a84d
+Revises: cbe08e76d94b
 Create Date: 2022-09-06 17:28:24.640661
 
 """
