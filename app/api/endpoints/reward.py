@@ -1,12 +1,13 @@
 import asyncio
 
 from typing import Any
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import crud
-from app.api.deps import get_session, retailer_is_valid, user_is_authorised
+from app.api.deps import get_idempotency_token, get_session, retailer_is_valid, user_is_authorised
 from app.api.tasks import enqueue_many_tasks
 from app.db.base_class import async_run_query
 from app.enums import HttpErrors, RewardTypeStatuses
@@ -22,18 +23,27 @@ router = APIRouter()
     status_code=status.HTTP_202_ACCEPTED,
     dependencies=[Depends(user_is_authorised)],
 )
-async def allocation(
+async def allocation(  # pylint: disable=too-many-arguments
     payload: RewardAllocationSchema,
+    response: Response,
     reward_slug: str,
     retailer: Retailer = Depends(retailer_is_valid),
     db_session: AsyncSession = Depends(get_session),
+    idempotency_token: UUID | None = Depends(get_idempotency_token),
 ) -> Any:
     reward_config = await crud.get_reward_config(db_session, retailer, reward_slug)
-    reward_issuance_task_ids = await crud.create_reward_issuance_retry_tasks(
-        db_session, reward_config=reward_config, account_url=payload.account_url, count=payload.count
+    response.status_code, reward_issuance_task_ids = await crud.create_reward_issuance_retry_tasks(
+        db_session,
+        reward_config=reward_config,
+        retailer_slug=retailer.slug,
+        account_url=payload.account_url,
+        count=payload.count,
+        idempotency_token=idempotency_token,
+        pending_reward_id=payload.pending_reward_id,
     )
 
-    asyncio.create_task(enqueue_many_tasks(retry_tasks_ids=reward_issuance_task_ids))
+    if reward_issuance_task_ids:
+        asyncio.create_task(enqueue_many_tasks(retry_tasks_ids=reward_issuance_task_ids))
 
     return {}
 

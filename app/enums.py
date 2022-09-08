@@ -37,6 +37,16 @@ class HttpErrors(Enum):
         },
         status_code=status.HTTP_409_CONFLICT,
     )
+    INVALID_IDEMPOTENCY_TOKEN_HEADER = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail={
+            "display_message": "Submitted headers invalid.",
+            "code": "HEADER_VALIDATION_ERROR",
+            "fields": [
+                "idempotency-token",
+            ],
+        },
+    )
 
 
 class RewardTypeStatuses(str, Enum):

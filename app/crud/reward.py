@@ -1,14 +1,23 @@
-from uuid import uuid4
+import logging
+import uuid
 
+from uuid import UUID, uuid4
+
+import sentry_sdk
+
+from fastapi import status as http_status
 from retry_tasks_lib.db.models import RetryTask
 from retry_tasks_lib.utils.asynchronous import async_create_task
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.core.config import settings
 from app.db.base_class import async_run_query
 from app.enums import HttpErrors
-from app.models import Retailer, RewardConfig
+from app.models import IDEMPOTENCY_TOKEN_REWARD_ALLOCATION_UNQ_CONSTRAINT_NAME, Allocation, Retailer, RewardConfig
+
+logger = logging.getLogger("reward-crud")
 
 
 async def get_reward_config(
@@ -33,36 +42,68 @@ async def get_reward_config(
     return reward_config
 
 
-async def _create_retry_task(db_session: AsyncSession, task_type_name: str, task_params: dict) -> RetryTask:
-    async def _query() -> RetryTask:
-        retry_task = await async_create_task(db_session=db_session, task_type_name=task_type_name, params=task_params)
-        await db_session.commit()
-        return retry_task
-
-    return await async_run_query(_query, db_session)
-
-
 async def create_reward_issuance_retry_tasks(
     db_session: AsyncSession,
     *,
     reward_config: RewardConfig,
+    retailer_slug: str,
     account_url: str,
     count: int,
-) -> list[int]:
-    task_name = settings.REWARD_ISSUANCE_TASK_NAME
-    task_params = {
-        "account_url": account_url,
-        "reward_config_id": reward_config.id,
-        "reward_slug": reward_config.reward_slug,
-    }
+    idempotency_token: UUID | None = None,
+    pending_reward_id: uuid.UUID | None,
+) -> tuple[int, list[int]]:
+    async def _query() -> tuple[int, list[int]]:
+        task_name = settings.REWARD_ISSUANCE_TASK_NAME
+        reward_slug = reward_config.reward_slug
+        task_params = {
+            "account_url": account_url,
+            "reward_config_id": reward_config.id,
+            "reward_slug": reward_config.reward_slug,
+        }
+        if pending_reward_id is not None:
+            task_params["pending_reward_id"] = pending_reward_id
 
-    reward_issuance_tasks = []
-    for _ in range(count):
-        task_params["idempotency_token"] = uuid4()
-        reward_issuance_task = await _create_retry_task(db_session, task_type_name=task_name, task_params=task_params)
-        reward_issuance_tasks.append(reward_issuance_task)
+        reward_issuance_tasks = []
+        status_code = http_status.HTTP_202_ACCEPTED
 
-    return [task.retry_task_id for task in reward_issuance_tasks]
+        try:
+            if idempotency_token:
+                allocation_request = Allocation(
+                    idempotency_token=str(idempotency_token), count=count, account_url=account_url
+                )
+                db_session.add(allocation_request)
+            for _ in range(count):
+                task_params["idempotency_token"] = uuid4()
+                reward_issuance_task = await async_create_task(
+                    db_session=db_session, task_type_name=task_name, params=task_params
+                )
+                reward_issuance_tasks.append(reward_issuance_task)
+            await db_session.commit()
+        except IntegrityError as ex:
+            if IDEMPOTENCY_TOKEN_REWARD_ALLOCATION_UNQ_CONSTRAINT_NAME not in ex.args[0]:
+                raise
+
+            status_code = http_status.HTTP_202_ACCEPTED
+            await db_session.rollback()
+            existing_allocation_request_id = (
+                await db_session.execute(
+                    select(Allocation.id).where(Allocation.idempotency_token == str(idempotency_token))
+                )
+            ).scalar_one()
+            message = (
+                f"IntegrityError on reward allocation when creating reward issuance tasks "
+                f"account url: {account_url} (retailer slug: {retailer_slug}).\n"
+                f"New allocation request for (reward slug: {reward_slug}) is using a conflicting token "
+                f"{idempotency_token} with existing allocation request of id: {existing_allocation_request_id}\n{ex}"
+            )
+            logger.error(message)
+            with sentry_sdk.push_scope() as scope:
+                scope.fingerprint = ["{{ default }}", "{{ message }}"]
+                sentry_sdk.capture_message(message)
+
+        return status_code, [task.retry_task_id for task in reward_issuance_tasks]
+
+    return await async_run_query(_query, db_session)
 
 
 async def create_delete_and_cancel_rewards_tasks(

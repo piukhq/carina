@@ -260,6 +260,7 @@ def reward_issuance_task_type(db_session: "Session") -> TaskType:
                 ("code", "STRING"),
                 ("idempotency_token", "STRING"),
                 ("agent_state_params_raw", "STRING"),
+                ("pending_reward_id", "STRING"),
             )
         ]
     )
@@ -347,7 +348,7 @@ def reward_cancellation_task_type(db_session: "Session") -> TaskType:
 
 @pytest.fixture
 def run_task_with_metrics() -> Generator:
-    val = settings.ACTIVATE_TASKS_METRICS
-    settings.ACTIVATE_TASKS_METRICS = True
+    val = getattr(settings, "ACTIVATE_TASKS_METRICS")
+    setattr(settings, "ACTIVATE_TASKS_METRICS", True)
     yield
-    settings.ACTIVATE_TASKS_METRICS = val
+    setattr(settings, "ACTIVATE_TASKS_METRICS", val)
