@@ -218,6 +218,26 @@ class BlobFileAgent:
 
 
 class RewardImportAgent(BlobFileAgent):
+    """
+    File name format (expiry date optional):
+
+        `rewards.import.<reward slug>[.expires.yyyy-mm-dd].<any suffix>.csv`
+
+    Examples:
+
+        - ``rewards.import.viator.batch1.csv`` (rewards do not expire)
+        - ``rewards.import.viator.expires.2023-12-31.batch1.csv`` (rewards expire 2023-12-31)
+
+    File content example (one code per line):
+
+    ```
+    code1
+    code2
+    code3
+    ...
+    ```
+    """
+
     blob_path_template = string.Template("$retailer_slug/rewards.import.")
     scheduler_name = "carina-reward-import-scheduler"
 
@@ -358,6 +378,24 @@ class RewardImportAgent(BlobFileAgent):
 
 
 class RewardUpdatesAgent(BlobFileAgent):
+    """
+    File name format (expiry date optional):
+
+        `rewards.update.<any suffix>.csv`
+
+    Example:
+
+        ``rewards.update.batch1.csv``
+
+    File content example (one code per line):
+
+    ```
+    code1,2022-09-08,cancelled
+    code2,2022-09-08,cancelled
+    code3,2022-09-08,redeemed
+    ```
+    """
+
     blob_path_template = string.Template("$retailer_slug/rewards.update.")
     scheduler_name = "carina-reward-update-scheduler"
 
