@@ -12,6 +12,8 @@ from retry_tasks_lib.utils.synchronous import enqueue_retry_task_delay, retryabl
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
 
+from app.activity_utils.enums import ActivityType
+from app.activity_utils.tasks import sync_send_activity
 from app.core.config import redis_raw, settings
 from app.db.base_class import sync_run_query
 from app.db.session import SyncSessionMaker
@@ -36,6 +38,7 @@ def _process_issuance(task_params: dict, validity_days: int | None = None) -> di
     logger.info(f"Processing allocation for reward: {task_params['reward_uuid']}")
     response_audit: dict = {"timestamp": datetime.now(tz=timezone.utc).isoformat()}
     parsed_url = urlparse(task_params["account_url"])
+
     url_template = "{scheme}://{netloc}{path}"
     url_kwargs = {
         "scheme": parsed_url.scheme,
@@ -57,6 +60,18 @@ def _process_issuance(task_params: dict, validity_days: int | None = None) -> di
             raise ValueError("Both validity_days and expiry_date are None")
 
         expiry_date = (now + timedelta(days=validity_days)).timestamp()
+
+    sync_send_activity(
+        ActivityType.get_reward_status_activity_data(
+            account_url_path=parsed_url.path,
+            retailer_slug=task_params["retailer_slug"],
+            reward_slug=task_params["reward_slug"],
+            activity_timestamp=issued_date,
+            reward_uuid=task_params["reward_uuid"],
+            pending_reward_id=task_params.get("pending_reward_id", None),
+        ),
+        routing_key=ActivityType.REWARD_STATUS.value,
+    )
 
     resp = send_request_with_metrics(
         "POST",

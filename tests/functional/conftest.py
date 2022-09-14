@@ -25,6 +25,7 @@ def reward_issuance_task_params(reward: Reward) -> dict:
         "reward_config_id": str(reward.reward_config_id),
         "reward_slug": reward.reward_config.reward_slug,
         "idempotency_token": str(uuid4()),
+        "retailer_slug": "test-retailer",
     }
 
 
@@ -35,6 +36,7 @@ def reward_issuance_task_params_no_reward(reward_config: RewardConfig) -> dict:
         "reward_config_id": str(reward_config.id),
         "reward_slug": reward_config.reward_slug,
         "idempotency_token": str(uuid4()),
+        "retailer_slug": "test-retailer",
     }
 
 

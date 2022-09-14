@@ -261,6 +261,7 @@ def reward_issuance_task_type(db_session: "Session") -> TaskType:
                 ("idempotency_token", "STRING"),
                 ("agent_state_params_raw", "STRING"),
                 ("pending_reward_id", "STRING"),
+                ("retailer_slug", "STRING"),
             )
         ]
     )

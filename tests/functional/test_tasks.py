@@ -30,13 +30,15 @@ fake_now = datetime.now(tz=timezone.utc)
 
 
 @httpretty.activate
-@mock.patch("app.tasks.issuance.datetime")
 def test__process_issuance_ok(
-    mock_datetime: mock.Mock,
+    mocker: MockerFixture,
     reward_config: RewardConfig,
     reward_issuance_task_params: dict,
     issuance_expected_payload: dict,
 ) -> None:
+    mock_send_activity = mocker.patch("app.tasks.issuance.sync_send_activity")
+    mock_datetime = mocker.patch("app.tasks.issuance.datetime")
+
     sample_url = "http://sample.url"
     issuance_expected_payload["associated_url"] = sample_url
     validity_days = reward_config.load_required_fields_values()["validity_days"]
@@ -63,16 +65,19 @@ def test__process_issuance_ok(
             "body": "OK",
         },
     }
+    mock_send_activity.assert_called_once()
 
 
 @httpretty.activate
-@mock.patch("app.tasks.issuance.datetime")
 def test__process_issuance_fixed_expiry_date_ok(
-    mock_datetime: mock.Mock,
+    mocker: MockerFixture,
     reward_config: RewardConfig,
     reward_issuance_task_params: dict,
     issuance_expected_payload: dict,
 ) -> None:
+    mock_send_activity = mocker.patch("app.tasks.issuance.sync_send_activity")
+    mock_datetime = mocker.patch("app.tasks.issuance.datetime")
+
     sample_url = "http://sample.url"
     issuance_expected_payload["associated_url"] = sample_url
     validity_days = reward_config.load_required_fields_values()["validity_days"]
@@ -100,27 +105,30 @@ def test__process_issuance_fixed_expiry_date_ok(
             "body": "OK",
         },
     }
+    mock_send_activity.assert_called_once()
 
 
 @httpretty.activate
-@mock.patch("app.tasks.issuance.datetime")
 def test__process_issuance_http_errors(
-    mock_datetime: mock.Mock,
+    mocker: MockerFixture,
     reward_config: RewardConfig,
     reward_issuance_task_params: dict,
     issuance_expected_payload: dict,
 ) -> None:
+    mock_send_activity = mocker.patch("app.tasks.issuance.sync_send_activity")
+    mock_datetime = mocker.patch("app.tasks.issuance.datetime")
+    mock_datetime.now.return_value = fake_now
+
+    validity_days = reward_config.load_required_fields_values()["validity_days"]
+    mock_issued_date = fake_now.timestamp()
+    mock_expiry_date = (fake_now + timedelta(days=validity_days)).timestamp()
+    issuance_expected_payload["issued_date"] = mock_issued_date
+    issuance_expected_payload["expiry_date"] = mock_expiry_date
 
     for status, body in [
         (401, "Unauthorized"),
         (500, "Internal Server Error"),
     ]:
-        validity_days = reward_config.load_required_fields_values()["validity_days"]
-        mock_datetime.now.return_value = fake_now
-        mock_issued_date = fake_now.timestamp()
-        mock_expiry_date = (fake_now + timedelta(days=validity_days)).timestamp()
-        issuance_expected_payload["issued_date"] = mock_issued_date
-        issuance_expected_payload["expiry_date"] = mock_expiry_date
 
         httpretty.register_uri("POST", reward_issuance_task_params["account_url"], body=body, status=status)
 
@@ -134,23 +142,26 @@ def test__process_issuance_http_errors(
         assert last_request.method == "POST"
         assert json.loads(last_request.body) == issuance_expected_payload
 
+    assert mock_send_activity.call_count == 2
 
-@mock.patch("app.tasks.issuance.send_request_with_metrics")
-def test__process_issuance_connection_error(
-    mock_send_request_with_metrics: mock.MagicMock, reward_issuance_task_params: dict
-) -> None:
-    mock_send_request_with_metrics.side_effect = requests.Timeout("Request timed out")
+
+def test__process_issuance_connection_error(mocker: MockerFixture, reward_issuance_task_params: dict) -> None:
+    mock_send_activity = mocker.patch("app.tasks.issuance.sync_send_activity")
+    mocker.patch("app.tasks.issuance.send_request_with_metrics", side_effect=requests.Timeout("Request timed out"))
 
     with pytest.raises(requests.RequestException) as excinfo:
         _process_issuance(reward_issuance_task_params, 1)
 
     assert isinstance(excinfo.value, requests.Timeout)
     assert excinfo.value.response is None
+    mock_send_activity.assert_called_once()
 
 
 @httpretty.activate
-def test_reward_issuance(db_session: "Session", reward_config: RewardConfig, issuance_retry_task: RetryTask) -> None:
-
+def test_reward_issuance(
+    mocker: MockerFixture, db_session: "Session", reward_config: RewardConfig, issuance_retry_task: RetryTask
+) -> None:
+    mock_send_activity = mocker.patch("app.tasks.issuance.sync_send_activity")
     httpretty.register_uri("POST", issuance_retry_task.get_params()["account_url"], body="OK", status=200)
 
     issue_reward(issuance_retry_task.retry_task_id)
@@ -160,6 +171,7 @@ def test_reward_issuance(db_session: "Session", reward_config: RewardConfig, iss
     assert issuance_retry_task.attempts == 1
     assert issuance_retry_task.next_attempt_time is None
     assert issuance_retry_task.status == RetryTaskStatuses.SUCCESS
+    mock_send_activity.assert_called_once()
 
 
 def test_reward_issuance_wrong_status(db_session: "Session", issuance_retry_task: RetryTask) -> None:
@@ -237,6 +249,7 @@ def test_reward_issuance_no_reward_but_one_available(
     db_session: "Session", issuance_retry_task_no_reward: RetryTask, mocker: MockerFixture, reward: Reward
 ) -> None:
     """test that an allocable reward (the pytest 'reward' fixture) is allocated, resulting in success"""
+    mock_send_activity = mocker.patch("app.tasks.issuance.sync_send_activity")
     mock_queue = mocker.patch("app.tasks.issuance.enqueue_retry_task_delay")
 
     httpretty.register_uri("POST", issuance_retry_task_no_reward.get_params()["account_url"], body="OK", status=200)
@@ -249,6 +262,7 @@ def test_reward_issuance_no_reward_but_one_available(
     assert issuance_retry_task_no_reward.attempts == 1
     assert issuance_retry_task_no_reward.next_attempt_time is None
     assert issuance_retry_task_no_reward.status == RetryTaskStatuses.SUCCESS
+    mock_send_activity.assert_called_once()
 
 
 @httpretty.activate
@@ -260,6 +274,7 @@ def test_reward_issuance_no_reward_and_allocation_is_requeued(
     create_reward: Callable,
 ) -> None:
     """test that no allocable reward results in the allocation being requeued"""
+    mock_send_activity = mocker.patch("app.tasks.issuance.sync_send_activity")
     mock_queue = mocker.patch("app.tasks.issuance.enqueue_retry_task_delay")
     mock_queue.return_value = fake_now
     from app.tasks.issuance import sentry_sdk as mock_sentry_sdk
@@ -292,6 +307,7 @@ def test_reward_issuance_no_reward_and_allocation_is_requeued(
     assert issuance_retry_task_no_reward.status == RetryTaskStatuses.SUCCESS
     assert issuance_retry_task_no_reward.get_params()["reward_uuid"] == str(reward.id)
     assert reward.allocated
+    mock_send_activity.assert_called_once()
 
 
 @httpretty.activate
@@ -499,10 +515,14 @@ def test_cancel_reward(mock_datetime: mock.Mock, db_session: Session, cancel_rew
 
 @httpretty.activate
 def test_reward_issuance_409_from_polaris(
-    db_session: "Session", issuance_retry_task: RetryTask, create_reward: Callable, reward_issuance_task_params: dict
+    db_session: "Session",
+    issuance_retry_task: RetryTask,
+    create_reward: Callable,
+    reward_issuance_task_params: dict,
+    mocker: MockerFixture,
 ) -> None:
     """Test reward is deleted for the task (from the DB) and task retried on a 409 from Polaris"""
-
+    mock_send_activity = mocker.patch("app.tasks.issuance.sync_send_activity")
     control_task = sync_create_task(
         db_session, task_type_name=issuance_retry_task.task_type.name, params=reward_issuance_task_params
     )
@@ -550,6 +570,7 @@ def test_reward_issuance_409_from_polaris(
     assert issuance_retry_task.next_attempt_time is None
     assert issuance_retry_task.status == RetryTaskStatuses.SUCCESS
     assert reward.allocated
+    assert mock_send_activity.call_count == 2
 
 
 @httpretty.activate
@@ -558,6 +579,7 @@ def test_reward_issuance_no_reward_but_one_available_and_409(
 ) -> None:
     """Test reward id is deleted for task (from the DB) and task is retried on a 409 from Polaris,
     if we don't initially have a reward"""
+    mock_send_activity = mocker.patch("app.tasks.issuance.sync_send_activity")
     mock_queue = mocker.patch("app.tasks.issuance.enqueue_retry_task_delay")
     assert "reward_uuid" not in issuance_retry_task_no_reward.get_params()
 
@@ -581,3 +603,4 @@ def test_reward_issuance_no_reward_but_one_available_and_409(
     assert issuance_retry_task_no_reward.status == RetryTaskStatuses.IN_PROGRESS
     # The reward should also have been set to allocated: True
     assert reward.allocated
+    mock_send_activity.assert_called_once()

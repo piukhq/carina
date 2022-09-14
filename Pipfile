@@ -36,6 +36,7 @@ fastapi-prometheus-metrics = {version=">=0.2.2", index="pypi-cloud"}
 pyyaml = "*"
 typer = "*"
 cryptography = "*"
+cosmos-message-lib = {version=">=1.2.0", index="pypi-cloud"}
 
 [dev-packages]
 isort = "*"

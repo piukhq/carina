@@ -59,6 +59,7 @@ async def create_reward_issuance_retry_tasks(
             "account_url": account_url,
             "reward_config_id": reward_config.id,
             "reward_slug": reward_config.reward_slug,
+            "retailer_slug": retailer_slug,
         }
         if pending_reward_id is not None:
             task_params["pending_reward_id"] = pending_reward_id
