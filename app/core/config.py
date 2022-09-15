@@ -260,6 +260,9 @@ class Settings(BaseSettings):
     REPORT_JOB_QUEUE_LENGTH_SCHEDULE: str = "*/10 * * * *"
     ACTIVATE_TASKS_METRICS: bool = True
 
+    RABBITMQ_DSN: str = "amqp://guest:guest@localhost:5672//"
+    MESSAGE_EXCHANGE_NAME: str = "hubble-activities"
+
     class Config:
         case_sensitive = True
         # env var settings priority ie priority 1 will override priority 2:
