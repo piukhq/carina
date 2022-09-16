@@ -13,8 +13,8 @@ from retry_tasks_lib.db.models import TaskTypeKey, TaskTypeKeyValue
 from sqlalchemy import insert
 from sqlalchemy.future import select
 
-from app.core.config import redis_raw
-from app.fetch_reward.jigsaw import Jigsaw
+from carina.core.config import redis_raw
+from carina.fetch_reward.jigsaw import Jigsaw
 
 from . import AnswerBotBase
 
@@ -24,7 +24,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from retry_tasks_lib.db.models import RetryTask
     from sqlalchemy.orm import Session
 
-    from app.models import RetailerFetchType, RewardConfig
+    from carina.models import RetailerFetchType, RewardConfig
 
 
 @httpretty.activate
@@ -90,8 +90,8 @@ def test_jigsaw_agent_ok(
         status=200,
     )
     spy_redis_set = mocker.spy(redis_raw, "set")
-    mock_uuid = mocker.patch("app.fetch_reward.jigsaw.uuid4", return_value=card_ref)
-    mock_datetime = mocker.patch("app.fetch_reward.jigsaw.datetime")
+    mock_uuid = mocker.patch("carina.fetch_reward.jigsaw.uuid4", return_value=card_ref)
+    mock_datetime = mocker.patch("carina.fetch_reward.jigsaw.datetime")
     mock_datetime.now.return_value = now
     mock_datetime.fromisoformat = datetime.fromisoformat
 
@@ -159,8 +159,8 @@ def test_jigsaw_agent_ok_token_already_set(
     redis_raw.set(Jigsaw.REDIS_TOKEN_KEY, fernet.encrypt(test_token.encode()), timedelta(days=1))
     spy_redis_set = mocker.spy(redis_raw, "set")
 
-    mock_uuid = mocker.patch("app.fetch_reward.jigsaw.uuid4", return_value=card_ref)
-    mock_datetime = mocker.patch("app.fetch_reward.jigsaw.datetime")
+    mock_uuid = mocker.patch("carina.fetch_reward.jigsaw.uuid4", return_value=card_ref)
+    mock_datetime = mocker.patch("carina.fetch_reward.jigsaw.datetime")
     mock_datetime.now.return_value = now
     mock_datetime.fromisoformat = datetime.fromisoformat
 
@@ -224,8 +224,8 @@ def test_jigsaw_agent_ok_card_ref_in_task_params(
     )
     redis_raw.set(Jigsaw.REDIS_TOKEN_KEY, fernet.encrypt(test_token.encode()), timedelta(days=1))
     spy_redis_set = mocker.spy(redis_raw, "set")
-    mock_uuid = mocker.patch("app.fetch_reward.jigsaw.uuid4", return_value=card_ref)
-    mock_datetime = mocker.patch("app.fetch_reward.jigsaw.datetime")
+    mock_uuid = mocker.patch("carina.fetch_reward.jigsaw.uuid4", return_value=card_ref)
+    mock_datetime = mocker.patch("carina.fetch_reward.jigsaw.datetime")
     mock_datetime.now.return_value = now
     mock_datetime.fromisoformat = datetime.fromisoformat
 
@@ -281,10 +281,10 @@ def test_jigsaw_agent_register_reversal_paths_no_previous_error_ok(
     redis_raw.set(Jigsaw.REDIS_TOKEN_KEY, fernet.encrypt(test_token.encode()), timedelta(days=1))
     spy_redis_set = mocker.spy(redis_raw, "set")
 
-    mock_uuid = mocker.patch("app.fetch_reward.jigsaw.uuid4")
+    mock_uuid = mocker.patch("carina.fetch_reward.jigsaw.uuid4")
     successful_card_ref = uuid4()
     mock_uuid.side_effect = [card_ref, successful_card_ref]
-    mock_datetime = mocker.patch("app.fetch_reward.jigsaw.datetime")
+    mock_datetime = mocker.patch("carina.fetch_reward.jigsaw.datetime")
     mock_datetime.now.return_value = now
     mock_datetime.fromisoformat = datetime.fromisoformat
 
@@ -382,10 +382,10 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_ok(
     redis_raw.set(Jigsaw.REDIS_TOKEN_KEY, fernet.encrypt(test_token.encode()), timedelta(days=1))
     spy_redis_set = mocker.spy(redis_raw, "set")
 
-    mock_uuid = mocker.patch("app.fetch_reward.jigsaw.uuid4")
+    mock_uuid = mocker.patch("carina.fetch_reward.jigsaw.uuid4")
     successful_card_ref = uuid4()
     mock_uuid.side_effect = [card_ref, successful_card_ref]
-    mock_datetime = mocker.patch("app.fetch_reward.jigsaw.datetime")
+    mock_datetime = mocker.patch("carina.fetch_reward.jigsaw.datetime")
     mock_datetime.now.return_value = now
     mock_datetime.fromisoformat = datetime.fromisoformat
 

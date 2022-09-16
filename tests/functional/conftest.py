@@ -7,10 +7,10 @@ import pytest
 from retry_tasks_lib.db.models import RetryTask, TaskType, TaskTypeKeyValue
 from retry_tasks_lib.utils.synchronous import sync_create_task
 
-from app.core.config import settings
-from app.enums import RewardTypeStatuses, RewardUpdateStatuses
-from app.models import RetailerFetchType, Reward, RewardUpdate
-from app.models.reward import RewardConfig
+from carina.core.config import settings
+from carina.enums import RewardTypeStatuses, RewardUpdateStatuses
+from carina.models import RetailerFetchType, Reward, RewardUpdate
+from carina.models.reward import RewardConfig
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session

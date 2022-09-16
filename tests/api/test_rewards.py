@@ -11,10 +11,10 @@ from retry_tasks_lib.db.models import RetryTask, TaskType, TaskTypeKeyValue
 from sqlalchemy import func
 from sqlalchemy.future import select
 
-from app.core.config import settings
-from app.enums import RewardTypeStatuses
-from app.models.reward import Allocation
 from asgi import app
+from carina.core.config import settings
+from carina.enums import RewardTypeStatuses
+from carina.models.reward import Allocation
 from tests.conftest import SetupType
 from tests.fixtures import HttpErrors
 
@@ -69,7 +69,7 @@ def test_post_reward_allocation_happy_path(
     setup: SetupType, mocker: MockerFixture, reward_issuance_task_type: TaskType
 ) -> None:
     db_session, reward_config, reward = setup
-    mock_enqueue_tasks = mocker.patch("app.api.endpoints.reward.enqueue_many_tasks")
+    mock_enqueue_tasks = mocker.patch("carina.api.endpoints.reward.enqueue_many_tasks")
 
     assert reward.allocated is False
 
@@ -102,7 +102,7 @@ def test_post_reward_allocation_with_count(
     setup: SetupType, mocker: MockerFixture, reward_issuance_task_type: TaskType
 ) -> None:
     db_session, reward_config, _ = setup
-    mock_enqueue_tasks = mocker.patch("app.api.endpoints.reward.enqueue_many_tasks")
+    mock_enqueue_tasks = mocker.patch("carina.api.endpoints.reward.enqueue_many_tasks")
     reward_allocation_count = 3
 
     payload_with_count = deepcopy(payload)
@@ -128,7 +128,7 @@ def test_post_reward_allocation_with_pending_reward_id(
     setup: SetupType, mocker: MockerFixture, reward_issuance_task_type: TaskType
 ) -> None:
     db_session, reward_config, _ = setup
-    mock_enqueue_tasks = mocker.patch("app.api.endpoints.reward.enqueue_many_tasks")
+    mock_enqueue_tasks = mocker.patch("carina.api.endpoints.reward.enqueue_many_tasks")
 
     payload_with_pending_reward_id = deepcopy(payload)
     payload_with_pending_reward_id["pending_reward_id"] = str(uuid.uuid4())
@@ -193,7 +193,7 @@ def test_post_reward_allocation_no_more_rewards(
     reward.allocated = True
     db_session.commit()
 
-    mock_enqueue_tasks = mocker.patch("app.api.endpoints.reward.enqueue_many_tasks")
+    mock_enqueue_tasks = mocker.patch("carina.api.endpoints.reward.enqueue_many_tasks")
 
     resp = client.post(
         f"{settings.API_PREFIX}/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/allocation",
@@ -218,8 +218,8 @@ def test_post_reward_allocation_existing_idempotency_token(
     setup: SetupType, mocker: MockerFixture, reward_issuance_task_type: TaskType
 ) -> None:
     db_session, reward_config, _ = setup
-    mock_enqueue_tasks = mocker.patch("app.api.endpoints.reward.enqueue_many_tasks")
-    mock_sentry = mocker.patch("app.crud.reward.sentry_sdk")
+    mock_enqueue_tasks = mocker.patch("carina.api.endpoints.reward.enqueue_many_tasks")
+    mock_sentry = mocker.patch("carina.crud.reward.sentry_sdk")
 
     idempotency_token = uuid4()
 
@@ -288,7 +288,7 @@ def test_reward_type_cancelled_status_ok(
     reward_cancellation_task_type: TaskType,
 ) -> None:
     db_session, reward_config, _ = setup
-    mock_enqueue_tasks = mocker.patch("app.api.endpoints.reward.enqueue_many_tasks")
+    mock_enqueue_tasks = mocker.patch("carina.api.endpoints.reward.enqueue_many_tasks")
 
     reward_config.status = RewardTypeStatuses.ACTIVE
     db_session.commit()
@@ -325,7 +325,7 @@ def test_reward_type_ended_status_ok(
     reward_cancellation_task_type: TaskType,
 ) -> None:
     db_session, reward_config, _ = setup
-    mock_enqueue_tasks = mocker.patch("app.api.endpoints.reward.enqueue_many_tasks")
+    mock_enqueue_tasks = mocker.patch("carina.api.endpoints.reward.enqueue_many_tasks")
 
     reward_config.status = RewardTypeStatuses.ACTIVE
     db_session.commit()

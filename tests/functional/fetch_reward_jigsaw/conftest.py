@@ -4,8 +4,8 @@ import pytest
 
 from cryptography.fernet import Fernet
 
-from app.core.config import redis_raw, settings
-from app.fetch_reward.jigsaw import Jigsaw
+from carina.core.config import redis_raw, settings
+from carina.fetch_reward.jigsaw import Jigsaw
 
 
 @pytest.fixture(scope="function", autouse=True)

@@ -3,8 +3,8 @@ import logging
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
-from app.core.config import settings
-from app.db.base import Base
+from carina.core.config import settings
+from carina.db.base import Base
 
 logger = logging.getLogger(__name__)
 
