@@ -1,6 +1,6 @@
 import uvicorn
 
-from app import create_app
+from carina import create_app
 
 app = create_app()
 

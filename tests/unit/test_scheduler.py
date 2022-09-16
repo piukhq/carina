@@ -1,7 +1,7 @@
 from uuid import uuid4
 
-from app.core.config import redis, settings
-from app.scheduled_tasks.scheduler import acquire_lock
+from carina.core.config import redis, settings
+from carina.scheduled_tasks.scheduler import acquire_lock
 
 
 class FakeScheduler:

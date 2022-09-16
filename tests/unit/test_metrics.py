@@ -2,8 +2,8 @@ import random
 
 from prometheus_client import REGISTRY
 
-from app.core.config import settings
-from app.tasks.prometheus import METRIC_NAME_PREFIX, task_processing_time_callback_fn
+from carina.core.config import settings
+from carina.tasks.prometheus import METRIC_NAME_PREFIX, task_processing_time_callback_fn
 
 
 def test_metrics_callback_fn_multiple_metrics() -> None:

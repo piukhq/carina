@@ -5,13 +5,13 @@ import pytest
 
 from pytest_mock import MockFixture
 
-from app.activity_utils.enums import ActivityType, _try_parse_account_url_path
+from carina.activity_utils.enums import ActivityType, _try_parse_account_url_path
 
 
 def test_get_reward_status_activity_data_no_pending(mocker: MockFixture) -> None:
     fake_now = datetime.now(tz=timezone.utc)
 
-    mock_datetime = mocker.patch("app.activity_utils.enums.datetime")
+    mock_datetime = mocker.patch("carina.activity_utils.enums.datetime")
     mock_datetime.now.return_value = fake_now
     mock_datetime.fromtimestamp = datetime.fromtimestamp
 
@@ -52,7 +52,7 @@ def test_get_reward_status_activity_data_no_pending(mocker: MockFixture) -> None
 def test_get_reward_status_activity_data_pending(mocker: MockFixture) -> None:
     fake_now = datetime.now(tz=timezone.utc)
 
-    mock_datetime = mocker.patch("app.activity_utils.enums.datetime")
+    mock_datetime = mocker.patch("carina.activity_utils.enums.datetime")
     mock_datetime.now.return_value = fake_now
     mock_datetime.fromtimestamp = datetime.fromtimestamp
 
@@ -125,7 +125,7 @@ def test_get_reward_status_activity_data_pending(mocker: MockFixture) -> None:
 def test__try_parse_account_url_path(
     mocker: MockFixture, account_url_path: str, expected_result: str, logger_called: bool
 ) -> None:
-    mock_logger = mocker.patch("app.activity_utils.enums.logger")
+    mock_logger = mocker.patch("carina.activity_utils.enums.logger")
 
     user_id = _try_parse_account_url_path(account_url_path)
     assert user_id == expected_result

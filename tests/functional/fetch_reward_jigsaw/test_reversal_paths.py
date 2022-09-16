@@ -15,9 +15,9 @@ from retry_tasks_lib.db.models import TaskTypeKey, TaskTypeKeyValue
 from sqlalchemy import insert
 from sqlalchemy.future import select
 
-from app.core.config import redis_raw
-from app.fetch_reward.base import AgentError
-from app.fetch_reward.jigsaw import Jigsaw
+from carina.core.config import redis_raw
+from carina.fetch_reward.base import AgentError
+from carina.fetch_reward.jigsaw import Jigsaw
 
 from . import AnswerBotBase
 
@@ -27,7 +27,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from retry_tasks_lib.db.models import RetryTask
     from sqlalchemy.orm import Session
 
-    from app.models import RetailerFetchType, RewardConfig
+    from carina.models import RetailerFetchType, RewardConfig
 
 
 @httpretty.activate
@@ -43,7 +43,7 @@ def test_jigsaw_agent_register_reversal_paths_no_previous_error_max_retries_exce
     # deepcode ignore HardcodedNonCryptoSecret/test: this is a test value
     test_token = "test-token"
     redis_raw.set(Jigsaw.REDIS_TOKEN_KEY, fernet.encrypt(test_token.encode()), timedelta(days=1))
-    mock_uuid4 = mocker.patch("app.fetch_reward.jigsaw.uuid4")
+    mock_uuid4 = mocker.patch("carina.fetch_reward.jigsaw.uuid4")
     expected_last_val = uuid4()
     mock_uuid4.side_effect = (uuid4(), uuid4(), uuid4(), expected_last_val, uuid4())
 
@@ -104,7 +104,7 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_max_retries_exceede
     card_ref = uuid4()
     redis_raw.set(Jigsaw.REDIS_TOKEN_KEY, fernet.encrypt(b"test-token"), timedelta(days=1))
     spy_redis_set = mocker.spy(redis_raw, "set")
-    mock_uuid = mocker.patch("app.fetch_reward.jigsaw.uuid4")
+    mock_uuid = mocker.patch("carina.fetch_reward.jigsaw.uuid4")
     mock_uuid.return_value = card_ref
 
     db_session.execute(
@@ -204,11 +204,11 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_need_new_token(
     tx_value = jigsaw_reward_config.load_required_fields_values()["transaction_value"]
     redis_raw.set(Jigsaw.REDIS_TOKEN_KEY, fernet.encrypt(b"test-token"), timedelta(days=1))
     spy_redis_set = mocker.spy(redis_raw, "set")
-    mock_uuid = mocker.patch("app.fetch_reward.jigsaw.uuid4")
+    mock_uuid = mocker.patch("carina.fetch_reward.jigsaw.uuid4")
     mock_uuid.side_effect = [card_ref, success_card_ref]
     success_token = "test-token-success"
     now = datetime.now(tz=timezone.utc)
-    mock_datetime = mocker.patch("app.fetch_reward.jigsaw.datetime")
+    mock_datetime = mocker.patch("carina.fetch_reward.jigsaw.datetime")
     mock_datetime.now.return_value = now
     mock_datetime.fromisoformat = datetime.fromisoformat
 
@@ -384,7 +384,7 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_retry_paths(
     redis_raw.set(Jigsaw.REDIS_TOKEN_KEY, fernet.encrypt(b"test-token"), timedelta(days=1))
     spy_redis_set = mocker.spy(redis_raw, "set")
     card_ref = uuid4()
-    mock_uuid = mocker.patch("app.fetch_reward.jigsaw.uuid4")
+    mock_uuid = mocker.patch("carina.fetch_reward.jigsaw.uuid4")
     mock_uuid.return_value = card_ref
 
     db_session.execute(
@@ -479,7 +479,7 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_failure_paths(
     redis_raw.set(Jigsaw.REDIS_TOKEN_KEY, fernet.encrypt(b"test-token"), timedelta(days=1))
     spy_redis_set = mocker.spy(redis_raw, "set")
     card_ref = uuid4()
-    mock_uuid = mocker.patch("app.fetch_reward.jigsaw.uuid4")
+    mock_uuid = mocker.patch("carina.fetch_reward.jigsaw.uuid4")
     mock_uuid.return_value = card_ref
 
     db_session.execute(

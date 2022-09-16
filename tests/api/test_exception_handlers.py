@@ -6,7 +6,7 @@ import pytest
 from fastapi import FastAPI, status
 from fastapi.testclient import TestClient
 
-from app.core.exception_handlers import unexpected_exception_handler
+from carina.core.exception_handlers import unexpected_exception_handler
 
 
 @pytest.fixture(scope="function")
@@ -26,7 +26,7 @@ def client(exc: Exception) -> TestClient:
     return TestClient(app, raise_server_exceptions=False)
 
 
-@mock.patch("app.core.exception_handlers.logger")
+@mock.patch("carina.core.exception_handlers.logger")
 def test_unexpected_exception_handler(mock_logger: mock.MagicMock, client: TestClient, exc: Exception) -> None:
     resp = client.get("/boom")
     assert resp.json() == {
