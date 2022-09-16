@@ -13,10 +13,10 @@ import requests
 from fastapi import status
 from sqlalchemy.future import select
 
-from app.core.config import redis_raw
-from app.fetch_reward.base import AgentError
-from app.fetch_reward.jigsaw import Jigsaw
-from app.models.reward import Reward
+from carina.core.config import redis_raw
+from carina.fetch_reward.base import AgentError
+from carina.fetch_reward.jigsaw import Jigsaw
+from carina.models.reward import Reward
 
 from . import AnswerBotBase
 
@@ -26,7 +26,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from retry_tasks_lib.db.models import RetryTask
     from sqlalchemy.orm import Session
 
-    from app.models import RetailerFetchType, RewardConfig
+    from carina.models import RetailerFetchType, RewardConfig
 
 
 @httpretty.activate
@@ -45,8 +45,8 @@ def test_jigsaw_agent_register_retry_paths(
     now = datetime.now(tz=timezone.utc)
     redis_raw.set(Jigsaw.REDIS_TOKEN_KEY, fernet.encrypt(test_token.encode()), timedelta(days=1))
     spy_redis_set = mocker.spy(redis_raw, "set")
-    mock_uuid = mocker.patch("app.fetch_reward.jigsaw.uuid4", return_value=card_ref)
-    mock_datetime = mocker.patch("app.fetch_reward.jigsaw.datetime")
+    mock_uuid = mocker.patch("carina.fetch_reward.jigsaw.uuid4", return_value=card_ref)
+    mock_datetime = mocker.patch("carina.fetch_reward.jigsaw.datetime")
     mock_datetime.now.return_value = now
     mock_datetime.fromisoformat = datetime.fromisoformat
 
@@ -111,8 +111,8 @@ def test_jigsaw_agent_register_failure_paths(
     now = datetime.now(tz=timezone.utc)
     redis_raw.set(Jigsaw.REDIS_TOKEN_KEY, fernet.encrypt(test_token.encode()), timedelta(days=1))
     spy_redis_set = mocker.spy(redis_raw, "set")
-    mock_uuid = mocker.patch("app.fetch_reward.jigsaw.uuid4", return_value=card_ref)
-    mock_datetime = mocker.patch("app.fetch_reward.jigsaw.datetime")
+    mock_uuid = mocker.patch("carina.fetch_reward.jigsaw.uuid4", return_value=card_ref)
+    mock_datetime = mocker.patch("carina.fetch_reward.jigsaw.datetime")
     mock_datetime.now.return_value = now
     mock_datetime.fromisoformat = datetime.fromisoformat
 
@@ -162,7 +162,7 @@ def test_jigsaw_agent_register_unexpected_error_response(
 ) -> None:
     agent_config = jigsaw_retailer_fetch_type.load_agent_config()
     card_ref = uuid4()
-    mock_uuid = mocker.patch("app.fetch_reward.jigsaw.uuid4")
+    mock_uuid = mocker.patch("carina.fetch_reward.jigsaw.uuid4")
     mock_uuid.return_value = card_ref
     redis_raw.set(Jigsaw.REDIS_TOKEN_KEY, fernet.encrypt(b"test-token"), timedelta(days=1))
     httpretty.register_uri(
@@ -260,9 +260,9 @@ def test_jigsaw_agent_register_retry_get_token_success(
     test_token = "test-token"
     card_num = "NEW-REWARD-CODE"
     now = datetime.now(tz=timezone.utc)
-    mock_redis = mocker.patch("app.fetch_reward.jigsaw.redis_raw")
-    mock_uuid = mocker.patch("app.fetch_reward.jigsaw.uuid4", return_value=card_ref)
-    mock_datetime = mocker.patch("app.fetch_reward.jigsaw.datetime")
+    mock_redis = mocker.patch("carina.fetch_reward.jigsaw.redis_raw")
+    mock_uuid = mocker.patch("carina.fetch_reward.jigsaw.uuid4", return_value=card_ref)
+    mock_datetime = mocker.patch("carina.fetch_reward.jigsaw.datetime")
     mock_datetime.now.return_value = now
     mock_datetime.fromisoformat = datetime.fromisoformat
     get_token_url = f"{agent_config['base_url']}/order/V4/getToken"
@@ -394,7 +394,7 @@ def test_jigsaw_agent_register_retry_get_token_max_retries_exceeded(
 
     agent_config = jigsaw_retailer_fetch_type.load_agent_config()
     card_ref = uuid4()
-    mock_uuid = mocker.patch("app.fetch_reward.jigsaw.uuid4")
+    mock_uuid = mocker.patch("carina.fetch_reward.jigsaw.uuid4")
     mock_uuid.return_value = card_ref
 
     class AnswerBot(AnswerBotBase):

@@ -1,11 +1,20 @@
-FROM ghcr.io/binkhq/python:3.10-pipenv
+FROM ghcr.io/binkhq/python:3.10-poetry as build
 
-WORKDIR /app
+WORKDIR /src
+RUN poetry config virtualenvs.create false
+RUN poetry self add poetry-dynamic-versioning[plugin]
 ADD . .
-RUN apt-get update && apt-get install gcc -y && \
-    pipenv install --deploy --system --ignore-pipfile && \
-    apt-get autoremove -y gcc && rm -rf /var/lib/apt/lists/*
+RUN poetry build
 
+FROM ghcr.io/binkhq/python:3.10
+
+ENV PIP_INDEX_URL=https://269fdc63-af3d-4eca-8101-8bddc22d6f14:b694b5b1-f97e-49e4-959e-f3c202e3ab91@pypi.tools.uksouth.bink.sh/simple
+WORKDIR /app
+COPY --from=build /src/dist/$wheel .
+COPY --from=build /src/asgi.py .
+ARG wheel=carina-*-py3-none-any.whl
+# gcc required for hiredis
+RUN apt update && apt -y install gcc && pip install $wheel && rm $wheel && apt -y autoremove gcc
 ENV PROMETHEUS_MULTIPROC_DIR=/dev/shm
 ENTRYPOINT [ "linkerd-await", "--" ]
 CMD [ "gunicorn", "--workers=2", "--error-logfile=-", "--access-logfile=-", \

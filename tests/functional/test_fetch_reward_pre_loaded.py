@@ -4,15 +4,15 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from app.core.config import settings
-from app.fetch_reward import get_allocable_reward
-from app.fetch_reward.base import BaseAgent, RewardData
+from carina.core.config import settings
+from carina.fetch_reward import get_allocable_reward
+from carina.fetch_reward.base import BaseAgent, RewardData
 
 if TYPE_CHECKING:  # pragma: no cover
     from pytest_mock import MockerFixture
     from retry_tasks_lib.db.models import RetryTask
 
-    from app.models import RetailerFetchType
+    from carina.models import RetailerFetchType
     from tests.conftest import SetupType
 
 

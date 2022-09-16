@@ -30,8 +30,8 @@ TaskTypeData = namedtuple("TaskTypeData", ["name", "path", "error_handler_path",
 task_type_data = [
     TaskTypeData(
         name="reward-issuance",
-        path="app.tasks.issuance.issue_reward",
-        error_handler_path="app.tasks.error_handlers.handle_issue_reward_request_error",
+        path="carina.tasks.issuance.issue_reward",
+        error_handler_path="carina.tasks.error_handlers.handle_issue_reward_request_error",
         keys=[
             TaskTypeKeyData(name="customer_card_ref", type=STRING),
             TaskTypeKeyData(name="idempotency_token", type=STRING),
@@ -46,8 +46,8 @@ task_type_data = [
     ),
     TaskTypeData(
         name="reward-status-adjustment",
-        path="app.tasks.status_adjustment.status_adjustment",
-        error_handler_path="app.tasks.error_handlers.handle_retry_task_request_error",
+        path="carina.tasks.status_adjustment.status_adjustment",
+        error_handler_path="carina.tasks.error_handlers.handle_retry_task_request_error",
         keys=[
             TaskTypeKeyData(name="retailer_slug", type=STRING),
             TaskTypeKeyData(name="date", type=FLOAT),
@@ -57,8 +57,8 @@ task_type_data = [
     ),
     TaskTypeData(
         name="delete-unallocated-rewards",
-        path="app.tasks.reward_deletion.delete_unallocated_rewards",
-        error_handler_path="app.tasks.error_handlers.default_handler",
+        path="carina.tasks.reward_deletion.delete_unallocated_rewards",
+        error_handler_path="carina.tasks.error_handlers.default_handler",
         keys=[
             TaskTypeKeyData(name="reward_slug", type=STRING),
             TaskTypeKeyData(name="retailer_id", type=INTEGER),
@@ -66,8 +66,8 @@ task_type_data = [
     ),
     TaskTypeData(
         name="cancel-rewards",
-        path="app.tasks.reward_cancellation.cancel_rewards",
-        error_handler_path="app.tasks.error_handlers.handle_retry_task_request_error",
+        path="carina.tasks.reward_cancellation.cancel_rewards",
+        error_handler_path="carina.tasks.error_handlers.handle_retry_task_request_error",
         keys=[
             TaskTypeKeyData(name="reward_slug", type=STRING),
             TaskTypeKeyData(name="retailer_slug", type=STRING),
@@ -101,12 +101,12 @@ def add_fetch_types(conn: sa.engine.Connection, metadata: sa.MetaData) -> None:
             {
                 "name": "PRE_LOADED",
                 "required_fields": "validity_days: integer",
-                "path": "app.fetch_reward.pre_loaded.PreLoaded",
+                "path": "carina.fetch_reward.pre_loaded.PreLoaded",
             },
             {
                 "name": "JIGSAW_EGIFT",
                 "required_fields": "transaction_value: integer",
-                "path": "app.fetch_reward.jigsaw.Jigsaw",
+                "path": "carina.fetch_reward.jigsaw.Jigsaw",
             },
         ],
     )
