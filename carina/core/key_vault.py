@@ -19,7 +19,9 @@ class KeyVault:
             self.client = None
             logger.info("Key Vault not initialised as this is either a test or a migration.")
         else:
-            self.client = SecretClient(vault_url=vault_url, credential=DefaultAzureCredential())
+            self.client = SecretClient(
+                vault_url=vault_url, credential=DefaultAzureCredential(additionally_allowed_tenants=["*"])
+            )
 
     def get_secret(self, secret_name: str) -> str:
         if not self.client:
