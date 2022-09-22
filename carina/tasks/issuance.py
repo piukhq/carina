@@ -209,9 +209,8 @@ def issue_reward(retry_task: RetryTask, db_session: "Session") -> None:
             sync_run_query(_add_reward_to_task_values_and_set_allocated, db_session, reward=reward_data.reward)
             db_session.refresh(retry_task)  # Ensure retry_task represents latest DB changes
             _process_and_issue_reward(db_session, retry_task, reward_data.validity_days)
-        else:  # requeue the allocation attempt
-            if retry_task.status != RetryTaskStatuses.WAITING:
-                # Only do a Sentry alert for the first allocation failure (when status is changing to WAITING)
+        else:  # requeue the allocation attempt and alert if required
+            if settings.MESSAGE_IF_NO_PRE_LOADED_REWARDS:
                 with sentry_sdk.push_scope() as scope:
                     scope.fingerprint = ["{{ default }}", "{{ message }}"]
                     event_id = sentry_sdk.capture_message(
