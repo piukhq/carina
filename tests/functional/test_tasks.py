@@ -279,6 +279,8 @@ def test_reward_issuance_no_reward_and_allocation_is_requeued(
     mock_queue.return_value = fake_now
     from carina.tasks.issuance import sentry_sdk as mock_sentry_sdk
 
+    mock_settings = mocker.patch("carina.tasks.issuance.settings")
+    mock_settings.MESSAGE_IF_NO_PRE_LOADED_REWARDS = True
     sentry_spy = mocker.spy(mock_sentry_sdk, "capture_message")
 
     httpretty.register_uri("POST", issuance_retry_task_no_reward.get_params()["account_url"], body="OK", status=200)
