@@ -18,13 +18,13 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import Session
 from testfixtures import LogCapture
 
-from app.core.config import settings
-from app.enums import RewardTypeStatuses
-from app.models import Reward, RewardConfig
-from app.tasks.issuance import _process_issuance, issue_reward
-from app.tasks.reward_cancellation import cancel_rewards
-from app.tasks.reward_deletion import delete_unallocated_rewards
-from app.tasks.status_adjustment import _process_status_adjustment, status_adjustment
+from carina.core.config import settings
+from carina.enums import RewardTypeStatuses
+from carina.models import Reward, RewardConfig
+from carina.tasks.issuance import _process_issuance, issue_reward
+from carina.tasks.reward_cancellation import cancel_rewards
+from carina.tasks.reward_deletion import delete_unallocated_rewards
+from carina.tasks.status_adjustment import _process_status_adjustment, status_adjustment
 
 fake_now = datetime.now(tz=timezone.utc)
 
@@ -36,8 +36,8 @@ def test__process_issuance_ok(
     reward_issuance_task_params: dict,
     issuance_expected_payload: dict,
 ) -> None:
-    mock_send_activity = mocker.patch("app.tasks.issuance.sync_send_activity")
-    mock_datetime = mocker.patch("app.tasks.issuance.datetime")
+    mock_send_activity = mocker.patch("carina.tasks.issuance.sync_send_activity")
+    mock_datetime = mocker.patch("carina.tasks.issuance.datetime")
 
     sample_url = "http://sample.url"
     issuance_expected_payload["associated_url"] = sample_url
@@ -75,8 +75,8 @@ def test__process_issuance_fixed_expiry_date_ok(
     reward_issuance_task_params: dict,
     issuance_expected_payload: dict,
 ) -> None:
-    mock_send_activity = mocker.patch("app.tasks.issuance.sync_send_activity")
-    mock_datetime = mocker.patch("app.tasks.issuance.datetime")
+    mock_send_activity = mocker.patch("carina.tasks.issuance.sync_send_activity")
+    mock_datetime = mocker.patch("carina.tasks.issuance.datetime")
 
     sample_url = "http://sample.url"
     issuance_expected_payload["associated_url"] = sample_url
@@ -115,8 +115,8 @@ def test__process_issuance_http_errors(
     reward_issuance_task_params: dict,
     issuance_expected_payload: dict,
 ) -> None:
-    mock_send_activity = mocker.patch("app.tasks.issuance.sync_send_activity")
-    mock_datetime = mocker.patch("app.tasks.issuance.datetime")
+    mock_send_activity = mocker.patch("carina.tasks.issuance.sync_send_activity")
+    mock_datetime = mocker.patch("carina.tasks.issuance.datetime")
     mock_datetime.now.return_value = fake_now
 
     validity_days = reward_config.load_required_fields_values()["validity_days"]
@@ -146,8 +146,8 @@ def test__process_issuance_http_errors(
 
 
 def test__process_issuance_connection_error(mocker: MockerFixture, reward_issuance_task_params: dict) -> None:
-    mock_send_activity = mocker.patch("app.tasks.issuance.sync_send_activity")
-    mocker.patch("app.tasks.issuance.send_request_with_metrics", side_effect=requests.Timeout("Request timed out"))
+    mock_send_activity = mocker.patch("carina.tasks.issuance.sync_send_activity")
+    mocker.patch("carina.tasks.issuance.send_request_with_metrics", side_effect=requests.Timeout("Request timed out"))
 
     with pytest.raises(requests.RequestException) as excinfo:
         _process_issuance(reward_issuance_task_params, 1)
@@ -161,7 +161,7 @@ def test__process_issuance_connection_error(mocker: MockerFixture, reward_issuan
 def test_reward_issuance(
     mocker: MockerFixture, db_session: "Session", reward_config: RewardConfig, issuance_retry_task: RetryTask
 ) -> None:
-    mock_send_activity = mocker.patch("app.tasks.issuance.sync_send_activity")
+    mock_send_activity = mocker.patch("carina.tasks.issuance.sync_send_activity")
     httpretty.register_uri("POST", issuance_retry_task.get_params()["account_url"], body="OK", status=200)
 
     issue_reward(issuance_retry_task.retry_task_id)
@@ -197,7 +197,7 @@ def test_reward_issuance_campaign_is_cancelled(
     """
     reward_config.status = RewardTypeStatuses.CANCELLED
     db_session.commit()
-    import app.tasks.issuance as tasks_allocation
+    import carina.tasks.issuance as tasks_allocation
 
     spy = mocker.spy(tasks_allocation, "_process_issuance")
 
@@ -230,7 +230,7 @@ def test_reward_issuance_no_reward_campaign_is_cancelled(
     """
     reward_config.status = RewardTypeStatuses.CANCELLED
     db_session.commit()
-    import app.tasks.issuance as tasks_allocation
+    import carina.tasks.issuance as tasks_allocation
 
     spy = mocker.spy(tasks_allocation, "_process_issuance")
 
@@ -249,8 +249,8 @@ def test_reward_issuance_no_reward_but_one_available(
     db_session: "Session", issuance_retry_task_no_reward: RetryTask, mocker: MockerFixture, reward: Reward
 ) -> None:
     """test that an allocable reward (the pytest 'reward' fixture) is allocated, resulting in success"""
-    mock_send_activity = mocker.patch("app.tasks.issuance.sync_send_activity")
-    mock_queue = mocker.patch("app.tasks.issuance.enqueue_retry_task_delay")
+    mock_send_activity = mocker.patch("carina.tasks.issuance.sync_send_activity")
+    mock_queue = mocker.patch("carina.tasks.issuance.enqueue_retry_task_delay")
 
     httpretty.register_uri("POST", issuance_retry_task_no_reward.get_params()["account_url"], body="OK", status=200)
 
@@ -274,11 +274,13 @@ def test_reward_issuance_no_reward_and_allocation_is_requeued(
     create_reward: Callable,
 ) -> None:
     """test that no allocable reward results in the allocation being requeued"""
-    mock_send_activity = mocker.patch("app.tasks.issuance.sync_send_activity")
-    mock_queue = mocker.patch("app.tasks.issuance.enqueue_retry_task_delay")
+    mock_send_activity = mocker.patch("carina.tasks.issuance.sync_send_activity")
+    mock_queue = mocker.patch("carina.tasks.issuance.enqueue_retry_task_delay")
     mock_queue.return_value = fake_now
-    from app.tasks.issuance import sentry_sdk as mock_sentry_sdk
+    from carina.tasks.issuance import sentry_sdk as mock_sentry_sdk
 
+    mock_settings = mocker.patch("carina.tasks.issuance.settings")
+    mock_settings.MESSAGE_IF_NO_PRE_LOADED_REWARDS = True
     sentry_spy = mocker.spy(mock_sentry_sdk, "capture_message")
 
     httpretty.register_uri("POST", issuance_retry_task_no_reward.get_params()["account_url"], body="OK", status=200)
@@ -311,7 +313,7 @@ def test_reward_issuance_no_reward_and_allocation_is_requeued(
 
 
 @httpretty.activate
-@mock.patch("app.tasks.status_adjustment.datetime")
+@mock.patch("carina.tasks.status_adjustment.datetime")
 def test__process_status_adjustment_ok(
     mock_datetime: mock.Mock,
     db_session: "Session",
@@ -393,7 +395,7 @@ def test__process_status_adjustment_404_not_found_soft_delete(
     assert reward.deleted is True
 
 
-@mock.patch("app.tasks.status_adjustment.send_request_with_metrics")
+@mock.patch("carina.tasks.status_adjustment.send_request_with_metrics")
 def test__process_status_adjustment_connection_error(
     mock_send_request_with_metrics: mock.MagicMock,
     db_session: "Session",
@@ -484,7 +486,7 @@ def test_delete_unallocated_rewards(delete_rewards_retry_task: RetryTask, db_ses
 
 
 @httpretty.activate
-@mock.patch("app.tasks.reward_cancellation.datetime")
+@mock.patch("carina.tasks.reward_cancellation.datetime")
 def test_cancel_reward(mock_datetime: mock.Mock, db_session: Session, cancel_rewards_retry_task: RetryTask) -> None:
     mock_datetime.now.return_value = fake_now
     task_params = cancel_rewards_retry_task.get_params()
@@ -522,7 +524,7 @@ def test_reward_issuance_409_from_polaris(
     mocker: MockerFixture,
 ) -> None:
     """Test reward is deleted for the task (from the DB) and task retried on a 409 from Polaris"""
-    mock_send_activity = mocker.patch("app.tasks.issuance.sync_send_activity")
+    mock_send_activity = mocker.patch("carina.tasks.issuance.sync_send_activity")
     control_task = sync_create_task(
         db_session, task_type_name=issuance_retry_task.task_type.name, params=reward_issuance_task_params
     )
@@ -579,8 +581,8 @@ def test_reward_issuance_no_reward_but_one_available_and_409(
 ) -> None:
     """Test reward id is deleted for task (from the DB) and task is retried on a 409 from Polaris,
     if we don't initially have a reward"""
-    mock_send_activity = mocker.patch("app.tasks.issuance.sync_send_activity")
-    mock_queue = mocker.patch("app.tasks.issuance.enqueue_retry_task_delay")
+    mock_send_activity = mocker.patch("carina.tasks.issuance.sync_send_activity")
+    mock_queue = mocker.patch("carina.tasks.issuance.enqueue_retry_task_delay")
     assert "reward_uuid" not in issuance_retry_task_no_reward.get_params()
 
     httpretty.register_uri(

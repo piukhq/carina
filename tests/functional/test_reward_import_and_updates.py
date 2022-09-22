@@ -17,17 +17,17 @@ from sqlalchemy import func
 from sqlalchemy.future import select
 from testfixtures import LogCapture
 
-from app.enums import FileAgentType, RewardTypeStatuses, RewardUpdateStatuses
-from app.imports.agents.file_agent import (
+from carina.enums import FileAgentType, RewardTypeStatuses, RewardUpdateStatuses
+from carina.imports.agents.file_agent import (
     BlobProcessingError,
     RewardFileLog,
     RewardImportAgent,
     RewardUpdateRow,
     RewardUpdatesAgent,
 )
-from app.models import Reward, RewardUpdate
-from app.models.retailer import Retailer
-from app.schemas import RewardUpdateSchema
+from carina.models import Reward, RewardUpdate
+from carina.models.retailer import Retailer
+from carina.schemas import RewardUpdateSchema
 from tests.conftest import SetupType
 
 if TYPE_CHECKING:
@@ -46,12 +46,12 @@ def _get_reward_rows(db_session: "Session") -> list[Reward]:
 
 
 def test_import_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> None:
-    mocker.patch("app.imports.agents.file_agent.sentry_sdk")
+    mocker.patch("carina.imports.agents.file_agent.sentry_sdk")
     db_session, reward_config, pre_existing_reward = setup
-    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
-    from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
+    mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
+    from carina.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
 
-    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings = mocker.patch("carina.imports.agents.file_agent.settings")
     mock_settings.SENTRY_DSN = "SENTRY_DSN"
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
 
@@ -90,7 +90,7 @@ def test_import_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> N
 
 def test_import_agent__process_csv_with_expiry_date(setup: SetupType, mocker: MockerFixture) -> None:
     db_session, reward_config, _ = setup
-    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
     reward_agent = RewardImportAgent()
 
     reward_agent.process_csv(
@@ -108,7 +108,7 @@ def test_import_agent__process_csv_with_expiry_date(setup: SetupType, mocker: Mo
 
 def test_import_agent__process_csv_with_bad_expiry_date(setup: SetupType, mocker: MockerFixture) -> None:
     db_session, reward_config, _ = setup
-    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
     reward_agent = RewardImportAgent()
 
     with pytest.raises(BlobProcessingError) as exc_info:
@@ -132,7 +132,7 @@ def test_import_agent__process_csv_soft_deleted(
     Test that a reward code will be imported OK when the code exists in the DB but for a different reward slug,
     and it has been soft deleted
     """
-    mocker.patch("app.imports.agents.file_agent.sentry_sdk")
+    mocker.patch("carina.imports.agents.file_agent.sentry_sdk")
     db_session, reward_config, pre_existing_reward = setup
     second_reward_config = create_reward_config(**{"reward_slug": "second-test-reward"})
     # Associate the existing reward with a different reward config i.e. a different reward slug.
@@ -140,10 +140,10 @@ def test_import_agent__process_csv_soft_deleted(
     pre_existing_reward.reward_config_id = second_reward_config.id
     pre_existing_reward.deleted = True
     db_session.commit()
-    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
-    from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
+    mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
+    from carina.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
 
-    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings = mocker.patch("carina.imports.agents.file_agent.settings")
     mock_settings.SENTRY_DSN = "SENTRY_DSN"
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
 
@@ -179,10 +179,10 @@ def test_import_agent__process_csv_not_soft_deleted(
     # This means the same reward code should import OK for the 'test-reward' reward type slug
     pre_existing_reward.reward_config_id = second_reward_config.id
     db_session.commit()
-    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
-    from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
+    mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
+    from carina.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
 
-    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings = mocker.patch("carina.imports.agents.file_agent.settings")
     mock_settings.SENTRY_DSN = "SENTRY_DSN"
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
 
@@ -217,10 +217,10 @@ def test_import_agent__process_csv_same_reward_slug_not_soft_deleted(setup: Setu
     db_session, reward_config, pre_existing_reward = setup
     pre_existing_reward.deleted = True
     db_session.commit()
-    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
-    from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
+    mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
+    from carina.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
 
-    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings = mocker.patch("carina.imports.agents.file_agent.settings")
     mock_settings.SENTRY_DSN = "SENTRY_DSN"
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
 
@@ -253,7 +253,7 @@ def test_import_agent__reward_config_non_active_status_error(
     db_session, reward_config, _ = setup
     reward_config.status = RewardTypeStatuses.ENDED
     db_session.commit()
-    MockBlobServiceClient = mocker.patch("app.imports.agents.file_agent.BlobServiceClient", autospec=True)
+    MockBlobServiceClient = mocker.patch("carina.imports.agents.file_agent.BlobServiceClient", autospec=True)
     mock_blob_service_client = mocker.MagicMock(spec=BlobServiceClient)
 
     MockBlobServiceClient.from_connection_string.return_value = mock_blob_service_client
@@ -279,7 +279,7 @@ def test_import_agent__reward_config_non_active_status_error(
 def test_import_agent__process_csv_no_reward_config(setup: SetupType, mocker: MockerFixture) -> None:
     db_session, reward_config, _ = setup
 
-    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
     reward_agent = RewardImportAgent()
     with pytest.raises(BlobProcessingError) as exc_info:
         reward_agent.process_csv(
@@ -294,7 +294,7 @@ def test_import_agent__process_csv_no_reward_config(setup: SetupType, mocker: Mo
 def test_import_agent__process_csv_blob_path_does_not_template(setup: SetupType, mocker: MockerFixture) -> None:
     db_session, reward_config, _ = setup
 
-    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
     reward_agent = RewardImportAgent()
     with pytest.raises(BlobProcessingError) as exc_info:
         reward_agent.process_csv(
@@ -312,7 +312,7 @@ def test_updates_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> 
     # GIVEN
     db_session, reward_config, _ = setup
 
-    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
     reward_agent = RewardUpdatesAgent()
     mock__process_updates = mocker.patch.object(reward_agent, "_process_updates")
     blob_name = "/test-retailer/rewards.update.test.csv"
@@ -381,12 +381,12 @@ def test_updates_agent__process_csv_reward_code_fails_non_validating_rows(
     reward.allocated = True
     db_session.commit()
 
-    from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
+    from carina.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
-    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
     mocker.patch.object(RewardUpdatesAgent, "enqueue_reward_updates")
-    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings = mocker.patch("carina.imports.agents.file_agent.settings")
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     reward_agent = RewardUpdatesAgent()
     blob_name = "/test-retailer/rewards.update.test.csv"
@@ -420,12 +420,12 @@ def test_updates_agent__process_csv_reward_code_fails_malformed_csv_rows(
     # GIVEN
     db_session, reward_config, _ = setup
 
-    from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
+    from carina.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
-    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
     mocker.patch.object(RewardUpdatesAgent, "enqueue_reward_updates")
-    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings = mocker.patch("carina.imports.agents.file_agent.settings")
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     reward_agent = RewardUpdatesAgent()
     blob_name = "/test-retailer/rewards.update.test.csv"
@@ -453,10 +453,10 @@ def test_updates_agent__process_updates(setup: SetupType, mocker: MockerFixture)
 
     mock_enqueue = mocker.patch.object(RewardUpdatesAgent, "enqueue_reward_updates", autospec=True)
 
-    from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
+    from carina.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
-    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
     reward_agent = RewardUpdatesAgent()
     blob_name = "/test-retailer/rewards.update.test.csv"
     data = RewardUpdateSchema(
@@ -492,12 +492,12 @@ def test_updates_agent__process_updates_reward_code_not_allocated(setup: SetupTy
     reward.allocated = False
     db_session.commit()
 
-    from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
+    from carina.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
-    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
     mocker.patch.object(RewardUpdatesAgent, "enqueue_reward_updates")
-    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings = mocker.patch("carina.imports.agents.file_agent.settings")
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     reward_agent = RewardUpdatesAgent()
     mocker.patch.object(reward_agent, "_report_unknown_codes", autospec=True)
@@ -531,12 +531,12 @@ def test_updates_agent__process_updates_reward_code_does_not_exist(setup: SetupT
     # GIVEN
     db_session, reward_config, _ = setup
 
-    from app.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
+    from carina.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
-    mocker.patch("app.imports.agents.file_agent.BlobServiceClient")
+    mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
     mocker.patch.object(RewardUpdatesAgent, "enqueue_reward_updates")
-    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings = mocker.patch("carina.imports.agents.file_agent.settings")
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     reward_agent = RewardUpdatesAgent()
     mocker.patch.object(reward_agent, "_process_unallocated_codes", autospec=True)
@@ -576,7 +576,7 @@ class Blob:
 
 def test_process_blobs(setup: SetupType, mocker: MockerFixture) -> None:
     db_session, reward_config, _ = setup
-    MockBlobServiceClient = mocker.patch("app.imports.agents.file_agent.BlobServiceClient", autospec=True)
+    MockBlobServiceClient = mocker.patch("carina.imports.agents.file_agent.BlobServiceClient", autospec=True)
     mock_blob_service_client = mocker.MagicMock(spec=BlobServiceClient)
 
     MockBlobServiceClient.from_connection_string.return_value = mock_blob_service_client
@@ -607,7 +607,7 @@ def test_process_blobs(setup: SetupType, mocker: MockerFixture) -> None:
 
 def test_process_blobs_unicodedecodeerror(capture: LogCapture, setup: SetupType, mocker: MockerFixture) -> None:
     db_session, reward_config, _ = setup
-    MockBlobServiceClient = mocker.patch("app.imports.agents.file_agent.BlobServiceClient", autospec=True)
+    MockBlobServiceClient = mocker.patch("carina.imports.agents.file_agent.BlobServiceClient", autospec=True)
     mock_blob_service_client = mocker.MagicMock(spec=BlobServiceClient)
 
     MockBlobServiceClient.from_connection_string.return_value = mock_blob_service_client
@@ -635,10 +635,10 @@ def test_process_blobs_unicodedecodeerror(capture: LogCapture, setup: SetupType,
 
 def test_process_blobs_not_csv(setup: SetupType, mocker: MockerFixture) -> None:
     db_session, reward_config, _ = setup
-    MockBlobServiceClient = mocker.patch("app.imports.agents.file_agent.BlobServiceClient", autospec=True)
+    MockBlobServiceClient = mocker.patch("carina.imports.agents.file_agent.BlobServiceClient", autospec=True)
     mock_blob_service_client = mocker.MagicMock(spec=BlobServiceClient)
     MockBlobServiceClient.from_connection_string.return_value = mock_blob_service_client
-    from app.imports.agents.file_agent import sentry_sdk
+    from carina.imports.agents.file_agent import sentry_sdk
 
     capture_message_spy = mocker.spy(sentry_sdk, "capture_message")
 
@@ -652,7 +652,7 @@ def test_process_blobs_not_csv(setup: SetupType, mocker: MockerFixture) -> None:
         ]
     )
     mock_blob_service_client.get_blob_client.return_value = mocker.MagicMock(spec=BlobClient)
-    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings = mocker.patch("carina.imports.agents.file_agent.settings")
     mock_settings.BLOB_ERROR_CONTAINER = "ERROR-CONTAINER"
 
     reward_agent.process_blobs(reward_config.retailer, db_session=db_session)
@@ -676,10 +676,10 @@ def test_process_blobs_filename_is_duplicate(setup: SetupType, mocker: MockerFix
         )
     )
     db_session.commit()
-    MockBlobServiceClient = mocker.patch("app.imports.agents.file_agent.BlobServiceClient", autospec=True)
+    MockBlobServiceClient = mocker.patch("carina.imports.agents.file_agent.BlobServiceClient", autospec=True)
     mock_blob_service_client = mocker.MagicMock(spec=BlobServiceClient)
     MockBlobServiceClient.from_connection_string.return_value = mock_blob_service_client
-    from app.imports.agents.file_agent import sentry_sdk
+    from carina.imports.agents.file_agent import sentry_sdk
 
     capture_message_spy = mocker.spy(sentry_sdk, "capture_message")
 
@@ -693,7 +693,7 @@ def test_process_blobs_filename_is_duplicate(setup: SetupType, mocker: MockerFix
         ]
     )
     mock_blob_service_client.get_blob_client.return_value = mocker.MagicMock(spec=BlobClient)
-    mock_settings = mocker.patch("app.imports.agents.file_agent.settings")
+    mock_settings = mocker.patch("carina.imports.agents.file_agent.settings")
     mock_settings.BLOB_ERROR_CONTAINER = "ERROR-CONTAINER"
 
     reward_agent.process_blobs(reward_config.retailer, db_session=db_session)
@@ -718,7 +718,7 @@ def test_process_blobs_filename_is_not_duplicate(setup: SetupType, mocker: Mocke
         )
     )
     db_session.commit()
-    MockBlobServiceClient = mocker.patch("app.imports.agents.file_agent.BlobServiceClient", autospec=True)
+    MockBlobServiceClient = mocker.patch("carina.imports.agents.file_agent.BlobServiceClient", autospec=True)
     mock_blob_service_client = mocker.MagicMock(spec=BlobServiceClient)
 
     MockBlobServiceClient.from_connection_string.return_value = mock_blob_service_client
@@ -749,11 +749,11 @@ def test_process_blobs_filename_is_not_duplicate(setup: SetupType, mocker: Mocke
 
 def test_move_blob(mocker: MockerFixture) -> None:
     # GIVEN
-    MockBlobServiceClient = mocker.patch("app.imports.agents.file_agent.BlobServiceClient", autospec=True)
+    MockBlobServiceClient = mocker.patch("carina.imports.agents.file_agent.BlobServiceClient", autospec=True)
     MockBlobServiceClient.from_connection_string.return_value = mocker.MagicMock(spec=BlobServiceClient)
-    mock_src_blob_client = mocker.patch("app.imports.agents.file_agent.BlobClient", autospec=True)
+    mock_src_blob_client = mocker.patch("carina.imports.agents.file_agent.BlobClient", autospec=True)
     mock_src_blob_client.url = "https://a-blob-url"
-    src_blob_lease_client = mocker.patch("app.imports.agents.file_agent.BlobLeaseClient", autospec=True)
+    src_blob_lease_client = mocker.patch("carina.imports.agents.file_agent.BlobLeaseClient", autospec=True)
 
     reward_agent = RewardUpdatesAgent()
     mock_src_blob_client.blob_name = blob_name = "/test-retailer/rewards.update.test.csv"
@@ -782,10 +782,10 @@ def test_enqueue_reward_updates(
 ) -> None:
     db_session, _, reward = setup
 
-    mock_sync_create_many_tasks = mocker.patch("app.imports.agents.file_agent.sync_create_many_tasks")
+    mock_sync_create_many_tasks = mocker.patch("carina.imports.agents.file_agent.sync_create_many_tasks")
     mock_sync_create_many_tasks.return_value = [mock.MagicMock(spec=RetryTask, retry_task_id=1)]
-    mock_enqueue_many_retry_tasks = mocker.patch("app.imports.agents.file_agent.enqueue_many_retry_tasks")
-    mock_redis = mocker.patch("app.imports.agents.file_agent.redis_raw")
+    mock_enqueue_many_retry_tasks = mocker.patch("carina.imports.agents.file_agent.enqueue_many_retry_tasks")
+    mock_redis = mocker.patch("carina.imports.agents.file_agent.redis_raw")
 
     today = date.today()
     reward_update = RewardUpdate(
@@ -819,8 +819,8 @@ def test_enqueue_reward_updates_exception(
 ) -> None:
     db_session, _, reward = setup
 
-    mock_sentry_sdk = mocker.patch("app.imports.agents.file_agent.sentry_sdk")
-    mock_enqueue_many_retry_tasks = mocker.patch("app.imports.agents.file_agent.enqueue_many_retry_tasks")
+    mock_sentry_sdk = mocker.patch("carina.imports.agents.file_agent.sentry_sdk")
+    mock_enqueue_many_retry_tasks = mocker.patch("carina.imports.agents.file_agent.enqueue_many_retry_tasks")
     error = redis.RedisError("Fake connection error")
     mock_enqueue_many_retry_tasks.side_effect = error
     today = date.today()

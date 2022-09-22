@@ -11,15 +11,15 @@ from retry_tasks_lib.db.models import TaskType, TaskTypeKey
 from sqlalchemy_utils import create_database, database_exists, drop_database
 from testfixtures import LogCapture
 
-from app.core.config import redis, settings
-from app.db.base import Base
-from app.db.session import SyncSessionMaker, sync_engine
-from app.enums import RewardTypeStatuses
-from app.models import FetchType, Retailer, Reward, RewardConfig
-from app.models.retailer import RetailerFetchType
-from app.tasks.error_handlers import default_handler, handle_retry_task_request_error
-from app.tasks.issuance import issue_reward
-from app.tasks.status_adjustment import status_adjustment
+from carina.core.config import redis, settings
+from carina.db.base import Base
+from carina.db.session import SyncSessionMaker, sync_engine
+from carina.enums import RewardTypeStatuses
+from carina.models import FetchType, Retailer, Reward, RewardConfig
+from carina.models.retailer import RetailerFetchType
+from carina.tasks.error_handlers import default_handler, handle_retry_task_request_error
+from carina.tasks.issuance import issue_reward
+from carina.tasks.status_adjustment import status_adjustment
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -102,7 +102,7 @@ def pre_loaded_fetch_type(db_session: "Session") -> FetchType:
     ft = FetchType(
         name="PRE_LOADED",
         required_fields="validity_days: integer",
-        path="app.fetch_reward.pre_loaded.PreLoaded",
+        path="carina.fetch_reward.pre_loaded.PreLoaded",
     )
     db_session.add(ft)
     db_session.commit()
@@ -113,7 +113,7 @@ def pre_loaded_fetch_type(db_session: "Session") -> FetchType:
 def jigsaw_fetch_type(db_session: "Session") -> FetchType:
     ft = FetchType(
         name="JIGSAW_EGIFT",
-        path="app.fetch_reward.jigsaw.Jigsaw",
+        path="carina.fetch_reward.jigsaw.Jigsaw",
         required_fields="transaction_value: integer",
     )
     db_session.add(ft)

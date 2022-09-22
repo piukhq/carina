@@ -10,17 +10,17 @@ import requests
 from fastapi import status
 from sqlalchemy.future import select
 
-from app.core.config import redis_raw
-from app.fetch_reward.base import AgentError
-from app.fetch_reward.jigsaw import Jigsaw
-from app.models.reward import Reward
+from carina.core.config import redis_raw
+from carina.fetch_reward.base import AgentError
+from carina.fetch_reward.jigsaw import Jigsaw
+from carina.models.reward import Reward
 
 if TYPE_CHECKING:  # pragma: no cover
     from pytest_mock import MockerFixture
     from retry_tasks_lib.db.models import RetryTask
     from sqlalchemy.orm import Session
 
-    from app.models import RetailerFetchType, RewardConfig
+    from carina.models import RetailerFetchType, RewardConfig
 
 
 @httpretty.activate
@@ -58,7 +58,7 @@ def test_jigsaw_agent_expired_token(
     )
 
     spy_redis_set = mocker.spy(redis_raw, "set")
-    mock_datetime = mocker.patch("app.fetch_reward.jigsaw.datetime")
+    mock_datetime = mocker.patch("carina.fetch_reward.jigsaw.datetime")
     mock_datetime.now.return_value = now
     mock_datetime.fromisoformat = datetime.fromisoformat
     spy_logger = mocker.spy(Jigsaw, "logger")
@@ -209,7 +209,7 @@ def test_jigsaw_agent_get_token_unexpected_error_response(
     )
 
     spy_redis_set = mocker.spy(redis_raw, "set")
-    mock_datetime = mocker.patch("app.fetch_reward.jigsaw.datetime")
+    mock_datetime = mocker.patch("carina.fetch_reward.jigsaw.datetime")
     mock_datetime.now.return_value = now
     mock_datetime.fromisoformat = datetime.fromisoformat
     spy_logger = mocker.spy(Jigsaw, "logger")
