@@ -52,7 +52,7 @@ class PreLoaded(BaseAgent):
             return (
                 self.db_session.execute(
                     select(Reward)
-                    .with_for_update()
+                    .with_for_update(skip_locked=True)
                     .where(
                         Reward.reward_config_id == self.reward_config.id,
                         Reward.allocated.is_(False),
