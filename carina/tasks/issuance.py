@@ -221,11 +221,11 @@ def issue_reward(retry_task: RetryTask, db_session: "Session") -> None:
                     )
                     logger.info(f"Sentry event ID: {event_id}")
 
-                def _set_waiting() -> None:
-                    retry_task.status = RetryTaskStatuses.WAITING.name
-                    db_session.commit()
+            def _set_waiting() -> None:
+                retry_task.status = RetryTaskStatuses.WAITING
+                db_session.commit()
 
-                sync_run_query(_set_waiting, db_session)
+            sync_run_query(_set_waiting, db_session)
 
             next_attempt_time = enqueue_retry_task_delay(
                 connection=redis_raw,
