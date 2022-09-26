@@ -62,6 +62,9 @@ pylint = "^2.15.2"
 pylint-pytest = "^1.1.2"
 testfixtures = "^7.0.0"
 
+[tool.poetry.scripts]
+carina = 'carina.core.cli:cli'
+
 [tool.black]
 line-length = 120
 
