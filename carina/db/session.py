@@ -5,13 +5,9 @@ from sqlalchemy.pool import NullPool
 
 from carina.core.config import settings
 
-if settings.USE_NULL_POOL or settings.TESTING:
-    null_pool = {"poolclass": NullPool}
-else:
-    null_pool = {}  # pragma: no cover
-
 # application name
 CONNECT_ARGS = {"application_name": "carina"}
+null_pool = {"poolclass": NullPool} if settings.USE_NULL_POOL else {}
 
 # future=True enables sqlalchemy core 2.0
 async_engine = create_async_engine(
