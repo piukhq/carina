@@ -132,11 +132,12 @@ def test_post_reward_allocation_with_pending_reward_id(
 
     payload_with_pending_reward_id = deepcopy(payload)
     payload_with_pending_reward_id["pending_reward_id"] = str(uuid.uuid4())
+    idempotency_token = str(uuid.uuid4())
 
     resp = client.post(
         f"{settings.API_PREFIX}/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/allocation",
         json=payload_with_pending_reward_id,
-        headers=auth_headers,
+        headers={"idempotency-token": idempotency_token, **auth_headers},
     )
 
     assert resp.status_code == status.HTTP_202_ACCEPTED
@@ -194,11 +195,12 @@ def test_post_reward_allocation_no_more_rewards(
     db_session.commit()
 
     mock_enqueue_tasks = mocker.patch("carina.api.endpoints.reward.enqueue_many_tasks")
+    idempotency_token = str(uuid.uuid4())
 
     resp = client.post(
         f"{settings.API_PREFIX}/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/allocation",
         json=payload,
-        headers=auth_headers,
+        headers={"idempotency-token": idempotency_token, **auth_headers},
     )
 
     assert resp.status_code == status.HTTP_202_ACCEPTED
@@ -277,8 +279,23 @@ def test_post_reward_allocation_invalid_idempotency_token(
         headers={**auth_headers, "idempotency-token": "invalid-token"},
     )
 
-    assert allocation_response.status_code == HttpErrors.INVALID_IDEMPOTENCY_TOKEN_HEADER.value.status_code
-    assert allocation_response.json() == HttpErrors.INVALID_IDEMPOTENCY_TOKEN_HEADER.value.detail
+    assert allocation_response.status_code == HttpErrors.MISSING_OR_INVALID_IDEMPOTENCY_TOKEN_HEADER.value.status_code
+    assert allocation_response.json() == HttpErrors.MISSING_OR_INVALID_IDEMPOTENCY_TOKEN_HEADER.value.detail
+
+
+def test_post_reward_allocation_missing_idempotency_token(
+    setup: SetupType,
+) -> None:
+    reward_config = setup.reward_config
+
+    allocation_response = client.post(
+        f"{settings.API_PREFIX}/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/allocation",
+        json=payload,
+        headers=auth_headers,
+    )
+
+    assert allocation_response.status_code == HttpErrors.MISSING_OR_INVALID_IDEMPOTENCY_TOKEN_HEADER.value.status_code
+    assert allocation_response.json() == HttpErrors.MISSING_OR_INVALID_IDEMPOTENCY_TOKEN_HEADER.value.detail
 
 
 def test_reward_type_cancelled_status_ok(
