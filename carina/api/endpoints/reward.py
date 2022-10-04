@@ -29,7 +29,7 @@ async def allocation(  # pylint: disable=too-many-arguments
     reward_slug: str,
     retailer: Retailer = Depends(retailer_is_valid),
     db_session: AsyncSession = Depends(get_session),
-    idempotency_token: UUID | None = Depends(get_idempotency_token),
+    idempotency_token: UUID = Depends(get_idempotency_token),
 ) -> Any:
     reward_config = await crud.get_reward_config(db_session, retailer, reward_slug)
     response.status_code, reward_issuance_task_ids = await crud.create_reward_issuance_retry_tasks(

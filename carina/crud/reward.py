@@ -49,7 +49,7 @@ async def create_reward_issuance_retry_tasks(
     retailer_slug: str,
     account_url: str,
     count: int,
-    idempotency_token: UUID | None = None,
+    idempotency_token: UUID,
     pending_reward_id: uuid.UUID | None,
 ) -> tuple[int, list[int]]:
     async def _query() -> tuple[int, list[int]]:
@@ -68,11 +68,10 @@ async def create_reward_issuance_retry_tasks(
         status_code = http_status.HTTP_202_ACCEPTED
 
         try:
-            if idempotency_token:
-                allocation_request = Allocation(
-                    idempotency_token=str(idempotency_token), count=count, account_url=account_url
-                )
-                db_session.add(allocation_request)
+            allocation_request = Allocation(
+                idempotency_token=str(idempotency_token), count=count, account_url=account_url
+            )
+            db_session.add(allocation_request)
             for _ in range(count):
                 task_params["idempotency_token"] = uuid4()
                 reward_issuance_task = await async_create_task(
