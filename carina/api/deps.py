@@ -43,12 +43,8 @@ async def retailer_is_valid(retailer_slug: str, db_session: AsyncSession = Depen
     return await crud.get_retailer_by_slug(db_session, retailer_slug)
 
 
-def get_idempotency_token(idempotency_token: str = Header(None)) -> UUID | None:
-    token = None
-    if idempotency_token:
-        try:
-            token = UUID(idempotency_token)
-        except (TypeError, ValueError):
-            raise HttpErrors.INVALID_IDEMPOTENCY_TOKEN_HEADER.value  # pylint: disable=raise-missing-from
-
-    return token
+def get_idempotency_token(idempotency_token: str = Header(None)) -> UUID:
+    try:
+        return UUID(idempotency_token)
+    except (TypeError, ValueError):
+        raise HttpErrors.MISSING_OR_INVALID_IDEMPOTENCY_TOKEN_HEADER.value  # pylint: disable=raise-missing-from
