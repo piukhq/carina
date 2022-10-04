@@ -15,20 +15,24 @@ class KeyVaultError(Exception):
 
 class KeyVault:
     def __init__(self, vault_url: str, test_or_migration: bool = False) -> None:
-        if test_or_migration:
-            self.client = None
-            logger.info("Key Vault not initialised as this is either a test or a migration.")
-        else:
-            self.client = SecretClient(
-                vault_url=vault_url,
-                credential=DefaultAzureCredential(
-                    additionally_allowed_tenants=["a6e2367a-92ea-4e5a-b565-723830bcc095"]
-                ),
-            )
+        self.client: SecretClient | None = None
+        self.vault_url = vault_url
+        self.test_or_migration = test_or_migration
+        if self.test_or_migration:
+            logger.info("SecretClient will not be initialised as this is either a test or a migration.")
+
+    def _get_client(self) -> SecretClient:
+        return SecretClient(
+            vault_url=self.vault_url,
+            credential=DefaultAzureCredential(additionally_allowed_tenants=["a6e2367a-92ea-4e5a-b565-723830bcc095"]),
+        )
 
     def get_secret(self, secret_name: str) -> str:
+        if self.test_or_migration:
+            return f"{secret_name}__testing-value"
+
         if not self.client:
-            return "testing-token"
+            self.client = self._get_client()
 
         try:
             return cast(str, self.client.get_secret(secret_name).value)

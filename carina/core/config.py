@@ -3,12 +3,11 @@ import os
 import sys
 
 from logging.config import dictConfig
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 import sentry_sdk
 
-from pydantic import BaseSettings, HttpUrl, PostgresDsn, validator
-from pydantic.validators import str_validator
+from pydantic import AnyHttpUrl, BaseSettings, Field, HttpUrl, PostgresDsn, validator
 from redis import Redis
 from retry_tasks_lib.settings import load_settings
 from sentry_sdk.integrations.redis import RedisIntegration
@@ -16,127 +15,88 @@ from sentry_sdk.integrations.redis import RedisIntegration
 from carina.core.key_vault import KeyVault
 from carina.version import __version__
 
-if TYPE_CHECKING:
-    from pydantic.typing import CallableGenerator
-
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+LogLevels = Literal["CRITICAL", "FATAL", "ERROR", "WARN", "WARNING", "INFO", "DEBUG", "NOTSET"]
 
 
-class LogLevel(str):
-    @classmethod
-    def __modify_schema__(cls, field_schema: dict[str, Any]) -> None:
-        field_schema.update(type="string", format="log_level")
+def _get_command() -> str:
+    cmd = sys.argv[0]
+    if cmd == "poetry":
+        cmd = sys.argv[2] if len(sys.argv) > 2 else "None"
+    return cmd
 
-    @classmethod
-    def __get_validators__(cls) -> "CallableGenerator":
-        yield str_validator
-        yield cls.validate
 
-    @classmethod
-    def validate(cls, value: str) -> str:
-        v = value.upper()
-        if v not in ["CRITICAL", "FATAL", "ERROR", "WARN", "WARNING", "INFO", "DEBUG", "NOTSET"]:
-            raise ValueError(f"{value} is not a valid LOG_LEVEL value")
-
-        return v
+_COMMAND = _get_command()
 
 
 class Settings(BaseSettings):
     API_PREFIX: str = "/rewards"
-    TESTING: bool = False
     SQL_DEBUG: bool = False
+    TESTING: bool = False
 
     @validator("TESTING")
     @classmethod
     def is_test(cls, v: bool) -> bool:
-        command = sys.argv[0]
-        args = sys.argv[1:] if len(sys.argv) > 1 else []
-
-        if "pytest" in command or any("test" in arg for arg in args):
-            return True
-        return v
+        return "test" in _COMMAND or v
 
     MIGRATING: bool = False
 
     @validator("MIGRATING")
     @classmethod
     def is_migration(cls, v: bool) -> bool:
-        command = sys.argv[0]
-
-        if "alembic" in command:
-            return True
-        return v
+        return "alembic" in _COMMAND or v
 
     PROJECT_NAME: str = "carina"
-    ROOT_LOG_LEVEL: LogLevel | None = None
-    QUERY_LOG_LEVEL: LogLevel | None = None
+    ROOT_LOG_LEVEL: LogLevels | None = None
+    QUERY_LOG_LEVEL: LogLevels | None = None
     LOG_FORMATTER: Literal["json", "brief", "console"] = "json"
     KEY_VAULT_URI: str = "https://bink-uksouth-dev-com.vault.azure.net/"
+    KEY_VAULT: KeyVault = None  # type: ignore [assignment]
 
-    CARINA_API_AUTH_TOKEN: str | None = None
-
-    @validator("CARINA_API_AUTH_TOKEN")
+    @validator("KEY_VAULT", pre=True, always=True)
     @classmethod
-    def fetch_carina_api_auth_token(cls, v: str | None, values: dict[str, Any]) -> Any:
-        if isinstance(v, str) and not values["TESTING"]:
+    def load_key_vault(cls, _: None, values: dict[str, Any]) -> KeyVault:
+        return KeyVault(values["KEY_VAULT_URI"], values["TESTING"] or values["MIGRATING"])
+
+    CARINA_API_AUTH_TOKEN: str = None  # type: ignore [assignment]
+
+    @validator("CARINA_API_AUTH_TOKEN", pre=True, always=True)
+    @classmethod
+    def fetch_carina_api_auth_token(cls, v: str | None, values: dict[str, Any]) -> str:
+        if v is not None:
             return v
 
-        if "KEY_VAULT_URI" in values:
-            return KeyVault(
-                values["KEY_VAULT_URI"],
-                values["TESTING"] or values["MIGRATING"],
-            ).get_secret("bpl-carina-api-auth-token")
+        return values["KEY_VAULT"].get_secret("bpl-carina-api-auth-token")
 
-        raise KeyError("required var KEY_VAULT_URI is not set.")
+    POLARIS_API_AUTH_TOKEN: str = None  # type: ignore [assignment]
 
-    POLARIS_API_AUTH_TOKEN: str | None = None
-
-    @validator("POLARIS_API_AUTH_TOKEN")
+    @validator("POLARIS_API_AUTH_TOKEN", pre=True, always=True)
     @classmethod
-    def fetch_polaris_api_auth_token(cls, v: str | None, values: dict[str, Any]) -> Any:
-        if isinstance(v, str) and not values["TESTING"]:
+    def fetch_polaris_api_auth_token(cls, v: str | None, values: dict[str, Any]) -> str:
+        if v is not None:
             return v
 
-        if "KEY_VAULT_URI" in values:
-            return KeyVault(
-                values["KEY_VAULT_URI"],
-                values["TESTING"] or values["MIGRATING"],
-            ).get_secret("bpl-polaris-api-auth-token")
-
-        raise KeyError("required var KEY_VAULT_URI is not set.")
+        return values["KEY_VAULT"].get_secret("bpl-polaris-api-auth-token")
 
     USE_NULL_POOL: bool = False
+
+    @validator("USE_NULL_POOL")
+    @classmethod
+    def set_null_pool(cls, v: bool, values: dict[str, Any]) -> bool:
+        return values["TESTING"] or v
+
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: str = "5432"
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = ""
     POSTGRES_DB: str = "carina"
-    SQLALCHEMY_DATABASE_URI: str = ""
-    SQLALCHEMY_DATABASE_URI_ASYNC: str | None = None
-    DB_CONNECTION_RETRY_TIMES: int = 3
-    SENTRY_DSN: HttpUrl | None = None
-    SENTRY_ENV: str | None = None
-    SENTRY_TRACES_SAMPLE_RATE: float = 0.0
+    SQLALCHEMY_DATABASE_URI: str = None  # type: ignore [assignment]
 
-    @validator("SENTRY_DSN", pre=True)
+    @validator("SQLALCHEMY_DATABASE_URI", pre=True, always=True)
     @classmethod
-    def sentry_dsn_can_be_blank(cls, v: str) -> str | None:
-        if v is not None and len(v) == 0:
-            return None
-        return v
+    def assemble_db_connection(cls, v: str | None, values: dict[str, Any]) -> str:
 
-    @validator("SENTRY_TRACES_SAMPLE_RATE")
-    @classmethod
-    def validate_sentry_traces_sample_rate(cls, v: float) -> float:
-        if not 0 <= v <= 1:
-            raise ValueError("SENTRY_TRACES_SAMPLE_RATE must be between 0.0 and 1.0")
-        return v
-
-    @validator("SQLALCHEMY_DATABASE_URI", pre=True)
-    @classmethod
-    def assemble_db_connection(cls, v: str, values: dict[str, Any]) -> Any:
-
-        if v != "":
+        if v is not None:
             db_uri = v.format(values["POSTGRES_DB"])
 
         else:
@@ -154,10 +114,12 @@ class Settings(BaseSettings):
 
         return db_uri
 
-    @validator("SQLALCHEMY_DATABASE_URI_ASYNC", pre=True)
+    SQLALCHEMY_DATABASE_URI_ASYNC: str = None  # type: ignore [assignment]
+
+    @validator("SQLALCHEMY_DATABASE_URI_ASYNC", pre=True, always=True)
     @classmethod
-    def adapt_db_connection_to_async(cls, v: str | None, values: dict[str, Any]) -> Any:
-        if isinstance(v, str):
+    def adapt_db_connection_to_async(cls, v: str | None, values: dict[str, Any]) -> str:
+        if v is not None:
             db_uri = v.format(values["POSTGRES_DB"])
         else:
             db_uri = (
@@ -168,14 +130,28 @@ class Settings(BaseSettings):
 
         return db_uri
 
-    POLARIS_HOST: str = "http://polaris-api"
-    POLARIS_BASE_URL: str = ""
+    DB_CONNECTION_RETRY_TIMES: int = 3
+    SENTRY_DSN: HttpUrl | None = None
 
-    @validator("POLARIS_BASE_URL")
+    @validator("SENTRY_DSN", pre=True, always=True)
     @classmethod
-    def polaris_base_url(cls, v: str, values: dict[str, Any]) -> str:
-        if v != "":
+    def sentry_dsn_can_be_blank(cls, v: str | None) -> str | None:
+        if v is not None and len(v) == 0:
+            return None
+        return v
+
+    SENTRY_ENV: str | None = None
+    SENTRY_TRACES_SAMPLE_RATE: float = Field(0.0, ge=0.0, le=1.0)
+
+    POLARIS_HOST: str = "http://polaris-api"
+    POLARIS_BASE_URL: str = None  # type: ignore [assignment]
+
+    @validator("POLARIS_BASE_URL", pre=True, always=True)
+    @classmethod
+    def polaris_base_url(cls, v: str | None, values: dict[str, Any]) -> str:
+        if v is not None:
             return v
+
         return f"{values['POLARIS_HOST']}/loyalty"
 
     REDIS_URL: str
@@ -209,52 +185,42 @@ class Settings(BaseSettings):
     REWARD_ISSUANCE_REQUEUE_BACKOFF_SECONDS: int = 60 * 60 * 12  # 12 hours
     REWARD_STATUS_ADJUSTMENT_TASK_NAME = "reward-status-adjustment"
 
+    PROMETHEUS_HTTP_SERVER_PORT: int = 9100
+
     TASK_MAX_RETRIES: int = 6
     TASK_RETRY_BACKOFF_BASE: float = 3.0
     TASK_QUEUE_PREFIX: str = "carina:"
-    TASK_QUEUES: list[str] | None = None
-    PROMETHEUS_HTTP_SERVER_PORT: int = 9100
+    TASK_QUEUES: list[str] = None  # type: ignore [assignment]
 
-    @validator("TASK_QUEUES")
+    @validator("TASK_QUEUES", pre=True, always=True)
     @classmethod
-    def task_queues(cls, v: list[str] | None, values: dict[str, Any]) -> Any:
-        if v and isinstance(v, list):
+    def task_queues(cls, v: list[str] | None, values: dict[str, Any]) -> list[str]:
+        if v is not None:
             return v
-        return (values["TASK_QUEUE_PREFIX"] + name for name in ("high", "default", "low"))
 
-    PRE_LOADED_REWARD_BASE_URL: str = "https://bpl.gb.bink.com"
+        return [values["TASK_QUEUE_PREFIX"] + name for name in ("high", "default", "low")]
+
+    PRE_LOADED_REWARD_BASE_URL: AnyHttpUrl
     JIGSAW_AGENT_USERNAME: str = "Bink_dev"
-    JIGSAW_AGENT_PASSWORD: str = ""
+    JIGSAW_AGENT_PASSWORD: str = None  # type: ignore [assignment]
 
-    @validator("JIGSAW_AGENT_PASSWORD")
+    @validator("JIGSAW_AGENT_PASSWORD", pre=True, always=True)
     @classmethod
-    def fetch_jigsaw_agent_password(cls, v: str, values: dict[str, Any]) -> Any:
-        if v != "" and not values["TESTING"]:
+    def fetch_jigsaw_agent_password(cls, v: str | None, values: dict[str, Any]) -> str:
+        if v is not None:
             return v
 
-        if "KEY_VAULT_URI" in values:
-            return KeyVault(
-                values["KEY_VAULT_URI"],
-                values["TESTING"] or values["MIGRATING"],
-            ).get_secret("bpl-carina-agent-jigsaw-password")
+        return values["KEY_VAULT"].get_secret("bpl-carina-agent-jigsaw-password")
 
-        raise KeyError("required var KEY_VAULT_URI is not set.")
+    JIGSAW_AGENT_ENCRYPTION_KEY: str = None  # type: ignore [assignment]
 
-    JIGSAW_AGENT_ENCRYPTION_KEY: str = ""
-
-    @validator("JIGSAW_AGENT_ENCRYPTION_KEY")
+    @validator("JIGSAW_AGENT_ENCRYPTION_KEY", pre=True, always=True)
     @classmethod
-    def fetch_jigsaw_agent_encryption_key(cls, v: str, values: dict[str, Any]) -> Any:
-        if v != "" and not values["TESTING"]:
+    def fetch_jigsaw_agent_encryption_key(cls, v: str | None, values: dict[str, Any]) -> str:
+        if v is not None:
             return v
 
-        if "KEY_VAULT_URI" in values:
-            return KeyVault(
-                values["KEY_VAULT_URI"],
-                values["TESTING"] or values["MIGRATING"],
-            ).get_secret("bpl-carina-agent-jigsaw-encryption-key")
-
-        raise KeyError("required var KEY_VAULT_URI is not set.")
+        return values["KEY_VAULT"].get_secret("bpl-carina-agent-jigsaw-encryption-key")
 
     REPORT_ANOMALOUS_TASKS_SCHEDULE = "*/10 * * * *"
     REPORT_TASKS_SUMMARY_SCHEDULE: str = "5,20,35,50 */1 * * *"
