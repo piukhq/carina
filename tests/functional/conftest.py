@@ -26,6 +26,7 @@ def reward_issuance_task_params(reward: Reward) -> dict:
         "reward_slug": reward.reward_config.reward_slug,
         "idempotency_token": str(uuid4()),
         "retailer_slug": "test-retailer",
+        "campaign_slug": "test-campaign",
     }
 
 
@@ -37,6 +38,7 @@ def reward_issuance_task_params_no_reward(reward_config: RewardConfig) -> dict:
         "reward_slug": reward_config.reward_slug,
         "idempotency_token": str(uuid4()),
         "retailer_slug": "test-retailer",
+        "campaign_slug": "test-campaign",
     }
 
 
@@ -91,6 +93,7 @@ def issuance_expected_payload(reward_issuance_task_params: dict) -> dict:
     return {
         "code": reward_issuance_task_params["code"],
         "reward_slug": reward_issuance_task_params["reward_slug"],
+        "campaign_slug": reward_issuance_task_params["campaign_slug"],
         "reward_uuid": reward_issuance_task_params["reward_uuid"],
         "associated_url": "",
     }
