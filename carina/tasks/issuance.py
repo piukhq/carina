@@ -61,18 +61,6 @@ def _process_issuance(task_params: dict, validity_days: int | None = None) -> di
 
         expiry_date = (now + timedelta(days=validity_days)).timestamp()
 
-    sync_send_activity(
-        ActivityType.get_reward_status_activity_data(
-            account_url_path=parsed_url.path,
-            retailer_slug=task_params["retailer_slug"],
-            reward_slug=task_params["reward_slug"],
-            activity_timestamp=issued_date,
-            reward_uuid=task_params["reward_uuid"],
-            pending_reward_id=task_params.get("pending_reward_id", None),
-        ),
-        routing_key=ActivityType.REWARD_STATUS.value,
-    )
-
     resp = send_request_with_metrics(
         "POST",
         url_template=url_template,
@@ -94,6 +82,18 @@ def _process_issuance(task_params: dict, validity_days: int | None = None) -> di
     resp.raise_for_status()
     response_audit["response"] = {"status": resp.status_code, "body": resp.text}
     logger.info(f"Allocation succeeded for reward: {task_params['reward_uuid']}")
+
+    sync_send_activity(
+        ActivityType.get_reward_status_activity_data(
+            account_url_path=parsed_url.path,
+            retailer_slug=task_params["retailer_slug"],
+            reward_slug=task_params["reward_slug"],
+            activity_timestamp=issued_date,
+            reward_uuid=task_params["reward_uuid"],
+            pending_reward_id=task_params.get("pending_reward_id", None),
+        ),
+        routing_key=ActivityType.REWARD_STATUS.value,
+    )
 
     return response_audit
 
