@@ -61,19 +61,24 @@ def _process_issuance(task_params: dict, validity_days: int | None = None) -> di
 
         expiry_date = (now + timedelta(days=validity_days)).timestamp()
 
+    campaign_slug = task_params.get("campaign_slug", None)
+    payload = {
+        "code": task_params["code"],
+        "issued_date": issued_date,
+        "expiry_date": expiry_date,
+        "reward_slug": task_params["reward_slug"],
+        "reward_uuid": task_params["reward_uuid"],
+        "associated_url": get_associated_url(task_params),
+    }
+    if campaign_slug:
+        payload["campaign_slug"] = campaign_slug
+
     resp = send_request_with_metrics(
         "POST",
         url_template=url_template,
         url_kwargs=url_kwargs,
         exclude_from_label_url=exclude,
-        json={
-            "code": task_params["code"],
-            "issued_date": issued_date,
-            "expiry_date": expiry_date,
-            "reward_slug": task_params["reward_slug"],
-            "reward_uuid": task_params["reward_uuid"],
-            "associated_url": get_associated_url(task_params),
-        },
+        json=payload,
         headers={
             "Authorization": f"Token {settings.POLARIS_API_AUTH_TOKEN}",
             "Idempotency-Token": task_params["idempotency_token"],
@@ -91,6 +96,7 @@ def _process_issuance(task_params: dict, validity_days: int | None = None) -> di
             activity_timestamp=issued_date,
             reward_uuid=task_params["reward_uuid"],
             pending_reward_id=task_params.get("pending_reward_id", None),
+            campaign_slug=campaign_slug,
         ),
         routing_key=ActivityType.REWARD_STATUS.value,
     )
