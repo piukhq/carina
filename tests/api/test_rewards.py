@@ -24,7 +24,11 @@ if TYPE_CHECKING:
 
 client = TestClient(app)
 auth_headers = {"Authorization": f"token {settings.CARINA_API_AUTH_TOKEN}"}
-payload = {"account_url": "http://test.url/"}
+payload = {
+    "account_url": "http://test.url/",
+    "count": 1,
+    "campaign_slug": "test-campaign",
+}
 
 
 def _get_retry_task_and_values(
@@ -92,6 +96,7 @@ def test_post_reward_allocation_happy_path(
     assert retry_task is not None
     assert "pending_reward_id" not in task_params
     assert payload["account_url"] in task_params_values
+    assert payload["campaign_slug"] in task_params_values
     assert str(reward_config.id) in task_params_values
     assert str(reward.id) not in task_params_values
     assert reward.allocated is False

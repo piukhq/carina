@@ -47,6 +47,7 @@ async def create_reward_issuance_retry_tasks(
     *,
     reward_config: RewardConfig,
     retailer_slug: str,
+    campaign_slug: str | None,
     account_url: str,
     count: int,
     idempotency_token: UUID,
@@ -63,6 +64,8 @@ async def create_reward_issuance_retry_tasks(
         }
         if pending_reward_id is not None:
             task_params["pending_reward_id"] = pending_reward_id
+        if campaign_slug is not None:
+            task_params["campaign_slug"] = campaign_slug
 
         reward_issuance_tasks = []
         status_code = http_status.HTTP_202_ACCEPTED
