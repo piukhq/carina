@@ -76,6 +76,18 @@ class BaseAgent(ABC):
                 f"for RetryTask: {self.retry_task.retry_task_id}."
             ) from ex
 
+    def _delete_task_params_by_key_names(self, key_names: list[str]) -> None:
+        self.db_session.execute(
+            TaskTypeKeyValue.__table__.delete().where(
+                TaskTypeKeyValue.retry_task_id == self.retry_task.retry_task_id,
+                TaskTypeKeyValue.task_type_key_id == TaskTypeKey.task_type_key_id,
+                TaskTypeKey.name.in_(key_names),
+            )
+        )
+
+    def _remove_reward_references_from_task_params(self) -> None:
+        self._delete_task_params_by_key_names(["reward_uuid", "code", "issued_date", "expiry_date"])
+
     def set_agent_state_params(self, value: dict) -> None:
         def _query(val: str) -> None:
             if self._agent_state_params_raw_instance is None:
@@ -108,6 +120,12 @@ class BaseAgent(ABC):
     @abstractmethod
     def fetch_reward(self) -> RewardData:
         ...
+
+    @abstractmethod
+    def cleanup(self) -> None:
+        """
+        Deletes all references to a Reward from the provided RetryTask and enables reallocation of said Reward's code.
+        """
 
     @abstractmethod
     def fetch_balance(self) -> Any:  # pragma: no cover
