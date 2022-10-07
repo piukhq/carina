@@ -29,6 +29,7 @@ def test_get_reward_status_activity_data_no_pending(mocker: MockFixture) -> None
         activity_timestamp=activity_datetime.timestamp(),
         reward_uuid=reward_uuid,
         pending_reward_id=None,
+        campaign_slug=None,
     )
 
     assert payload == {
@@ -60,6 +61,7 @@ def test_get_reward_status_activity_data_pending(mocker: MockFixture) -> None:
     user_uuid = str(uuid4())
     reward_slug = "test-reward"
     retailer_slug = "test-retailer"
+    campaign_slug = "test-campaign"
     reward_uuid = str(uuid4())
     activity_datetime = datetime.now(tz=timezone.utc)
     account_url_path = f"/loyalty/{retailer_slug}/accounts/{user_uuid}/rewards"
@@ -71,6 +73,7 @@ def test_get_reward_status_activity_data_pending(mocker: MockFixture) -> None:
         activity_timestamp=activity_datetime.timestamp(),
         reward_uuid=reward_uuid,
         pending_reward_id=pending_reward_id,
+        campaign_slug=campaign_slug,
     )
 
     assert payload == {
@@ -83,7 +86,7 @@ def test_get_reward_status_activity_data_pending(mocker: MockFixture) -> None:
         "user_id": user_uuid,
         "associated_value": "issued",
         "retailer": retailer_slug,
-        "campaigns": [],
+        "campaigns": [campaign_slug],
         "data": {
             "new_status": "issued",
             "original_status": "pending",

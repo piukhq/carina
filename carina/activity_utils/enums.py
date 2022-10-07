@@ -30,7 +30,8 @@ class ActivityType(Enum):
         reward_slug: str,
         activity_timestamp: float,
         reward_uuid: str,
-        pending_reward_id: str | None = None,
+        pending_reward_id: str | None,
+        campaign_slug: str | None,
     ) -> dict:
         data_payload = {"new_status": "issued", "reward_slug": reward_slug}
 
@@ -51,6 +52,6 @@ class ActivityType(Enum):
             "user_id": _try_parse_account_url_path(account_url_path),
             "associated_value": "issued",
             "retailer": retailer_slug,
-            "campaigns": [],
+            "campaigns": [campaign_slug] if campaign_slug else [],
             "data": RewardStatusDataSchema(**data_payload).dict(exclude_unset=True),
         }

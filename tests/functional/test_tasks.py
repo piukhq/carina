@@ -142,7 +142,7 @@ def test__process_issuance_http_errors(
         assert last_request.method == "POST"
         assert json.loads(last_request.body) == issuance_expected_payload
 
-    assert mock_send_activity.call_count == 2
+    mock_send_activity.assert_not_called()
 
 
 def test__process_issuance_connection_error(mocker: MockerFixture, reward_issuance_task_params: dict) -> None:
@@ -154,7 +154,7 @@ def test__process_issuance_connection_error(mocker: MockerFixture, reward_issuan
 
     assert isinstance(excinfo.value, requests.Timeout)
     assert excinfo.value.response is None
-    mock_send_activity.assert_called_once()
+    mock_send_activity.assert_not_called()
 
 
 @httpretty.activate
@@ -572,7 +572,7 @@ def test_reward_issuance_409_from_polaris(
     assert issuance_retry_task.next_attempt_time is None
     assert issuance_retry_task.status == RetryTaskStatuses.SUCCESS
     assert reward.allocated
-    assert mock_send_activity.call_count == 2
+    mock_send_activity.assert_called_once()
 
 
 @httpretty.activate
@@ -605,4 +605,4 @@ def test_reward_issuance_no_reward_but_one_available_and_409(
     assert issuance_retry_task_no_reward.status == RetryTaskStatuses.IN_PROGRESS
     # The reward should also have been set to allocated: True
     assert reward.allocated
-    mock_send_activity.assert_called_once()
+    mock_send_activity.assert_not_called()

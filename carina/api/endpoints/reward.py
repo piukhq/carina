@@ -36,6 +36,7 @@ async def allocation(  # pylint: disable=too-many-arguments
         db_session,
         reward_config=reward_config,
         retailer_slug=retailer.slug,
+        campaign_slug=payload.campaign_slug,
         account_url=payload.account_url,
         count=payload.count,
         idempotency_token=idempotency_token,
