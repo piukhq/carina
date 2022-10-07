@@ -424,7 +424,10 @@ class Jigsaw(BaseAgent):
         )
 
     def fetch_balance(self) -> Any:  # pragma: no cover
-        return NotImplementedError
+        raise NotImplementedError
+
+    def cleanup(self) -> None:  # pragma: no cover
+        raise NotImplementedError
 
     def __exit__(self, exc_type: type, exc_value: Exception, exc_traceback: "Traceback") -> None:
 
