@@ -44,21 +44,10 @@ class PreLoaded(BaseAgent):
 
         return RewardData(reward=reward, issued_date=None, expiry_date=expiry_date, validity_days=validity_days)
 
-    def cleanup(self) -> None:
-        task_params = self.retry_task.get_params()
-        if "reward_uuid" not in task_params:
-            return
-
-        def _query() -> None:
-            self.db_session.execute(
-                Reward.__table__.update()
-                .values(allocated=False)
-                .where(Reward.id == task_params["reward_uuid"], Reward.allocated.is_(True), Reward.deleted.is_(False))
-            )
-            self._remove_reward_references_from_task_params()
-            self.db_session.commit()
-
-        sync_run_query(_query, self.db_session)
+    def cleanup_reward(self) -> None:
+        reward_uuid: str | None = self.retry_task.get_params().get("reward_uuid")
+        if reward_uuid:
+            self.update_reward_and_remove_references_from_task(reward_uuid, {"allocated": False})
 
     def fetch_balance(self) -> Any:  # pragma: no cover
         raise NotImplementedError
