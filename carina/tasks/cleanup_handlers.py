@@ -19,5 +19,6 @@ def reward_issuance_cleanup_handler(retry_task: RetryTask, db_session: "Session"
     reward_config: RewardConfig = sync_run_query(
         lambda: db_session.execute(select(RewardConfig).where(RewardConfig.id == reward_config_id)),
         db_session,
+        rollback_on_exc=False,
     )
     cleanup_reward(db_session, reward_config, retry_task)
