@@ -10,7 +10,7 @@ class AnswerBotBase(ABC):
     def __init__(self) -> None:
         self.calls: dict[str, int] = defaultdict(int)
 
-    def _update_calls_end_get_endpoint(self, uri: str) -> str:
+    def _update_calls_and_get_endpoint(self, uri: str) -> str:
         _, endpoint_name = uri.rsplit("/", 1)
         self.calls[endpoint_name] += 1
         return endpoint_name

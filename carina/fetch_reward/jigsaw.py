@@ -215,7 +215,10 @@ class Jigsaw(BaseAgent):
         return error_msg_details
 
     def _get_response_body_or_raise_for_status(
-        self, resp: requests.Response, try_again_call: Callable[..., requests.Response] = None
+        self,
+        resp: requests.Response,
+        try_again_call: Callable[..., requests.Response] = None,
+        reversal_allowed: bool = True,
     ) -> dict:
         """Validates a http response based on Jigsaw specific status codes and errors ids."""
 
@@ -234,19 +237,18 @@ class Jigsaw(BaseAgent):
                 response=resp,
             )
 
-        if self.retry_task is not None:
-            self.retry_task.update_task(
-                db_session=self.db_session,
-                response_audit={
-                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                    "request": {"method": resp.request.method, "url": resp.request.url},
-                    "response": {
-                        "status": resp.status_code,
-                        "jigsaw_status": f"{jigsaw_status} {description}",
-                        "message": f"{msg_id} {msg_info}",
-                    },
+        self.retry_task.update_task(
+            db_session=self.db_session,
+            response_audit={
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+                "request": {"method": resp.request.method, "url": resp.request.url},
+                "response": {
+                    "status": resp.status_code,
+                    "jigsaw_status": f"{jigsaw_status} {description}",
+                    "message": f"{msg_id} {msg_info}",
                 },
-            )
+            },
+        )
 
         # we want to capture the failed response's audit before trying again.
         if execute_special_action:
@@ -254,7 +256,9 @@ class Jigsaw(BaseAgent):
             return self.special_actions_map[jigsaw_status]["action"](try_again_call)
 
         if jigsaw_status != "2000":
-            self._flag_for_reversal_if_needed(resp, unknown_status=True)
+            if reversal_allowed:
+                self._flag_for_reversal_if_needed(resp, unknown_status=True)
+
             raise AgentError(
                 f"Jigsaw: unknown error returned. status: {jigsaw_status} {description}, "
                 + self._format_error_message_details(msg_id, msg_info, resp.request.path_url)
@@ -337,10 +341,7 @@ class Jigsaw(BaseAgent):
         If a customer_card_ref is stored as task param, returns that instead of creating a new uuid.
         """
 
-        customer_card_ref: str | None = None
-        if self.retry_task is not None:
-            customer_card_ref = self.agent_state_params.get(self.CARD_REF_KEY, None)
-
+        customer_card_ref = self.agent_state_params.get(self.CARD_REF_KEY, None)
         self.customer_card_ref = str(uuid4()) if customer_card_ref is None else customer_card_ref
         return datetime.now(tz=timezone.utc)
 
@@ -426,14 +427,23 @@ class Jigsaw(BaseAgent):
     def fetch_balance(self) -> Any:  # pragma: no cover
         raise NotImplementedError
 
-    def cleanup(self) -> None:  # pragma: no cover
-        raise NotImplementedError
+    def cleanup_reward(self) -> None:
+        reward_uuid: str | None = self.retry_task.get_params().get("reward_uuid", None)
+        if reward_uuid:
+            self.set_agent_state_params(self.agent_state_params | {self.REVERSAL_CARD_REF_KEY: reward_uuid})
+            self.update_reward_and_remove_references_from_task(reward_uuid, {"deleted": True})
+
+        if self.agent_state_params.get(self.REVERSAL_CARD_REF_KEY):
+            resp = self._send_reversal_request()
+            self._get_response_body_or_raise_for_status(resp)
 
     def __exit__(self, exc_type: type, exc_value: Exception, exc_traceback: "Traceback") -> None:
 
         if exc_value is not None:
             self.logger.exception(
-                "Exception occurred while fetching a new Jigsaw reward, exiting agent gracefully.", exc_info=exc_value
+                "Exception occurred while fetching a new Jigsaw reward or cleaning up an existing task, "
+                "exiting agent gracefully.",
+                exc_info=exc_value,
             )
 
             if self.customer_card_ref is not None and self.CARD_REF_KEY not in self.agent_state_params:

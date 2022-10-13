@@ -56,7 +56,7 @@ def test_jigsaw_agent_ok(
                 "data": {
                     "__type": "Response.getToken:#Jigsaw.API.Service",
                     "Token": test_token,
-                    # jidsaw returns a naive datetime here
+                    # jigsaw returns a naive datetime here
                     "Expires": (now.replace(tzinfo=None) + timedelta(days=1)).isoformat(),
                     "TestMode": True,
                 },
@@ -293,7 +293,7 @@ def test_jigsaw_agent_register_reversal_paths_no_previous_error_ok(
             self, request: httpretty.core.HTTPrettyRequest, uri: str, response_headers: dict
         ) -> tuple[int, dict, str]:
 
-            self._update_calls_end_get_endpoint(uri)
+            self._update_calls_and_get_endpoint(uri)
             requests_card_ref = json.loads(request.body)["customer_card_ref"]
 
             if requests_card_ref == str(card_ref):
@@ -410,7 +410,7 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_ok(
             self, request: httpretty.core.HTTPrettyRequest, uri: str, response_headers: dict
         ) -> tuple[int, dict, str]:
 
-            endpoint = self._update_calls_end_get_endpoint(uri)
+            endpoint = self._update_calls_and_get_endpoint(uri)
 
             if endpoint == "register":
                 requests_card_ref = json.loads(request.body)["customer_card_ref"]

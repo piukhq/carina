@@ -9,7 +9,7 @@ from retry_tasks_lib.db.models import TaskTypeKey, TaskTypeKeyValue
 from sqlalchemy.future import select
 
 from carina.db.base_class import sync_run_query
-from carina.models.reward import Reward
+from carina.models import Reward
 from carina.tasks import send_request_with_metrics
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -85,6 +85,22 @@ class BaseAgent(ABC):
             )
         )
 
+    def update_reward_and_remove_references_from_task(self, reward_uuid: str, update_values: dict) -> None:
+        def _query() -> None:
+            self.db_session.execute(
+                Reward.__table__.update()
+                .values(**update_values)
+                .where(
+                    Reward.id == reward_uuid,
+                    Reward.allocated.is_(True),
+                    Reward.deleted.is_(False),
+                )
+            )
+            self._delete_task_params_by_key_names(["reward_uuid", "code", "issued_date", "expiry_date"])
+            self.db_session.commit()
+
+        sync_run_query(_query, self.db_session)
+
     def _remove_reward_references_from_task_params(self) -> None:
         self._delete_task_params_by_key_names(["reward_uuid", "code", "issued_date", "expiry_date"])
 
@@ -122,7 +138,7 @@ class BaseAgent(ABC):
         ...
 
     @abstractmethod
-    def cleanup(self) -> None:
+    def cleanup_reward(self) -> None:
         """
         Deletes all references to a Reward from the provided RetryTask and enables reallocation of said Reward's code.
         """
