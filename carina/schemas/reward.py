@@ -11,8 +11,8 @@ from carina.enums import RewardTypeStatuses, RewardUpdateStatuses
 class RewardAllocationSchema(BaseModel):  # pragma: no cover
     account_url: AnyHttpUrl
     count: int = 1
+    campaign_slug: str
     pending_reward_id: uuid.UUID | None
-    campaign_slug: str | None
 
 
 class RewardStatusSchema(BaseModel):
