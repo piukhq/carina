@@ -14,8 +14,15 @@ from sqlalchemy.future import select
 
 from carina.core.config import settings
 from carina.db.base_class import async_run_query
-from carina.enums import HttpErrors
-from carina.models import IDEMPOTENCY_TOKEN_REWARD_ALLOCATION_UNQ_CONSTRAINT_NAME, Allocation, Retailer, RewardConfig
+from carina.enums import HttpErrors, RewardCampaignStatuses
+from carina.models import (
+    CAMPAIGN_RETAILER_UNQ_CONSTRAINT_NAME,
+    IDEMPOTENCY_TOKEN_REWARD_ALLOCATION_UNQ_CONSTRAINT_NAME,
+    Allocation,
+    Retailer,
+    RewardCampaign,
+    RewardConfig,
+)
 
 logger = logging.getLogger("reward-crud")
 
@@ -128,3 +135,44 @@ async def create_delete_and_cancel_rewards_tasks(
         return delete_task, cancel_task
 
     return [task.retry_task_id for task in await async_run_query(_query, db_session)]
+
+
+async def insert_or_update_reward_campaign(
+    db_session: AsyncSession,
+    *,
+    reward_slug: str,
+    retailer_id: int,
+    campaign_slug: str,
+    campaign_status: RewardCampaignStatuses,
+) -> int:
+    async def _query() -> int:
+        status_code = http_status.HTTP_201_CREATED
+        try:
+            new_reward_campaign = RewardCampaign(
+                reward_slug=reward_slug,
+                campaign_slug=campaign_slug,
+                retailer_id=retailer_id,
+                campaign_status=campaign_status,
+            )
+            db_session.add(new_reward_campaign)
+            await db_session.commit()
+        except IntegrityError as ex:
+            # change this to use ex.orig.diag.constraint_name when we migrate to psycopg3
+            if CAMPAIGN_RETAILER_UNQ_CONSTRAINT_NAME not in ex.args[0]:
+                raise
+
+            await db_session.rollback()
+            existing_reward_campaign: RewardCampaign = (
+                await db_session.execute(
+                    select(RewardCampaign).where(
+                        RewardCampaign.campaign_slug == campaign_slug, RewardCampaign.retailer_id == retailer_id
+                    )
+                )
+            ).scalar_one()
+            existing_reward_campaign.campaign_status = campaign_status
+            await db_session.commit()
+            status_code = http_status.HTTP_200_OK
+
+        return status_code  # pylint: disable=lost-exception
+
+    return await async_run_query(_query, db_session)

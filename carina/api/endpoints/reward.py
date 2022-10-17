@@ -12,7 +12,7 @@ from carina.api.tasks import enqueue_many_tasks
 from carina.db.base_class import async_run_query
 from carina.enums import HttpErrors, RewardTypeStatuses
 from carina.models import Retailer
-from carina.schemas import RewardAllocationSchema
+from carina.schemas import RewardAllocationSchema, RewardCampaignSchema
 from carina.schemas.reward import RewardStatusSchema
 
 router = APIRouter()
@@ -79,5 +79,32 @@ async def reward_type_status(
         )
 
         asyncio.create_task(enqueue_many_tasks(retry_tasks_ids=retry_tasks_ids))
+
+    return {}
+
+
+@router.put(
+    path="/{retailer_slug}/{reward_slug}/campaign",
+    dependencies=[Depends(user_is_authorised)],
+)
+async def reward_campaign(  # pylint: disable=too-many-arguments
+    payload: RewardCampaignSchema,
+    response: Response,
+    reward_slug: str,
+    retailer: Retailer = Depends(retailer_is_valid),
+    db_session: AsyncSession = Depends(get_session),
+) -> Any:
+    reward_config = await crud.get_reward_config(db_session, retailer, reward_slug, for_update=True)
+
+    if reward_config.status not in [RewardTypeStatuses.ACTIVE]:
+        raise HttpErrors.UNKNOWN_REWARD_SLUG.value
+
+    response.status_code = await crud.insert_or_update_reward_campaign(
+        db_session,
+        reward_slug=reward_config.reward_slug,
+        retailer_id=retailer.id,
+        campaign_slug=payload.campaign_slug,
+        campaign_status=payload.status,
+    )
 
     return {}

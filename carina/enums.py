@@ -61,6 +61,13 @@ class RewardUpdateStatuses(Enum):
     REDEEMED = "redeemed"
 
 
+class RewardCampaignStatuses(Enum):
+    ACTIVE = "active"
+    CANCELLED = "cancelled"
+    DRAFT = "draft"
+    ENDED = "ended"
+
+
 class RewardFetchType(Enum):
     PRE_LOADED = "pre_loaded"
 

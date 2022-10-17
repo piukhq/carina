@@ -14,8 +14,8 @@ from testfixtures import LogCapture
 from carina.core.config import redis, settings
 from carina.db.base import Base
 from carina.db.session import SyncSessionMaker, sync_engine
-from carina.enums import RewardTypeStatuses
-from carina.models import FetchType, Retailer, Reward, RewardConfig
+from carina.enums import RewardCampaignStatuses, RewardTypeStatuses
+from carina.models import FetchType, Retailer, Reward, RewardCampaign, RewardConfig
 from carina.models.retailer import RetailerFetchType
 from carina.tasks.error_handlers import default_handler, handle_retry_task_request_error
 from carina.tasks.issuance import issue_reward
@@ -228,6 +228,19 @@ def create_rewards(db_session: "Session", reward_config: RewardConfig) -> Callab
         return {reward.code: reward for reward in rewards}
 
     return fn
+
+
+@pytest.fixture(scope="function")
+def reward_campaign(db_session: "Session", reward_config: RewardConfig, retailer: Retailer) -> RewardCampaign:
+    rc = RewardCampaign(
+        reward_slug=reward_config.reward_slug,
+        campaign_slug="test-campaign",
+        retailer_id=retailer.id,
+        campaign_status=RewardCampaignStatuses.ACTIVE,
+    )
+    db_session.add(rc)
+    db_session.commit()
+    return rc
 
 
 @pytest.fixture(scope="function")
