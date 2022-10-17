@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from carina.db.base_class import Base, TimestampMixin
-from carina.enums import FileAgentType, RewardTypeStatuses, RewardUpdateStatuses
+from carina.enums import FileAgentType, RewardCampaignStatuses, RewardTypeStatuses, RewardUpdateStatuses
 
 
 class Reward(Base, TimestampMixin):
@@ -105,3 +105,24 @@ class Allocation(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("idempotency_token", name=IDEMPOTENCY_TOKEN_REWARD_ALLOCATION_UNQ_CONSTRAINT_NAME),
     )
+
+
+class RewardCampaign(Base, TimestampMixin):
+    __tablename__ = "reward_campaign"
+
+    id = Column(Integer, primary_key=True)
+    reward_slug = Column(String(32), index=True, nullable=False)
+    campaign_slug = Column(String(32), index=True, nullable=False)
+    retailer_id = Column(Integer, ForeignKey("retailer.id", ondelete="CASCADE"), nullable=False)
+    campaign_status = Column(Enum(RewardCampaignStatuses), nullable=False)
+
+    retailer = relationship("Retailer", back_populates="reward_campaigns")
+
+    __mapper_args__ = {"eager_defaults": True}
+    __table_args__ = (UniqueConstraint("campaign_slug", "retailer_id", name="campaign_slug_retailer_unq"),)
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"{self.__class__.__name__}({self.retailer.slug}, " f"{self.campaign_slug})"
+
+
+CAMPAIGN_RETAILER_UNQ_CONSTRAINT_NAME = "campaign_slug_retailer_unq"

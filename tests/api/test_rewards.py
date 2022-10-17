@@ -13,7 +13,8 @@ from sqlalchemy.future import select
 
 from asgi import app
 from carina.core.config import settings
-from carina.enums import RewardTypeStatuses
+from carina.enums import RewardCampaignStatuses, RewardTypeStatuses
+from carina.models import Retailer, RewardCampaign
 from carina.models.reward import Allocation
 from tests.conftest import SetupType
 from tests.fixtures import HttpErrors
@@ -430,3 +431,138 @@ def test_reward_type_status_wrong_reward_config_status(setup: SetupType) -> None
     assert resp.json() == HttpErrors.STATUS_UPDATE_FAILED.value.detail
     db_session.refresh(reward_config)
     assert reward_config.status == RewardTypeStatuses.CANCELLED
+
+
+def test_insert_reward_campaign_happy_path(
+    setup: SetupType,
+    retailer: Retailer,
+) -> None:
+    db_session, _, reward = setup
+    mock_campaign_slug = "test-campaign"
+
+    reward_campaign_payload = {
+        "status": RewardTypeStatuses.ACTIVE,
+        "campaign_slug": mock_campaign_slug,
+    }
+    resp = client.put(
+        f"{settings.API_PREFIX}/{reward.reward_config.retailer.slug}/{reward.reward_config.reward_slug}/campaign",
+        json=reward_campaign_payload,
+        headers=auth_headers,
+    )
+
+    assert resp.status_code == status.HTTP_201_CREATED
+    assert resp.json() == {}
+
+    existing_reward_campaign: RewardCampaign = (
+        db_session.execute(
+            select(RewardCampaign).where(
+                RewardCampaign.campaign_slug == mock_campaign_slug, RewardCampaign.retailer_id == retailer.id
+            )
+        )
+    ).scalar_one()
+    assert existing_reward_campaign.campaign_status == RewardCampaignStatuses.ACTIVE
+
+
+def test_update_reward_campaign_happy_path(
+    setup: SetupType,
+    retailer: Retailer,
+    reward_campaign: RewardCampaign,
+) -> None:
+    db_session, _, reward = setup
+
+    reward_campaign_payload = {
+        "status": RewardTypeStatuses.ENDED,
+        "campaign_slug": reward_campaign.campaign_slug,
+    }
+    resp = client.put(
+        f"{settings.API_PREFIX}/{reward.reward_config.retailer.slug}/{reward.reward_config.reward_slug}/campaign",
+        json=reward_campaign_payload,
+        headers=auth_headers,
+    )
+
+    assert resp.status_code == status.HTTP_200_OK
+    assert resp.json() == {}
+
+    db_session.refresh(reward_campaign)
+
+    assert reward_campaign.campaign_status == RewardCampaignStatuses.ENDED
+
+
+def test_reward_campaign_reward_slug_not_found(setup: SetupType) -> None:
+    _, reward_config, _ = setup
+
+    reward_campaign_payload = {
+        "status": RewardTypeStatuses.ACTIVE,
+        "campaign_slug": "test-campaign",
+    }
+    resp = client.put(
+        f"{settings.API_PREFIX}/{reward_config.retailer.slug}/invalid-reward-slug/campaign",
+        json=reward_campaign_payload,
+        headers=auth_headers,
+    )
+    assert resp.status_code == HttpErrors.UNKNOWN_REWARD_TYPE.value.status_code
+    assert resp.json() == HttpErrors.UNKNOWN_REWARD_TYPE.value.detail
+
+
+def test_reward_campaign_invalid_retailer(setup: SetupType) -> None:
+    _, reward_config, _ = setup
+
+    reward_campaign_payload = {
+        "status": RewardTypeStatuses.ACTIVE,
+        "campaign_slug": "test-campaign",
+    }
+    resp = client.put(
+        f"{settings.API_PREFIX}/invalid-retailer-slug/{reward_config.reward_slug}/campaign",
+        json=reward_campaign_payload,
+        headers=auth_headers,
+    )
+    assert resp.status_code == HttpErrors.INVALID_RETAILER.value.status_code
+    assert resp.json() == HttpErrors.INVALID_RETAILER.value.detail
+
+
+def test_reward_campaign_validation_error(setup: SetupType) -> None:
+    _, reward_config, _ = setup
+
+    reward_campaign_payload = {
+        "status": "invalid-status",
+        "campaign_slug": "test-campaign",
+    }
+    resp = client.put(
+        f"{settings.API_PREFIX}/{reward_config.retailer.slug}/{reward_config.reward_slug}/campaign",
+        json=reward_campaign_payload,
+        headers=auth_headers,
+    )
+
+    assert resp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert resp.json() == {
+        "display_message": "Submitted fields are missing or invalid.",
+        "code": "FIELD_VALIDATION_ERROR",
+        "fields": [
+            "status",
+        ],
+    }
+
+
+def test_reward_campaign_reward_slug_is_not_active(
+    setup: SetupType,
+    retailer: Retailer,
+    reward_campaign: RewardCampaign,
+) -> None:
+    db_session, reward_config, reward = setup
+
+    reward_config.status = RewardTypeStatuses.ENDED
+    db_session.commit()
+
+    reward_campaign_payload = {
+        "status": RewardTypeStatuses.ACTIVE,
+        "campaign_slug": "test-campaign",
+    }
+    resp = client.put(
+        f"{settings.API_PREFIX}/{reward.reward_config.retailer.slug}/{reward.reward_config.reward_slug}/campaign",
+        json=reward_campaign_payload,
+        headers=auth_headers,
+    )
+    db_session.refresh(reward_config)
+    assert reward_config.status == RewardTypeStatuses.ENDED
+    assert resp.status_code == HttpErrors.UNKNOWN_REWARD_TYPE.value.status_code
+    assert resp.json() == HttpErrors.UNKNOWN_REWARD_TYPE.value.detail
