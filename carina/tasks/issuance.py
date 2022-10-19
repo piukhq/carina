@@ -17,9 +17,9 @@ from carina.activity_utils.tasks import sync_send_activity
 from carina.core.config import redis_raw, settings
 from carina.db.base_class import sync_run_query
 from carina.db.session import SyncSessionMaker
-from carina.enums import RewardTypeStatuses
+from carina.enums import RewardCampaignStatuses
 from carina.fetch_reward import get_allocable_reward, get_associated_url
-from carina.models import Reward, RewardConfig
+from carina.models import Retailer, Reward, RewardCampaign, RewardConfig
 
 from . import logger, send_request_with_metrics
 from .prometheus import task_processing_time_callback_fn, tasks_run_total
@@ -123,6 +123,34 @@ def _get_reward(db_session: "Session", reward_uuid: str) -> Reward:
     return reward
 
 
+def _get_reward_campaign(
+    db_session: "Session",
+    campaign_slug: str,
+    retailer_id: int,
+) -> RewardCampaign:
+    reward_campaign: RewardCampaign = sync_run_query(
+        lambda: db_session.execute(
+            select(RewardCampaign).where(
+                RewardCampaign.campaign_slug == campaign_slug, RewardCampaign.retailer_id == retailer_id
+            )
+        ).scalar_one(),
+        db_session,
+        rollback_on_exc=False,
+    )
+
+    return reward_campaign
+
+
+def _get_retailer_by_slug(db_session: "Session", retailer_slug: str) -> Retailer:
+    retailer: Retailer = sync_run_query(
+        lambda: db_session.execute(select(Retailer).where(Retailer.slug == retailer_slug)).scalar_one(),
+        db_session,
+        rollback_on_exc=False,
+    )
+
+    return retailer
+
+
 def _cancel_task(db_session: "Session", retry_task: RetryTask) -> None:
     """The campaign been cancelled: cancel the task and soft delete any associated reward"""
     retry_task.update_task(db_session, status=RetryTaskStatuses.CANCELLED, clear_next_attempt_time=True)
@@ -178,11 +206,17 @@ def issue_reward(retry_task: RetryTask, db_session: "Session") -> None:
     if settings.ACTIVATE_TASKS_METRICS:
         tasks_run_total.labels(app=settings.PROJECT_NAME, task_name=settings.REWARD_ISSUANCE_TASK_NAME).inc()
 
-    reward_config = _get_reward_config(db_session, retry_task.get_params()["reward_config_id"])
-    if reward_config.status == RewardTypeStatuses.CANCELLED:
+    retailer = _get_retailer_by_slug(db_session, retry_task.get_params()["retailer_slug"])
+    reward_campaign: RewardCampaign = _get_reward_campaign(
+        db_session=db_session,
+        campaign_slug=retry_task.get_params()["campaign_slug"],
+        retailer_id=retailer.id,
+    )
+    if reward_campaign.campaign_status == RewardCampaignStatuses.CANCELLED:
         _cancel_task(db_session, retry_task)
         return
 
+    reward_config = _get_reward_config(db_session, retry_task.get_params()["reward_config_id"])
     # Process the allocation if it has a reward, else try to get a reward - requeue that if necessary
     if "reward_uuid" in retry_task.get_params():
         validity_days = reward_config.load_required_fields_values().get("validity_days")

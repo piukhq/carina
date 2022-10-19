@@ -1,4 +1,4 @@
-# pylint: disable=import-outside-toplevel,no-value-for-parameter
+# pylint: disable=import-outside-toplevel,no-value-for-parameter,too-many-arguments
 
 import json
 
@@ -19,8 +19,8 @@ from sqlalchemy.orm import Session
 from testfixtures import LogCapture
 
 from carina.core.config import settings
-from carina.enums import RewardTypeStatuses
-from carina.models import Reward, RewardConfig
+from carina.enums import RewardCampaignStatuses
+from carina.models import Reward, RewardCampaign, RewardConfig
 from carina.tasks.issuance import _process_issuance, issue_reward
 from carina.tasks.reward_cancellation import cancel_rewards
 from carina.tasks.reward_deletion import delete_unallocated_rewards
@@ -159,7 +159,11 @@ def test__process_issuance_connection_error(mocker: MockerFixture, reward_issuan
 
 @httpretty.activate
 def test_reward_issuance(
-    mocker: MockerFixture, db_session: "Session", reward_config: RewardConfig, issuance_retry_task: RetryTask
+    mocker: MockerFixture,
+    db_session: "Session",
+    reward_config: RewardConfig,
+    issuance_retry_task: RetryTask,
+    reward_campaign: RewardCampaign,
 ) -> None:
     mock_send_activity = mocker.patch("carina.tasks.issuance.sync_send_activity")
     httpretty.register_uri("POST", issuance_retry_task.get_params()["account_url"], body="OK", status=200)
@@ -174,7 +178,12 @@ def test_reward_issuance(
     mock_send_activity.assert_called_once()
 
 
-def test_reward_issuance_wrong_status(db_session: "Session", issuance_retry_task: RetryTask) -> None:
+def test_reward_issuance_wrong_status(
+    db_session: "Session",
+    issuance_retry_task: RetryTask,
+    reward_campaign: RewardCampaign,
+) -> None:
+
     issuance_retry_task.status = RetryTaskStatuses.FAILED
     db_session.commit()
 
@@ -190,12 +199,15 @@ def test_reward_issuance_wrong_status(db_session: "Session", issuance_retry_task
 
 @httpretty.activate
 def test_reward_issuance_campaign_is_cancelled(
-    db_session: "Session", issuance_retry_task: RetryTask, reward_config: RewardConfig, mocker: MockerFixture
+    db_session: "Session",
+    issuance_retry_task: RetryTask,
+    mocker: MockerFixture,
+    reward_campaign: RewardCampaign,
 ) -> None:
     """
     Test that, if the campaign has been cancelled by the time we get to issue a reward, the issuance is also cancelled
     """
-    reward_config.status = RewardTypeStatuses.CANCELLED
+    reward_campaign.campaign_status = RewardCampaignStatuses.CANCELLED
     db_session.commit()
     import carina.tasks.issuance as tasks_allocation
 
@@ -221,14 +233,14 @@ def test_reward_issuance_campaign_is_cancelled(
 def test_reward_issuance_no_reward_campaign_is_cancelled(
     db_session: "Session",
     issuance_retry_task_no_reward: RetryTask,
-    reward_config: RewardConfig,
     mocker: MockerFixture,
+    reward_campaign: RewardCampaign,
 ) -> None:
     """
     Test that, if the campaign has been cancelled by the time we get to issue a reward, the issuance is also cancelled.
     This is the test for when the task exists but a reward has not yet become available
     """
-    reward_config.status = RewardTypeStatuses.CANCELLED
+    reward_campaign.campaign_status = RewardCampaignStatuses.CANCELLED
     db_session.commit()
     import carina.tasks.issuance as tasks_allocation
 
@@ -246,7 +258,11 @@ def test_reward_issuance_no_reward_campaign_is_cancelled(
 
 @httpretty.activate
 def test_reward_issuance_no_reward_but_one_available(
-    db_session: "Session", issuance_retry_task_no_reward: RetryTask, mocker: MockerFixture, reward: Reward
+    db_session: "Session",
+    issuance_retry_task_no_reward: RetryTask,
+    mocker: MockerFixture,
+    reward: Reward,
+    reward_campaign: RewardCampaign,
 ) -> None:
     """test that an allocable reward (the pytest 'reward' fixture) is allocated, resulting in success"""
     mock_send_activity = mocker.patch("carina.tasks.issuance.sync_send_activity")
@@ -272,6 +288,7 @@ def test_reward_issuance_no_reward_and_allocation_is_requeued(
     capture: LogCapture,
     mocker: MockerFixture,
     create_reward: Callable,
+    reward_campaign: RewardCampaign,
 ) -> None:
     """test that no allocable reward results in the allocation being requeued"""
     mock_send_activity = mocker.patch("carina.tasks.issuance.sync_send_activity")
@@ -522,6 +539,7 @@ def test_reward_issuance_409_from_polaris(
     create_reward: Callable,
     reward_issuance_task_params: dict,
     mocker: MockerFixture,
+    reward_campaign: RewardCampaign,
 ) -> None:
     """Test reward is deleted for the task (from the DB) and task retried on a 409 from Polaris"""
     mock_send_activity = mocker.patch("carina.tasks.issuance.sync_send_activity")
@@ -577,7 +595,11 @@ def test_reward_issuance_409_from_polaris(
 
 @httpretty.activate
 def test_reward_issuance_no_reward_but_one_available_and_409(
-    db_session: "Session", issuance_retry_task_no_reward: RetryTask, mocker: MockerFixture, reward: Reward
+    db_session: "Session",
+    issuance_retry_task_no_reward: RetryTask,
+    mocker: MockerFixture,
+    reward: Reward,
+    reward_campaign: RewardCampaign,
 ) -> None:
     """Test reward id is deleted for task (from the DB) and task is retried on a 409 from Polaris,
     if we don't initially have a reward"""

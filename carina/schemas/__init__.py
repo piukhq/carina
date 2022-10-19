@@ -1,1 +1,1 @@
-from .reward import RewardAllocationSchema, RewardUpdateSchema
+from .reward import RewardAllocationSchema, RewardCampaignSchema, RewardUpdateSchema
