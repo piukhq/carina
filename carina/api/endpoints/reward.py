@@ -1,19 +1,23 @@
 import asyncio
+import logging
 
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from carina import crud
 from carina.api.deps import get_idempotency_token, get_session, retailer_is_valid, user_is_authorised
 from carina.api.tasks import enqueue_many_tasks
-from carina.enums import HttpErrors, RewardTypeStatuses
-from carina.models import Retailer
+from carina.db.base_class import async_run_query
+from carina.enums import HttpErrors, RewardFetchType, RewardTypeStatuses
+from carina.models import Retailer, Reward
 from carina.schemas import RewardAllocationSchema, RewardCampaignSchema
 
 router = APIRouter()
+
+logger = logging.getLogger("reward")
 
 
 @router.post(
@@ -70,5 +74,40 @@ async def reward_campaign(  # pylint: disable=too-many-arguments
         campaign_slug=payload.campaign_slug,
         campaign_status=payload.status,
     )
+
+    return {}
+
+
+@router.delete(
+    path="/{retailer_slug}/rewards/{reward_slug}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(user_is_authorised)],
+)
+async def deactivate_reward_type(
+    reward_slug: str,
+    retailer: Retailer = Depends(retailer_is_valid),
+    db_session: AsyncSession = Depends(get_session),
+) -> Any:
+    reward_config = await crud.get_reward_config(db_session, retailer, reward_slug)
+    active_campaign = await crud.check_for_active_campaigns(db_session, retailer, reward_slug)
+    if active_campaign:
+        raise HTTPException(  # pylint: disable=raise-missing-from
+            detail={"campaign_slug": active_campaign.campaign_slug}, status_code=status.HTTP_409_CONFLICT
+        )
+
+    async def _query() -> None:
+        reward_config.status = RewardTypeStatuses.DELETED
+        if reward_config.fetch_type.name == RewardFetchType.PRE_LOADED.name:
+            result = await db_session.execute(
+                Reward.__table__.delete().where(
+                    Reward.allocated.is_(False),
+                    Reward.retailer_id == retailer.id,
+                    Reward.reward_config_id == reward_config.id,
+                )
+            )
+            logger.info(f"Deleted {result.rowcount} unallocated reward rows for {reward_config}")
+        return await db_session.commit()
+
+    await async_run_query(_query, db_session)
 
     return {}
