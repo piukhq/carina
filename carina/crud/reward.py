@@ -11,6 +11,7 @@ from retry_tasks_lib.utils.asynchronous import async_create_task
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy.orm import noload, selectinload
 
 from carina.core.config import settings
 from carina.db.base_class import async_run_query
@@ -34,13 +35,16 @@ async def get_reward_config(
     for_update: bool = False,
 ) -> RewardConfig:
     async def _query() -> list[RewardConfig]:
-        stmt = select(RewardConfig).where(
-            RewardConfig.retailer_id == retailer.id, RewardConfig.reward_slug == reward_slug
+        option = selectinload if not for_update else noload
+        stmt = (
+            select(RewardConfig)
+            .options(option(RewardConfig.fetch_type))
+            .where(RewardConfig.retailer_id == retailer.id, RewardConfig.reward_slug == reward_slug)
         )
         if for_update:
             stmt = stmt.with_for_update()
 
-        return (await db_session.execute(stmt)).scalar_one_or_none()
+        return (await db_session.execute(stmt)).unique().scalar_one_or_none()
 
     reward_config = await async_run_query(_query, db_session)
     if reward_config is None:
@@ -153,5 +157,22 @@ async def insert_or_update_reward_campaign(
             status_code = http_status.HTTP_200_OK
 
         return status_code  # pylint: disable=lost-exception
+
+    return await async_run_query(_query, db_session)
+
+
+async def check_for_active_campaigns(
+    db_session: AsyncSession,
+    retailer: Retailer,
+    reward_slug: str,
+) -> RewardCampaign | None:
+    async def _query() -> RewardCampaign | None:
+        campaigns = select(RewardCampaign).where(
+            RewardCampaign.retailer_id == retailer.id,
+            RewardCampaign.reward_slug == reward_slug,
+            RewardCampaign.campaign_status == RewardCampaignStatuses.ACTIVE,
+        )
+
+        return (await db_session.execute(campaigns)).scalar_one_or_none()
 
     return await async_run_query(_query, db_session)
