@@ -15,10 +15,9 @@ if TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy.orm import Session
 
 
-def get_allocable_reward(
-    db_session: "Session", reward_config: RewardConfig, retry_task: "RetryTask" = None
-) -> RewardData:
-
+def _reward_config_specific_agent(
+    db_session: "Session", reward_config: RewardConfig, retry_task: "RetryTask"
+) -> BaseAgent:
     try:
         mod, cls = reward_config.fetch_type.path.rsplit(".", 1)
         mod = import_module(mod)
@@ -37,10 +36,18 @@ def get_allocable_reward(
             )
         ).scalar_one()
 
-    agent_config: dict = sync_run_query(_query, db_session).load_agent_config()
+    agent_config: dict = sync_run_query(_query, db_session, rollback_on_exc=False).load_agent_config()
+    return Agent(db_session, reward_config, agent_config, retry_task=retry_task)
 
-    with Agent(db_session, reward_config, agent_config, retry_task=retry_task) as agent:
+
+def get_allocable_reward(db_session: "Session", reward_config: RewardConfig, retry_task: "RetryTask") -> RewardData:
+    with _reward_config_specific_agent(db_session, reward_config, retry_task) as agent:
         return agent.fetch_reward()
+
+
+def cleanup_reward(db_session: "Session", reward_config: RewardConfig, retry_task: "RetryTask") -> None:
+    with _reward_config_specific_agent(db_session, reward_config, retry_task) as agent:
+        return agent.cleanup_reward()
 
 
 def get_associated_url(task_params: dict) -> str:

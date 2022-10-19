@@ -48,7 +48,7 @@ def test_jigsaw_agent_expired_token(
                 "data": {
                     "__type": "Response.getToken:#Jigsaw.API.Service",
                     "Token": test_token,
-                    # jidsaw returns a naive datetime here
+                    # jigsaw returns a naive datetime here
                     "Expires": (now.replace(tzinfo=None) - timedelta(days=1)).isoformat(),
                     "TestMode": True,
                 },
@@ -219,7 +219,9 @@ def test_jigsaw_agent_get_token_unexpected_error_response(
             agent.fetch_reward()
 
     spy_logger.exception.assert_called_with(
-        "Exception occurred while fetching a new Jigsaw reward, exiting agent gracefully.", exc_info=exc_info.value
+        "Exception occurred while fetching a new Jigsaw reward or cleaning up an existing task, "
+        "exiting agent gracefully.",
+        exc_info=exc_info.value,
     )
     assert exc_info.value.args[0] == (
         "Jigsaw: unknown error returned. status: 9000 OMG, endpoint: /order/V4/getToken, "

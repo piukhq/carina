@@ -51,7 +51,7 @@ def test_jigsaw_agent_register_reversal_paths_no_previous_error_max_retries_exce
         def response_generator(
             self, request: httpretty.core.HTTPrettyRequest, uri: str, response_headers: dict
         ) -> tuple[int, dict, str]:
-            self._update_calls_end_get_endpoint(uri)
+            self._update_calls_and_get_endpoint(uri)
             return (
                 200,
                 response_headers,
@@ -128,7 +128,7 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_max_retries_exceede
             self, request: httpretty.core.HTTPrettyRequest, uri: str, response_headers: dict
         ) -> tuple[int, dict, str]:
 
-            match self._update_calls_end_get_endpoint(uri):
+            match self._update_calls_and_get_endpoint(uri):
                 case "register":
                     return (
                         200,
@@ -233,7 +233,7 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_need_new_token(
             self, request: httpretty.core.HTTPrettyRequest, uri: str, response_headers: dict
         ) -> tuple[int, dict, str]:
 
-            match self._update_calls_end_get_endpoint(uri):
+            match self._update_calls_and_get_endpoint(uri):
                 case "register":
                     if self.calls["reversal"] < 2:
                         return (
@@ -328,7 +328,7 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_need_new_token(
                                 "data": {
                                     "__type": "Response.getToken:#Jigsaw.API.Service",
                                     "Token": success_token,
-                                    # jidsaw returns a naive datetime here
+                                    # jigsaw returns a naive datetime here
                                     "Expires": (now.replace(tzinfo=None) + timedelta(days=1)).isoformat(),
                                     "TestMode": True,
                                 },

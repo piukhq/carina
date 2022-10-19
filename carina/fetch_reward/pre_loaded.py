@@ -44,8 +44,13 @@ class PreLoaded(BaseAgent):
 
         return RewardData(reward=reward, issued_date=None, expiry_date=expiry_date, validity_days=validity_days)
 
+    def cleanup_reward(self) -> None:
+        reward_uuid: str | None = self.retry_task.get_params().get("reward_uuid")
+        if reward_uuid:
+            self.update_reward_and_remove_references_from_task(reward_uuid, {"allocated": False})
+
     def fetch_balance(self) -> Any:  # pragma: no cover
-        return NotImplementedError
+        raise NotImplementedError
 
     def _get_allocable_reward(self) -> Reward | None:
         def _query() -> Reward | None:
