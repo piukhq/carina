@@ -178,8 +178,6 @@ class Settings(BaseSettings):
     REDIS_KEY_PREFIX = "carina:"
 
     REWARD_ISSUANCE_TASK_NAME = "reward-issuance"
-    CANCEL_REWARDS_TASK_NAME = "cancel-rewards"
-    DELETE_UNALLOCATED_REWARDS_TASK_NAME = "delete-unallocated-rewards"
 
     MESSAGE_IF_NO_PRE_LOADED_REWARDS: bool = False
     REWARD_ISSUANCE_REQUEUE_BACKOFF_SECONDS: int = 60 * 60 * 12  # 12 hours

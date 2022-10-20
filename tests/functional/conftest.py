@@ -179,22 +179,6 @@ def delete_rewards_retry_task(
 
 
 @pytest.fixture(scope="function")
-def cancel_rewards_retry_task(
-    db_session: "Session", reward_cancellation_task_type: TaskType, reward_config: RewardConfig
-) -> RetryTask:
-    task = sync_create_task(
-        db_session,
-        task_type_name=reward_cancellation_task_type.name,
-        params={
-            "retailer_slug": reward_config.retailer.slug,
-            "reward_slug": reward_config.reward_slug,
-        },
-    )
-    db_session.commit()
-    return task
-
-
-@pytest.fixture(scope="function")
 def create_reward_config(db_session: "Session", pre_loaded_retailer_fetch_type: RetailerFetchType) -> Callable:
     def _create_reward_config(**reward_config_params: Any) -> RewardConfig:
         mock_reward_config_params = {
