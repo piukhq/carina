@@ -18,12 +18,9 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import Session
 from testfixtures import LogCapture
 
-from carina.core.config import settings
 from carina.enums import RewardCampaignStatuses
 from carina.models import Reward, RewardCampaign, RewardConfig
 from carina.tasks.issuance import _process_issuance, issue_reward
-from carina.tasks.reward_cancellation import cancel_rewards
-from carina.tasks.reward_deletion import delete_unallocated_rewards
 from carina.tasks.status_adjustment import _process_status_adjustment, status_adjustment
 
 fake_now = datetime.now(tz=timezone.utc)
@@ -456,80 +453,6 @@ def test_status_adjustment_wrong_status(db_session: "Session", reward_status_adj
     assert reward_status_adjustment_retry_task.attempts == 0
     assert reward_status_adjustment_retry_task.next_attempt_time is None
     assert reward_status_adjustment_retry_task.status == RetryTaskStatuses.FAILED
-
-
-def test_delete_unallocated_rewards(delete_rewards_retry_task: RetryTask, db_session: Session, reward: Reward) -> None:
-    task_params = delete_rewards_retry_task.get_params()
-
-    other_config = RewardConfig(
-        reward_slug="other-config",
-        required_fields_values="validity_days: 15",
-        retailer_id=task_params["retailer_id"],
-        fetch_type_id=reward.reward_config.fetch_type_id,
-    )
-    db_session.add(other_config)
-    db_session.flush()
-
-    other_reward = Reward(
-        code="sample-other-code",
-        reward_config_id=other_config.id,
-        retailer_id=other_config.retailer_id,
-    )
-    db_session.add(other_reward)
-
-    allocated_reward = Reward(
-        code="sample-allocated-code",
-        reward_config_id=reward.reward_config_id,
-        retailer_id=reward.retailer_id,
-        allocated=True,
-    )
-    db_session.add(allocated_reward)
-    db_session.commit()
-
-    assert reward.deleted is False
-    delete_unallocated_rewards(delete_rewards_retry_task.retry_task_id)
-
-    db_session.refresh(delete_rewards_retry_task)
-    db_session.refresh(reward)
-    db_session.refresh(other_reward)
-    db_session.refresh(allocated_reward)
-
-    assert reward.deleted is True
-    assert other_reward.deleted is False
-    assert allocated_reward.deleted is False
-    assert delete_rewards_retry_task.next_attempt_time is None
-    assert delete_rewards_retry_task.attempts == 1
-    assert delete_rewards_retry_task.audit_data == []
-
-
-@httpretty.activate
-@mock.patch("carina.tasks.reward_cancellation.datetime")
-def test_cancel_reward(mock_datetime: mock.Mock, db_session: Session, cancel_rewards_retry_task: RetryTask) -> None:
-    mock_datetime.now.return_value = fake_now
-    task_params = cancel_rewards_retry_task.get_params()
-    url = "{base_url}/{retailer_slug}/rewards/{reward_slug}/cancel".format(
-        base_url=settings.POLARIS_BASE_URL,
-        retailer_slug=task_params["retailer_slug"],
-        reward_slug=task_params["reward_slug"],
-    )
-
-    httpretty.register_uri("POST", url, body="OK", status=202)
-    cancel_rewards(cancel_rewards_retry_task.retry_task_id)
-    db_session.refresh(cancel_rewards_retry_task)
-
-    last_request = httpretty.last_request()
-    assert last_request.method == "POST"
-    assert last_request.url == url
-    assert last_request.body == b""
-    assert cancel_rewards_retry_task.next_attempt_time is None
-    assert cancel_rewards_retry_task.attempts == 1
-    assert cancel_rewards_retry_task.audit_data[0] == {
-        "timestamp": fake_now.isoformat(),
-        "response": {
-            "status": 202,
-            "body": "OK",
-        },
-    }
 
 
 @httpretty.activate
