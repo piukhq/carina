@@ -10,7 +10,6 @@ from retry_tasks_lib.db.models import RetryTask, TaskTypeKey, TaskTypeKeyValue
 from retry_tasks_lib.enums import RetryTaskStatuses
 from retry_tasks_lib.utils.synchronous import enqueue_retry_task_delay, retryable_task
 from sqlalchemy.future import select
-from sqlalchemy.orm import joinedload
 
 from carina.activity_utils.enums import ActivityType
 from carina.activity_utils.tasks import sync_send_activity
@@ -19,7 +18,8 @@ from carina.db.base_class import sync_run_query
 from carina.db.session import SyncSessionMaker
 from carina.enums import RewardCampaignStatuses
 from carina.fetch_reward import get_allocable_reward, get_associated_url
-from carina.models import Retailer, Reward, RewardCampaign, RewardConfig
+from carina.models import Retailer, Reward, RewardCampaign
+from carina.tasks.shared_crud import get_reward_config
 
 from . import logger, send_request_with_metrics
 from .prometheus import task_processing_time_callback_fn, tasks_run_total
@@ -104,20 +104,11 @@ def _process_issuance(task_params: dict, validity_days: int | None = None) -> di
     return response_audit
 
 
-def _get_reward_config(db_session: "Session", reward_config_id: int) -> RewardConfig:
-
-    return sync_run_query(
-        lambda: db_session.execute(
-            select(RewardConfig).options(joinedload(RewardConfig.retailer)).where(RewardConfig.id == reward_config_id)
-        ).scalar_one(),
-        db_session,
-    )
-
-
 def _get_reward(db_session: "Session", reward_uuid: str) -> Reward:
     reward: Reward = sync_run_query(
         lambda: db_session.execute(select(Reward).where(Reward.id == reward_uuid)).scalar_one(),
         db_session,
+        rollback_on_exc=False,
     )
 
     return reward
@@ -216,7 +207,7 @@ def issue_reward(retry_task: RetryTask, db_session: "Session") -> None:
         _cancel_task(db_session, retry_task)
         return
 
-    reward_config = _get_reward_config(db_session, retry_task.get_params()["reward_config_id"])
+    reward_config = get_reward_config(db_session, retry_task.get_params()["reward_config_id"])
     # Process the allocation if it has a reward, else try to get a reward - requeue that if necessary
     if "reward_uuid" in retry_task.get_params():
         validity_days = reward_config.load_required_fields_values().get("validity_days")
