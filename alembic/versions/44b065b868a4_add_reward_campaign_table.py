@@ -16,6 +16,9 @@ branch_labels = None
 depends_on = None
 
 
+rewardcampaignstatuses = sa.Enum("ACTIVE", "CANCELLED", "DRAFT", "ENDED", name="rewardcampaignstatuses")
+
+
 def upgrade() -> None:
     op.create_table(
         "reward_campaign",
@@ -31,7 +34,7 @@ def upgrade() -> None:
         sa.Column("retailer_id", sa.Integer(), nullable=False),
         sa.Column(
             "campaign_status",
-            sa.Enum("ACTIVE", "CANCELLED", "DRAFT", "ENDED", name="rewardcampaignstatuses"),
+            rewardcampaignstatuses,
             nullable=False,
         ),
         sa.ForeignKeyConstraint(["retailer_id"], ["retailer.id"], ondelete="CASCADE"),
@@ -46,3 +49,4 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_reward_campaign_reward_slug"), table_name="reward_campaign")
     op.drop_index(op.f("ix_reward_campaign_campaign_slug"), table_name="reward_campaign")
     op.drop_table("reward_campaign")
+    rewardcampaignstatuses.drop(op.get_bind(), checkfirst=False)
