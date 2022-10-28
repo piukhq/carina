@@ -17,6 +17,7 @@ class Retailer(Base, TimestampMixin):
 
     rewards = relationship("Reward", back_populates="retailer")
     reward_configs = relationship("RewardConfig", back_populates="retailer")
+    reward_campaigns = relationship("RewardCampaign", back_populates="retailer")
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"{self.__class__.__name__}: ({self.id}) {self.slug}"

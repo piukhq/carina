@@ -53,12 +53,20 @@ class RewardTypeStatuses(str, Enum):
     ACTIVE = "active"
     CANCELLED = "cancelled"
     ENDED = "ended"
+    DELETED = "deleted"
 
 
 class RewardUpdateStatuses(Enum):
     ISSUED = "issued"
     CANCELLED = "cancelled"
     REDEEMED = "redeemed"
+
+
+class RewardCampaignStatuses(Enum):
+    ACTIVE = "active"
+    CANCELLED = "cancelled"
+    DRAFT = "draft"
+    ENDED = "ended"
 
 
 class RewardFetchType(Enum):

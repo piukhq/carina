@@ -14,10 +14,10 @@ from testfixtures import LogCapture
 from carina.core.config import redis, settings
 from carina.db.base import Base
 from carina.db.session import SyncSessionMaker, sync_engine
-from carina.enums import RewardTypeStatuses
-from carina.models import FetchType, Retailer, Reward, RewardConfig
+from carina.enums import RewardCampaignStatuses, RewardTypeStatuses
+from carina.models import FetchType, Retailer, Reward, RewardCampaign, RewardConfig
 from carina.models.retailer import RetailerFetchType
-from carina.tasks.error_handlers import default_handler, handle_retry_task_request_error
+from carina.tasks.error_handlers import handle_retry_task_request_error
 from carina.tasks.issuance import issue_reward
 from carina.tasks.status_adjustment import status_adjustment
 
@@ -231,6 +231,19 @@ def create_rewards(db_session: "Session", reward_config: RewardConfig) -> Callab
 
 
 @pytest.fixture(scope="function")
+def reward_campaign(db_session: "Session", reward_config: RewardConfig, retailer: Retailer) -> RewardCampaign:
+    rc = RewardCampaign(
+        reward_slug=reward_config.reward_slug,
+        campaign_slug="test-campaign",
+        retailer_id=retailer.id,
+        campaign_status=RewardCampaignStatuses.ACTIVE,
+    )
+    db_session.add(rc)
+    db_session.commit()
+    return rc
+
+
+@pytest.fixture(scope="function")
 def capture() -> Generator:
     with LogCapture() as cpt:
         yield cpt
@@ -290,56 +303,6 @@ def reward_status_adjustment_task_type(db_session: "Session") -> TaskType:
                 ("retailer_slug", "STRING"),
                 ("date", "FLOAT"),
                 ("status", "STRING"),
-            )
-        ]
-    )
-
-    db_session.commit()
-    return task
-
-
-@pytest.fixture(scope="function")
-def reward_deletion_task_type(db_session: "Session") -> TaskType:
-    task = TaskType(
-        name=settings.DELETE_UNALLOCATED_REWARDS_TASK_NAME,
-        path=_get_path(issue_reward),
-        queue_name="carina:default",
-        error_handler_path=_get_path(default_handler),
-    )
-    db_session.add(task)
-    db_session.flush()
-
-    db_session.bulk_save_objects(
-        [
-            TaskTypeKey(task_type_id=task.task_type_id, name=key_name, type=key_type)
-            for key_name, key_type in (
-                ("reward_slug", "STRING"),
-                ("retailer_id", "INTEGER"),
-            )
-        ]
-    )
-
-    db_session.commit()
-    return task
-
-
-@pytest.fixture(scope="function")
-def reward_cancellation_task_type(db_session: "Session") -> TaskType:
-    task = TaskType(
-        name=settings.CANCEL_REWARDS_TASK_NAME,
-        path=_get_path(issue_reward),
-        queue_name="carina:default",
-        error_handler_path=_get_path(handle_retry_task_request_error),
-    )
-    db_session.add(task)
-    db_session.flush()
-
-    db_session.bulk_save_objects(
-        [
-            TaskTypeKey(task_type_id=task.task_type_id, name=key_name, type=key_type)
-            for key_name, key_type in (
-                ("reward_slug", "STRING"),
-                ("retailer_slug", "STRING"),
             )
         ]
     )

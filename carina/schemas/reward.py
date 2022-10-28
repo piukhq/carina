@@ -5,14 +5,19 @@ from typing import Literal
 
 from pydantic import AnyHttpUrl, BaseModel, validator
 
-from carina.enums import RewardTypeStatuses, RewardUpdateStatuses
+from carina.enums import RewardCampaignStatuses, RewardTypeStatuses, RewardUpdateStatuses
 
 
 class RewardAllocationSchema(BaseModel):  # pragma: no cover
     account_url: AnyHttpUrl
     count: int = 1
+    campaign_slug: str
     pending_reward_id: uuid.UUID | None
-    campaign_slug: str | None
+
+
+class RewardCampaignSchema(BaseModel):  # pragma: no cover
+    campaign_slug: str
+    status: RewardCampaignStatuses
 
 
 class RewardStatusSchema(BaseModel):

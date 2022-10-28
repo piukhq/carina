@@ -11,11 +11,19 @@ from retry_tasks_lib.utils.asynchronous import async_create_task
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy.orm import noload, selectinload
 
 from carina.core.config import settings
 from carina.db.base_class import async_run_query
-from carina.enums import HttpErrors
-from carina.models import IDEMPOTENCY_TOKEN_REWARD_ALLOCATION_UNQ_CONSTRAINT_NAME, Allocation, Retailer, RewardConfig
+from carina.enums import HttpErrors, RewardCampaignStatuses
+from carina.models import (
+    CAMPAIGN_RETAILER_UNQ_CONSTRAINT_NAME,
+    IDEMPOTENCY_TOKEN_REWARD_ALLOCATION_UNQ_CONSTRAINT_NAME,
+    Allocation,
+    Retailer,
+    RewardCampaign,
+    RewardConfig,
+)
 
 logger = logging.getLogger("reward-crud")
 
@@ -27,13 +35,16 @@ async def get_reward_config(
     for_update: bool = False,
 ) -> RewardConfig:
     async def _query() -> list[RewardConfig]:
-        stmt = select(RewardConfig).where(
-            RewardConfig.retailer_id == retailer.id, RewardConfig.reward_slug == reward_slug
+        option = selectinload if not for_update else noload
+        stmt = (
+            select(RewardConfig)
+            .options(option(RewardConfig.fetch_type))
+            .where(RewardConfig.retailer_id == retailer.id, RewardConfig.reward_slug == reward_slug)
         )
         if for_update:
             stmt = stmt.with_for_update()
 
-        return (await db_session.execute(stmt)).scalar_one_or_none()
+        return (await db_session.execute(stmt)).unique().scalar_one_or_none()
 
     reward_config = await async_run_query(_query, db_session)
     if reward_config is None:
@@ -109,22 +120,59 @@ async def create_reward_issuance_retry_tasks(
     return await async_run_query(_query, db_session)
 
 
-async def create_delete_and_cancel_rewards_tasks(
-    db_session: AsyncSession, *, retailer: Retailer, reward_slug: str
-) -> list[int]:
-    async def _query() -> tuple[RetryTask, RetryTask | None]:
-        delete_task: RetryTask = await async_create_task(
-            db_session=db_session,
-            task_type_name=settings.DELETE_UNALLOCATED_REWARDS_TASK_NAME,
-            params={"retailer_id": retailer.id, "reward_slug": reward_slug},
-        )
-        cancel_task: RetryTask = await async_create_task(
-            db_session=db_session,
-            task_type_name=settings.CANCEL_REWARDS_TASK_NAME,
-            params={"retailer_slug": retailer.slug, "reward_slug": reward_slug},
+async def insert_or_update_reward_campaign(
+    db_session: AsyncSession,
+    *,
+    reward_slug: str,
+    retailer_id: int,
+    campaign_slug: str,
+    campaign_status: RewardCampaignStatuses,
+) -> int:
+    async def _query() -> int:
+        status_code = http_status.HTTP_201_CREATED
+        try:
+            new_reward_campaign = RewardCampaign(
+                reward_slug=reward_slug,
+                campaign_slug=campaign_slug,
+                retailer_id=retailer_id,
+                campaign_status=campaign_status,
+            )
+            db_session.add(new_reward_campaign)
+            await db_session.commit()
+        except IntegrityError as ex:
+            # change this to use ex.orig.diag.constraint_name when we migrate to psycopg3
+            if CAMPAIGN_RETAILER_UNQ_CONSTRAINT_NAME not in ex.args[0]:
+                raise
+
+            await db_session.rollback()
+            existing_reward_campaign: RewardCampaign = (
+                await db_session.execute(
+                    select(RewardCampaign).where(
+                        RewardCampaign.campaign_slug == campaign_slug, RewardCampaign.retailer_id == retailer_id
+                    )
+                )
+            ).scalar_one()
+            existing_reward_campaign.campaign_status = campaign_status
+            await db_session.commit()
+            status_code = http_status.HTTP_200_OK
+
+        return status_code  # pylint: disable=lost-exception
+
+    return await async_run_query(_query, db_session)
+
+
+async def check_for_active_campaigns(
+    db_session: AsyncSession,
+    retailer: Retailer,
+    reward_slug: str,
+) -> RewardCampaign | None:
+    async def _query() -> RewardCampaign | None:
+        campaigns = select(RewardCampaign).where(
+            RewardCampaign.retailer_id == retailer.id,
+            RewardCampaign.reward_slug == reward_slug,
+            RewardCampaign.campaign_status == RewardCampaignStatuses.ACTIVE,
         )
 
-        await db_session.commit()
-        return delete_task, cancel_task
+        return (await db_session.execute(campaigns)).scalar_one_or_none()
 
-    return [task.retry_task_id for task in await async_run_query(_query, db_session)]
+    return await async_run_query(_query, db_session)
