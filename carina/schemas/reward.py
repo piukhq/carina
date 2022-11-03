@@ -4,6 +4,7 @@ import uuid
 from typing import Literal
 
 from pydantic import AnyHttpUrl, BaseModel, validator
+from pydantic.types import constr
 
 from carina.enums import RewardCampaignStatuses, RewardTypeStatuses, RewardUpdateStatuses
 
@@ -16,8 +17,13 @@ class RewardAllocationSchema(BaseModel):  # pragma: no cover
 
 
 class RewardCampaignSchema(BaseModel):  # pragma: no cover
-    campaign_slug: str
+    campaign_slug: constr(min_length=1, strip_whitespace=True)  # type: ignore  # noqa
     status: RewardCampaignStatuses
+
+    @validator("campaign_slug")
+    @classmethod
+    def get_campaign_slug(cls, v: str) -> str:
+        return v.lower()
 
 
 class RewardStatusSchema(BaseModel):
