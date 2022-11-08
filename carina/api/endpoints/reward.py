@@ -4,7 +4,7 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from carina import crud
@@ -91,9 +91,7 @@ async def deactivate_reward_type(
     reward_config = await crud.get_reward_config(db_session, retailer, reward_slug)
     active_campaign = await crud.check_for_active_campaigns(db_session, retailer, reward_slug)
     if active_campaign:
-        raise HTTPException(  # pylint: disable=raise-missing-from
-            detail={"campaign_slug": active_campaign.campaign_slug}, status_code=status.HTTP_409_CONFLICT
-        )
+        raise HttpErrors.DELETE_FAILED.value
 
     async def _query() -> None:
         reward_config.status = RewardTypeStatuses.DELETED
