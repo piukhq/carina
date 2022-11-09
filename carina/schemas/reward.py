@@ -20,11 +20,6 @@ class RewardCampaignSchema(BaseModel):  # pragma: no cover
     campaign_slug: constr(min_length=1, strip_whitespace=True)  # type: ignore  # noqa
     status: RewardCampaignStatuses
 
-    @validator("campaign_slug")
-    @classmethod
-    def get_campaign_slug(cls, v: str) -> str:
-        return v.lower()
-
 
 class RewardStatusSchema(BaseModel):
     status: Literal[RewardTypeStatuses.CANCELLED, RewardTypeStatuses.ENDED]
