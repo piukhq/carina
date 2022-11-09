@@ -601,7 +601,8 @@ def test_deactivate_reward_type_with_active_campaign(
     )
     db_session.refresh(reward_config)
     assert reward_config.status == RewardTypeStatuses.ACTIVE
-    assert resp.status_code == status.HTTP_409_CONFLICT
+    assert resp.status_code == HttpErrors.DELETE_FAILED.value.status_code
+    assert resp.json() == HttpErrors.DELETE_FAILED.value.detail
     assert (
         db_session.execute(
             select(func.count("*")).select_from(Reward).where(Reward.reward_config_id == reward_config.id)

@@ -45,3 +45,10 @@ class HttpErrors(Enum):
             ],
         },
     )
+    DELETE_FAILED = HttpError(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "display_message": "The campaign could not be deleted.",
+            "code": "DELETE_FAILED",
+        },
+    )
