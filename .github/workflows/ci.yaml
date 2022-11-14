@@ -2,9 +2,9 @@ name: ci
 
 on:
   push:
-    branches: [develop, master]
+    branches: [master]
   pull_request:
-    branches: [develop, master]
+    branches: [master]
   release:
     types: [published]
 
@@ -66,7 +66,7 @@ jobs:
       - run: mypy .
       - run: pytest --verbose --cov carina --cov-report term-missing
   release_dev:
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    if: github.event_name == 'push'
     name: release_dev
     environment: development
     runs-on: ubuntu-latest
