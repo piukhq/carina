@@ -83,3 +83,12 @@ class RewardFetchType(Enum):
 class FileAgentType(Enum):
     IMPORT = "import"
     UPDATE = "update"
+
+
+class RetailerStatuses(Enum):
+    TEST = "Test"
+    ACTIVE = "Active"
+    INACTIVE = "Inactive"
+    DELETED = "Deleted"
+    ARCHIVED = "Archived"
+    SUSPENDED = "Suspended"

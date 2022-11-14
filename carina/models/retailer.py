@@ -1,9 +1,10 @@
 import yaml
 
-from sqlalchemy import Column, ForeignKey, Integer, PrimaryKeyConstraint, String, Text
+from sqlalchemy import Column, Enum, ForeignKey, Integer, PrimaryKeyConstraint, String, Text
 from sqlalchemy.orm import relationship
 
 from carina.db.base_class import Base, TimestampMixin
+from carina.enums import RetailerStatuses
 
 
 class Retailer(Base, TimestampMixin):
@@ -11,6 +12,7 @@ class Retailer(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True)
     slug = Column(String, nullable=False, index=True)
+    status = Column(Enum(RetailerStatuses), nullable=False, index=True, default=RetailerStatuses.TEST)
 
     fetch_types = relationship("FetchType", back_populates="retailers", secondary="retailer_fetch_type")
     retailer_fetch_types = relationship("RetailerFetchType", back_populates="retailer", overlaps="fetch_types")
