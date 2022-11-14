@@ -9,11 +9,17 @@ from pydantic.types import constr
 from carina.enums import RewardCampaignStatuses, RewardTypeStatuses, RewardUpdateStatuses
 
 
+class ActivityMetadataSchema(BaseModel):
+    pending_reward_id: uuid.UUID | None
+    reason: str | None
+
+
 class RewardAllocationSchema(BaseModel):  # pragma: no cover
     account_url: AnyHttpUrl
     count: int = 1
     campaign_slug: str
     pending_reward_id: uuid.UUID | None
+    activity_metadata: ActivityMetadataSchema | None
 
 
 class RewardCampaignSchema(BaseModel):  # pragma: no cover
