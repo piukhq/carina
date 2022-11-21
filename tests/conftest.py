@@ -276,6 +276,7 @@ def reward_issuance_task_type(db_session: "Session") -> TaskType:
                 ("pending_reward_id", "STRING"),
                 ("retailer_slug", "STRING"),
                 ("campaign_slug", "STRING"),
+                ("reason", "STRING"),
             )
         ]
     )

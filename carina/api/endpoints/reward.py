@@ -34,6 +34,7 @@ async def allocation(  # pylint: disable=too-many-arguments
     idempotency_token: UUID = Depends(get_idempotency_token),
 ) -> Any:
     reward_config = await crud.get_reward_config(db_session, retailer, reward_slug)
+
     response.status_code, reward_issuance_task_ids = await crud.create_reward_issuance_retry_tasks(
         db_session,
         reward_config=reward_config,
@@ -43,6 +44,7 @@ async def allocation(  # pylint: disable=too-many-arguments
         count=payload.count,
         idempotency_token=idempotency_token,
         pending_reward_id=payload.pending_reward_id,
+        reason=payload.activity_metadata.reason if payload.activity_metadata else None,
     )
 
     if reward_issuance_task_ids:

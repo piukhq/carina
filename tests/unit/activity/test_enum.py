@@ -30,6 +30,7 @@ def test_get_reward_status_activity_data_no_pending(mocker: MockFixture) -> None
         reward_uuid=reward_uuid,
         pending_reward_id=None,
         campaign_slug=None,
+        is_campaign_end=False,
     )
 
     assert payload == {
@@ -74,14 +75,62 @@ def test_get_reward_status_activity_data_pending(mocker: MockFixture) -> None:
         reward_uuid=reward_uuid,
         pending_reward_id=pending_reward_id,
         campaign_slug=campaign_slug,
+        is_campaign_end=False,
     )
 
     assert payload == {
         "type": ActivityType.REWARD_STATUS.name,
         "datetime": fake_now,
         "underlying_datetime": activity_datetime,
-        "summary": f'{retailer_slug} Reward "issued"',
+        "summary": f"{retailer_slug} Pending Reward issued for {campaign_slug}",
         "reasons": ["Pending Reward converted"],
+        "activity_identifier": reward_uuid,
+        "user_id": user_uuid,
+        "associated_value": "issued",
+        "retailer": retailer_slug,
+        "campaigns": [campaign_slug],
+        "data": {
+            "new_status": "issued",
+            "original_status": "pending",
+            "pending_reward_id": pending_reward_id,
+            "reward_slug": reward_slug,
+        },
+    }
+
+
+def test_get_reward_status_activity_data_pending_campaign_end(mocker: MockFixture) -> None:
+    fake_now = datetime.now(tz=timezone.utc)
+
+    mock_datetime = mocker.patch("carina.activity_utils.enums.datetime")
+    mock_datetime.now.return_value = fake_now
+    mock_datetime.fromtimestamp = datetime.fromtimestamp
+
+    pending_reward_id = str(uuid4())
+    user_uuid = str(uuid4())
+    reward_slug = "test-reward"
+    retailer_slug = "test-retailer"
+    campaign_slug = "test-campaign"
+    reward_uuid = str(uuid4())
+    activity_datetime = datetime.now(tz=timezone.utc)
+    account_url_path = f"/loyalty/{retailer_slug}/accounts/{user_uuid}/rewards"
+
+    payload = ActivityType.get_reward_status_activity_data(
+        account_url_path=account_url_path,
+        retailer_slug=retailer_slug,
+        reward_slug=reward_slug,
+        activity_timestamp=activity_datetime.timestamp(),
+        reward_uuid=reward_uuid,
+        pending_reward_id=pending_reward_id,
+        campaign_slug=campaign_slug,
+        is_campaign_end=True,
+    )
+
+    assert payload == {
+        "type": ActivityType.REWARD_STATUS.name,
+        "datetime": fake_now,
+        "underlying_datetime": activity_datetime,
+        "summary": f"{retailer_slug} Pending Reward issued for {campaign_slug}",
+        "reasons": ["Pending reward converted at campaign end"],
         "activity_identifier": reward_uuid,
         "user_id": user_uuid,
         "associated_value": "issued",
