@@ -32,21 +32,27 @@ class ActivityType(Enum):
         reward_uuid: str,
         pending_reward_id: str | None,
         campaign_slug: str | None,
+        is_campaign_end: bool,
     ) -> dict:
         data_payload = {"new_status": "issued", "reward_slug": reward_slug}
 
         if pending_reward_id:
-            reason = "Pending Reward converted"
+            if is_campaign_end:
+                reason = "Pending reward converted at campaign end"
+            else:
+                reason = "Pending Reward converted"
+            summary = f"{retailer_slug} Pending Reward issued for {campaign_slug}"
             data_payload["original_status"] = "pending"
             data_payload["pending_reward_id"] = pending_reward_id
         else:
             reason = "Reward goal met"
+            summary = f'{retailer_slug} Reward "issued"'
 
         return {
             "type": cls.REWARD_STATUS.name,
             "datetime": datetime.now(tz=timezone.utc),
             "underlying_datetime": datetime.fromtimestamp(activity_timestamp, tz=timezone.utc),
-            "summary": f'{retailer_slug} Reward "issued"',
+            "summary": summary,
             "reasons": [reason],
             "activity_identifier": reward_uuid,
             "user_id": _try_parse_account_url_path(account_url_path),

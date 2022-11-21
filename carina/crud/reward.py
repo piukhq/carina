@@ -63,6 +63,7 @@ async def create_reward_issuance_retry_tasks(
     count: int,
     idempotency_token: UUID,
     pending_reward_id: uuid.UUID | None,
+    reason: str | None,
 ) -> tuple[int, list[int]]:
     async def _query() -> tuple[int, list[int]]:
         task_name = settings.REWARD_ISSUANCE_TASK_NAME
@@ -72,6 +73,7 @@ async def create_reward_issuance_retry_tasks(
             "reward_config_id": reward_config.id,
             "reward_slug": reward_config.reward_slug,
             "retailer_slug": retailer_slug,
+            "reason": reason,
         }
         if pending_reward_id is not None:
             task_params["pending_reward_id"] = pending_reward_id

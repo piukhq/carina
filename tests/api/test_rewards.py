@@ -30,6 +30,7 @@ payload = {
     "account_url": "http://test.url/",
     "count": 1,
     "campaign_slug": "test-campaign",
+    "activity_metadata": None,
 }
 
 
