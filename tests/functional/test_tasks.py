@@ -49,7 +49,7 @@ def test__process_issuance_ok(
 
     httpretty.register_uri("POST", reward_issuance_task_params["account_url"], body="OK", status=200)
 
-    response_audit = _process_issuance(reward_issuance_task_params, None, validity_days)
+    response_audit = _process_issuance(reward_issuance_task_params, validity_days)
 
     last_request = httpretty.last_request()
     assert last_request.method == "POST"
@@ -130,7 +130,7 @@ def test__process_issuance_http_errors(
         httpretty.register_uri("POST", reward_issuance_task_params["account_url"], body=body, status=status)
 
         with pytest.raises(requests.RequestException) as excinfo:
-            _process_issuance(reward_issuance_task_params, None, validity_days)
+            _process_issuance(reward_issuance_task_params, validity_days)
 
         assert isinstance(excinfo.value, requests.RequestException)
         assert excinfo.value.response.status_code == status
@@ -147,7 +147,7 @@ def test__process_issuance_connection_error(mocker: MockerFixture, reward_issuan
     mocker.patch("carina.tasks.issuance.send_request_with_metrics", side_effect=requests.Timeout("Request timed out"))
 
     with pytest.raises(requests.RequestException) as excinfo:
-        _process_issuance(reward_issuance_task_params, None, 1)
+        _process_issuance(reward_issuance_task_params, 1)
 
     assert isinstance(excinfo.value, requests.Timeout)
     assert excinfo.value.response is None

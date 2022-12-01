@@ -32,7 +32,8 @@ class PreLoaded(BaseAgent):
                         base_url=settings.PRE_LOADED_REWARD_BASE_URL,
                         query_params=urlencode({"retailer": self.reward_config.retailer.slug, "reward": reward.id}),
                     )
-                }
+                },
+                commit_changes=False,
             )
             if reward.expiry_date:
                 expiry_date = datetime(

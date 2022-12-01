@@ -25,7 +25,7 @@ from . import logger, send_request_with_metrics
 from .prometheus import task_processing_time_callback_fn, tasks_run_total
 
 if TYPE_CHECKING:  # pragma: no cover
-    from sqlalchemy.orm import Session
+    from sqlalchemy.orm import Session, SessionTransaction
 
 
 REWARD_ID = "reward_uuid"
@@ -34,7 +34,7 @@ ISSUED = "issued_date"
 EXPIRY = "expiry_date"
 
 
-def _process_issuance(task_params: dict, reason: str | None, validity_days: int | None = None) -> dict:
+def _process_issuance(task_params: dict, validity_days: int | None = None) -> dict:
     logger.info(f"Processing allocation for reward: {task_params['reward_uuid']}")
     response_audit: dict = {"timestamp": datetime.now(tz=timezone.utc).isoformat()}
     parsed_url = urlparse(task_params["account_url"])
@@ -97,7 +97,7 @@ def _process_issuance(task_params: dict, reason: str | None, validity_days: int 
             reward_uuid=task_params["reward_uuid"],
             pending_reward_id=task_params.get("pending_reward_id", None),
             campaign_slug=campaign_slug,
-            is_campaign_end=bool(reason),
+            is_campaign_end=bool(task_params["reason"]),
         ),
         routing_key=ActivityType.REWARD_STATUS.value,
     )
@@ -174,12 +174,10 @@ def _set_reward_and_delete_from_task(db_session: "Session", retry_task: RetryTas
     sync_run_query(_query, db_session)
 
 
-def _process_and_issue_reward(
-    db_session: "Session", retry_task: RetryTask, reason: str | None, validity_days: int | None = None
-) -> None:
+def _process_and_issue_reward(db_session: "Session", retry_task: RetryTask, validity_days: int | None = None) -> None:
     task_params = retry_task.get_params()
     try:
-        response_audit = _process_issuance(task_params, reason, validity_days)
+        response_audit = _process_issuance(task_params, validity_days)
     except HTTPError as ex:
         if ex.response.status_code == status.HTTP_409_CONFLICT:
             _set_reward_and_delete_from_task(
@@ -214,16 +212,17 @@ def issue_reward(retry_task: RetryTask, db_session: "Session") -> None:
     # Process the allocation if it has a reward, else try to get a reward - requeue that if necessary
     if "reward_uuid" in retry_task.get_params():
         validity_days = reward_config.load_required_fields_values().get("validity_days")
-        _process_and_issue_reward(
-            db_session, retry_task, reason=retry_task.get_params()["reason"], validity_days=validity_days
-        )
+        _process_and_issue_reward(db_session, retry_task, validity_days=validity_days)
     else:
         reward_data = get_allocable_reward(db_session, reward_config, retry_task)
 
         if reward_data.reward is not None:
             key_ids = retry_task.task_type.get_key_ids_by_name()
 
-            def _add_reward_to_task_values_and_set_allocated(reward: Reward) -> None:
+            def _add_reward_to_task_values_and_set_allocated(
+                reward: Reward, db_savepoint: "SessionTransaction"
+            ) -> None:
+
                 reward.allocated = True
                 key_ids_to_add = [
                     (key_ids[REWARD_ID], str(reward.id)),
@@ -240,16 +239,17 @@ def issue_reward(retry_task: RetryTask, db_session: "Session") -> None:
                     key_ids_to_add.append((key_ids[ISSUED], reward_data.issued_date))
 
                 db_session.add_all(retry_task.get_task_type_key_values(key_ids_to_add))
+                db_savepoint.commit()
                 db_session.commit()
 
-            sync_run_query(_add_reward_to_task_values_and_set_allocated, db_session, reward=reward_data.reward)
-            db_session.refresh(retry_task)  # Ensure retry_task represents latest DB changes
-            _process_and_issue_reward(
+            sync_run_query(
+                _add_reward_to_task_values_and_set_allocated,
                 db_session,
-                retry_task,
-                reason=retry_task.get_params()["reason"],
-                validity_days=reward_data.validity_days,
+                reward=reward_data.reward,
+                use_savepoint=True,
             )
+            db_session.refresh(retry_task)  # Ensure retry_task represents latest DB changes
+            _process_and_issue_reward(db_session, retry_task, validity_days=reward_data.validity_days)
         else:  # requeue the allocation attempt and alert if required
             if settings.MESSAGE_IF_NO_PRE_LOADED_REWARDS:
                 with sentry_sdk.push_scope() as scope:
