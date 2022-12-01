@@ -14,7 +14,7 @@ from carina.core.config import settings
 
 if TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy.ext.asyncio import AsyncSession
-    from sqlalchemy.orm import Session
+    from sqlalchemy.orm import Session, SessionTransaction
 
 logger = logging.getLogger("db-base-class")
 
@@ -45,17 +45,25 @@ def sync_run_query(
     *,
     attempts: int = settings.DB_CONNECTION_RETRY_TIMES,
     rollback_on_exc: bool = True,
+    use_savepoint: bool = False,
     **kwargs: Any,
 ) -> Any:  # pragma: no cover
-
+    savepoint: "SessionTransaction | None" = None
     while attempts > 0:
         attempts -= 1
         try:
+            if use_savepoint:
+                savepoint = session.begin_nested()
+                kwargs["db_savepoint"] = savepoint
+
             return fn(**kwargs)
         except DBAPIError as ex:
             logger.debug(f"Attempt failed: {type(ex).__name__} {ex}")
             if rollback_on_exc:
-                session.rollback()
+                if savepoint:
+                    savepoint.rollback()
+                else:
+                    session.rollback()
 
             if attempts > 0 and ex.connection_invalidated:
                 logger.warning(f"Interrupted transaction: {repr(ex)}, attempts remaining:{attempts}")

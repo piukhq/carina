@@ -104,7 +104,7 @@ class BaseAgent(ABC):
     def _remove_reward_references_from_task_params(self) -> None:
         self._delete_task_params_by_key_names(["reward_uuid", "code", "issued_date", "expiry_date"])
 
-    def set_agent_state_params(self, value: dict) -> None:
+    def set_agent_state_params(self, value: dict, commit_changes: bool = True) -> None:
         def _query(val: str) -> None:
             if self._agent_state_params_raw_instance is None:
                 self._agent_state_params_raw_instance = TaskTypeKeyValue(
@@ -121,7 +121,10 @@ class BaseAgent(ABC):
             else:
                 self._agent_state_params_raw_instance.value = val
 
-            self.db_session.commit()
+            if commit_changes:
+                self.db_session.commit()
+            else:
+                self.db_session.flush()
 
         try:
             self.agent_state_params = value
