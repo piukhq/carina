@@ -6,7 +6,6 @@ from uuid import UUID, uuid4
 import sentry_sdk
 
 from fastapi import status as http_status
-from retry_tasks_lib.db.models import RetryTask
 from retry_tasks_lib.utils.asynchronous import async_create_task
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -73,8 +72,9 @@ async def create_reward_issuance_retry_tasks(
             "reward_config_id": reward_config.id,
             "reward_slug": reward_config.reward_slug,
             "retailer_slug": retailer_slug,
-            "reason": reason,
         }
+        if reason:
+            task_params["reason"] = reason
         if pending_reward_id is not None:
             task_params["pending_reward_id"] = pending_reward_id
         if campaign_slug is not None:

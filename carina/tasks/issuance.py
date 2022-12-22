@@ -97,7 +97,7 @@ def _process_issuance(task_params: dict, validity_days: int | None = None) -> di
             reward_uuid=task_params["reward_uuid"],
             pending_reward_id=task_params.get("pending_reward_id", None),
             campaign_slug=campaign_slug,
-            is_campaign_end=bool(task_params["reason"]),
+            is_campaign_end=bool(task_params.get("reason")),
         ),
         routing_key=ActivityType.REWARD_STATUS.value,
     )
