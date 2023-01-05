@@ -37,7 +37,7 @@ def test_get_reward_status_activity_data_no_pending(mocker: MockFixture) -> None
         "type": ActivityType.REWARD_STATUS.name,
         "datetime": fake_now,
         "underlying_datetime": activity_datetime,
-        "summary": f'{retailer_slug} Reward "issued"',
+        "summary": f"{retailer_slug} Reward issued",
         "reasons": ["Reward goal met"],
         "activity_identifier": reward_uuid,
         "user_id": user_uuid,

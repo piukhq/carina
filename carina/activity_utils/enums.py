@@ -46,7 +46,7 @@ class ActivityType(Enum):
             data_payload["pending_reward_id"] = pending_reward_id
         else:
             reason = "Reward goal met"
-            summary = f'{retailer_slug} Reward "issued"'
+            summary = f"{retailer_slug} Reward issued"
 
         return {
             "type": cls.REWARD_STATUS.name,
