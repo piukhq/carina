@@ -112,7 +112,7 @@ class RewardCampaign(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True)
     reward_slug = Column(String(32), index=True, nullable=False)
-    campaign_slug = Column(String(120), index=True, nullable=False)
+    campaign_slug = Column(String(100), index=True, nullable=False)
     retailer_id = Column(Integer, ForeignKey("retailer.id", ondelete="CASCADE"), nullable=False)
     campaign_status = Column(Enum(RewardCampaignStatuses), nullable=False)
 
