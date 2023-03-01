@@ -38,7 +38,7 @@ azure-storage-blob = "==12.8.1"   # version 12.9.0 & 12.10.0 have bad type annot
 APScheduler = "^3.9.1"
 PyYAML = "^6.0"
 typer = "^0.6.1"
-cryptography = "^38.0.1"
+cryptography = "^39.0.1"
 retry-tasks-lib = {version = "2.0.*", source = "bink-pypi"}
 cosmos-message-lib = {version = "^1.2.0", source = "bink-pypi"}
 fastapi-prometheus-metrics = {version = "^0.2.3", source = "bink-pypi"}
