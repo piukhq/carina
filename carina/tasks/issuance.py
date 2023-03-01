@@ -184,10 +184,9 @@ def _process_and_issue_reward(db_session: "Session", retry_task: RetryTask, vali
                 db_session=db_session, retry_task=retry_task, reward_uuid=task_params.get("reward_uuid")
             )
         raise
-    else:
-        retry_task.update_task(
-            db_session, response_audit=response_audit, status=RetryTaskStatuses.SUCCESS, clear_next_attempt_time=True
-        )
+    retry_task.update_task(
+        db_session, response_audit=response_audit, status=RetryTaskStatuses.SUCCESS, clear_next_attempt_time=True
+    )
 
 
 # NOTE: Inter-dependency: If this function's name or module changes, ensure that

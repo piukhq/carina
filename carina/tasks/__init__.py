@@ -22,7 +22,7 @@ logger = logging.getLogger("tasks")
     wait=wait_fixed(1),
     reraise=True,
     before=before_log(logger, logging.INFO),
-    retry_error_callback=lambda retry_state: retry_state.outcome.result(),
+    retry_error_callback=lambda retry_state: retry_state.outcome.result(),  # type: ignore [union-attr]
     retry=retry_if_result(lambda resp: 501 <= resp.status_code < 600)
     | retry_if_exception_type(requests.RequestException),
 )
