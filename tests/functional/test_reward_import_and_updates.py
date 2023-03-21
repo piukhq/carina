@@ -55,6 +55,14 @@ def test_import_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> N
     mock_settings.SENTRY_DSN = "SENTRY_DSN"
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
 
+    file_name = "test-retailer/rewards.import.test-reward.new-reward.csv"
+    reward_file_log = RewardFileLog(
+        file_name=file_name,
+        file_agent_type=FileAgentType.IMPORT,
+    )
+    db_session.add(reward_file_log)
+    db_session.commit()
+
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     reward_agent = RewardImportAgent()
     eligible_reward_codes = ["reward1", "reward2", "reward3"]
@@ -69,7 +77,7 @@ def test_import_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> N
 
     reward_agent.process_csv(
         retailer=reward_config.retailer,
-        blob_name="test-retailer/rewards.import.test-reward.new-reward.csv",
+        reward_file_log=reward_file_log,
         blob_content=blob_content,
         db_session=db_session,
     )
@@ -77,6 +85,9 @@ def test_import_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> N
     rewards = _get_reward_rows(db_session)
     assert len(rewards) == 4
     assert all(v in [reward.code for reward in rewards] for v in eligible_reward_codes)
+    assert all(
+        reward.reward_file_log_id == reward_file_log.id for reward in rewards if reward.code in eligible_reward_codes
+    )
     # We should be sentry warned about the existing token
     assert capture_message_spy.call_count == 2  # Errors should all be rolled up in to one call per error category
     assert (
@@ -92,10 +103,17 @@ def test_import_agent__process_csv_with_expiry_date(setup: SetupType, mocker: Mo
     db_session, reward_config, _ = setup
     mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
     reward_agent = RewardImportAgent()
+    file_name = "test-retailer/rewards.import.test-reward.expires.2023-01-16.new-reward.csv"
+    reward_file_log = RewardFileLog(
+        file_name=file_name,
+        file_agent_type=FileAgentType.IMPORT,
+    )
+    db_session.add(reward_file_log)
+    db_session.commit()
 
     reward_agent.process_csv(
         retailer=reward_config.retailer,
-        blob_name="test-retailer/rewards.import.test-reward.expires.2023-01-16.new-reward.csv",
+        reward_file_log=reward_file_log,
         blob_content="reward1\nreward2\nreward3",
         db_session=db_session,
     )
@@ -110,11 +128,18 @@ def test_import_agent__process_csv_with_bad_expiry_date(setup: SetupType, mocker
     db_session, reward_config, _ = setup
     mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
     reward_agent = RewardImportAgent()
+    file_name = "test-retailer/rewards.import.test-reward.expires.BAD-DATE.new-reward.csv"
+    reward_file_log = RewardFileLog(
+        file_name=file_name,
+        file_agent_type=FileAgentType.IMPORT,
+    )
+    db_session.add(reward_file_log)
+    db_session.commit()
 
     with pytest.raises(BlobProcessingError) as exc_info:
         reward_agent.process_csv(
             retailer=reward_config.retailer,
-            blob_name="test-retailer/rewards.import.test-reward.expires.BAD-DATE.new-reward.csv",
+            reward_file_log=reward_file_log,
             blob_content="reward1\nreward2\nreward3",
             db_session=db_session,
         )
@@ -125,6 +150,7 @@ def test_import_agent__process_csv_with_bad_expiry_date(setup: SetupType, mocker
     )
 
 
+# pylint: disable=too-many-locals
 def test_import_agent__process_csv_soft_deleted(
     setup: SetupType, create_reward_config: Callable, mocker: MockerFixture
 ) -> None:
@@ -139,6 +165,12 @@ def test_import_agent__process_csv_soft_deleted(
     # This means the same reward code should import OK for the 'test-reward' reward slug
     pre_existing_reward.reward_config_id = second_reward_config.id
     pre_existing_reward.deleted = True
+    file_name = "test-retailer/rewards.import.test-reward.new-reward.csv"
+    reward_file_log = RewardFileLog(
+        file_name=file_name,
+        file_agent_type=FileAgentType.IMPORT,
+    )
+    db_session.add(reward_file_log)
     db_session.commit()
     mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
     from carina.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
@@ -155,7 +187,7 @@ def test_import_agent__process_csv_soft_deleted(
 
     reward_agent.process_csv(
         retailer=reward_config.retailer,
-        blob_name="test-retailer/rewards.import.test-reward.new-reward.csv",
+        reward_file_log=reward_file_log,
         blob_content=blob_content,
         db_session=db_session,
     )
@@ -166,6 +198,7 @@ def test_import_agent__process_csv_soft_deleted(
     assert capture_message_spy.call_count == 0  # All rewards should import OK
 
 
+# pylint: disable=too-many-locals
 def test_import_agent__process_csv_not_soft_deleted(
     setup: SetupType, create_reward_config: Callable, mocker: MockerFixture
 ) -> None:
@@ -178,6 +211,12 @@ def test_import_agent__process_csv_not_soft_deleted(
     # Associate the existing reward with a different reward config i.e. a different reward slug.
     # This means the same reward code should import OK for the 'test-reward' reward type slug
     pre_existing_reward.reward_config_id = second_reward_config.id
+    file_name = "test-retailer/rewards.import.test-reward.new-reward.csv"
+    reward_file_log = RewardFileLog(
+        file_name=file_name,
+        file_agent_type=FileAgentType.IMPORT,
+    )
+    db_session.add(reward_file_log)
     db_session.commit()
     mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
     from carina.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
@@ -194,7 +233,7 @@ def test_import_agent__process_csv_not_soft_deleted(
 
     reward_agent.process_csv(
         retailer=reward_config.retailer,
-        blob_name="test-retailer/rewards.import.test-reward.new-reward.csv",
+        reward_file_log=reward_file_log,
         blob_content=blob_content,
         db_session=db_session,
     )
@@ -224,6 +263,14 @@ def test_import_agent__process_csv_same_reward_slug_not_soft_deleted(setup: Setu
     mock_settings.SENTRY_DSN = "SENTRY_DSN"
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
 
+    file_name = "test-retailer/rewards.import.test-reward.new-reward.csv"
+    reward_file_log = RewardFileLog(
+        file_name=file_name,
+        file_agent_type=FileAgentType.IMPORT,
+    )
+    db_session.add(reward_file_log)
+    db_session.commit()
+
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
     reward_agent = RewardImportAgent()
     eligible_reward_codes = ["reward1", "reward2", "reward3"]
@@ -232,7 +279,7 @@ def test_import_agent__process_csv_same_reward_slug_not_soft_deleted(setup: Setu
 
     reward_agent.process_csv(
         retailer=reward_config.retailer,
-        blob_name="test-retailer/rewards.import.test-reward.new-reward.csv",
+        reward_file_log=reward_file_log,
         blob_content=blob_content,
         db_session=db_session,
     )
@@ -279,12 +326,20 @@ def test_import_agent__reward_config_non_active_status_error(
 def test_import_agent__process_csv_no_reward_config(setup: SetupType, mocker: MockerFixture) -> None:
     db_session, reward_config, _ = setup
 
+    file_name = "test-retailer/rewards.import.incorrect-reward-type.new-rewards.csv"
+    reward_file_log = RewardFileLog(
+        file_name=file_name,
+        file_agent_type=FileAgentType.IMPORT,
+    )
+    db_session.add(reward_file_log)
+    db_session.commit()
+
     mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
     reward_agent = RewardImportAgent()
     with pytest.raises(BlobProcessingError) as exc_info:
         reward_agent.process_csv(
             retailer=reward_config.retailer,
-            blob_name="test-retailer/rewards.import.incorrect-reward-type.new-rewards.csv",
+            reward_file_log=reward_file_log,
             blob_content="reward1\nreward2\nreward3",
             db_session=db_session,
         )
@@ -294,12 +349,20 @@ def test_import_agent__process_csv_no_reward_config(setup: SetupType, mocker: Mo
 def test_import_agent__process_csv_blob_path_does_not_template(setup: SetupType, mocker: MockerFixture) -> None:
     db_session, reward_config, _ = setup
 
+    file_name = "test-retailer/rewards.reward-slug.whatever.csv"
+    reward_file_log = RewardFileLog(
+        file_name=file_name,
+        file_agent_type=FileAgentType.IMPORT,
+    )
+    db_session.add(reward_file_log)
+    db_session.commit()
+
     mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
     reward_agent = RewardImportAgent()
     with pytest.raises(BlobProcessingError) as exc_info:
         reward_agent.process_csv(
             retailer=reward_config.retailer,
-            blob_name="test-retailer/rewards.reward-slug.whatever.csv",
+            reward_file_log=reward_file_log,
             blob_content="reward1\nreward2\nreward3",
             db_session=db_session,
         )
@@ -311,11 +374,17 @@ def test_import_agent__process_csv_blob_path_does_not_template(setup: SetupType,
 def test_updates_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> None:
     # GIVEN
     db_session, reward_config, _ = setup
+    blob_name = "/test-retailer/rewards.update.test.csv"
+    reward_file_log = RewardFileLog(
+        file_name=blob_name,
+        file_agent_type=FileAgentType.UPDATE,
+    )
+    db_session.add(reward_file_log)
+    db_session.commit()
 
     mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
     reward_agent = RewardUpdatesAgent()
     mock__process_updates = mocker.patch.object(reward_agent, "_process_updates")
-    blob_name = "/test-retailer/rewards.update.test.csv"
     content = """
 TEST12345678,2021-07-30,cancelled
 TEST87654321,2021-07-21,redeemed
@@ -325,7 +394,7 @@ TEST87654322,2021-07-30,redeemed
 
     reward_agent.process_csv(
         retailer=reward_config.retailer,
-        blob_name=blob_name,
+        reward_file_log=reward_file_log,
         blob_content=content,
         db_session=db_session,
     )
@@ -378,6 +447,12 @@ def test_updates_agent__process_csv_reward_code_fails_non_validating_rows(
     """If non-validating values are encountered, sentry should log a msg"""
     # GIVEN
     db_session, reward_config, reward = setup
+    blob_name = "/test-retailer/rewards.update.test.csv"
+    reward_file_log = RewardFileLog(
+        file_name=blob_name,
+        file_agent_type=FileAgentType.UPDATE,
+    )
+    db_session.add(reward_file_log)
     reward.allocated = True
     db_session.commit()
 
@@ -389,7 +464,6 @@ def test_updates_agent__process_csv_reward_code_fails_non_validating_rows(
     mock_settings = mocker.patch("carina.imports.agents.file_agent.settings")
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     reward_agent = RewardUpdatesAgent()
-    blob_name = "/test-retailer/rewards.update.test.csv"
     bad_date = "20210830"
     bad_status = "nosuchstatus"
     content = f"""
@@ -401,7 +475,7 @@ TEST666666,2021-07-30,{bad_status}
     # WHEN
     reward_agent.process_csv(
         retailer=reward_config.retailer,
-        blob_name=blob_name,
+        reward_file_log=reward_file_log,
         blob_content=content,
         db_session=db_session,
     )
@@ -419,7 +493,13 @@ def test_updates_agent__process_csv_reward_code_fails_malformed_csv_rows(
     """If a bad CSV row in encountered, sentry should log a msg"""
     # GIVEN
     db_session, reward_config, _ = setup
-
+    blob_name = "/test-retailer/rewards.update.test.csv"
+    reward_file_log = RewardFileLog(
+        file_name=blob_name,
+        file_agent_type=FileAgentType.UPDATE,
+    )
+    db_session.add(reward_file_log)
+    db_session.commit()
     from carina.imports.agents.file_agent import sentry_sdk as file_agent_sentry_sdk
 
     capture_message_spy = mocker.spy(file_agent_sentry_sdk, "capture_message")
@@ -428,13 +508,12 @@ def test_updates_agent__process_csv_reward_code_fails_malformed_csv_rows(
     mock_settings = mocker.patch("carina.imports.agents.file_agent.settings")
     mock_settings.BLOB_IMPORT_LOGGING_LEVEL = logging.INFO
     reward_agent = RewardUpdatesAgent()
-    blob_name = "/test-retailer/rewards.update.test.csv"
     content = "TEST87654321,2021-07-30\nTEST12345678,redeemed\n"
 
     # WHEN
     reward_agent.process_csv(
         retailer=reward_config.retailer,
-        blob_name=blob_name,
+        reward_file_log=reward_file_log,
         blob_content=content,
         db_session=db_session,
     )
