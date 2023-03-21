@@ -93,7 +93,7 @@ class BlobFileAgent:
         return sync_run_query(lambda: db_session.execute(select(Retailer)).scalars().all(), db_session)
 
     def process_csv(
-        self, retailer: Retailer, blob_name: str, blob_content: str, db_session: "Session"
+        self, retailer: Retailer, reward_file_log: RewardFileLog, blob_content: str, db_session: "Session"
     ) -> None:  # pragma: no cover
         raise NotImplementedError
 
@@ -137,9 +137,15 @@ class BlobFileAgent:
     ) -> None:
         logger.debug(f"Processing blob {blob.name}.")
         try:
+            reward_file_log = RewardFileLog(
+                file_name=blob.name,
+                file_agent_type=self.file_agent_type,
+            )
+            db_session.add(reward_file_log)
+            db_session.flush()
             self.process_csv(
                 retailer=retailer,
-                blob_name=blob.name,
+                reward_file_log=reward_file_log,
                 blob_content=byte_content.decode("utf-8", "strict"),
                 db_session=db_session,
             )
@@ -165,17 +171,6 @@ class BlobFileAgent:
         else:
             logger.debug(f"Archiving blob {blob.name}.")
             self.move_blob(settings.BLOB_ARCHIVE_CONTAINER, blob_client, lease)
-
-            def add_reward_file_log(blb: "BlobProperties") -> None:
-                db_session.add(
-                    RewardFileLog(
-                        file_name=blb.name,
-                        file_agent_type=self.file_agent_type,
-                    )
-                )
-                db_session.commit()
-
-            sync_run_query(add_reward_file_log, db_session, blb=blob)
 
     def process_blobs(self, retailer: Retailer, db_session: "Session") -> None:
         for blob in self.container_client.list_blobs(
@@ -331,7 +326,10 @@ class RewardImportAgent(BlobFileAgent):
         return db_reward_codes, row_nums_by_code
 
     # pylint: disable=too-many-locals
-    def process_csv(self, retailer: Retailer, blob_name: str, blob_content: str, db_session: "Session") -> None:
+    def process_csv(
+        self, retailer: Retailer, reward_file_log: RewardFileLog, blob_content: str, db_session: "Session"
+    ) -> None:
+        blob_name = reward_file_log.file_name
         try:
             _, sub_blob_name = blob_name.split(self.blob_path_template.substitute(retailer_slug=retailer.slug))
         except ValueError as ex:
@@ -365,6 +363,7 @@ class RewardImportAgent(BlobFileAgent):
                 reward_config_id=reward_config.id,
                 retailer_id=retailer.id,
                 expiry_date=expiry_date,
+                reward_file_log_id=reward_file_log.id,
             )
             for code in set(row_nums_by_code)
             if code  # caters for blank lines
@@ -407,7 +406,10 @@ class RewardUpdatesAgent(BlobFileAgent):
     def do_import(self) -> None:  # pragma: no cover
         super()._do_import()
 
-    def process_csv(self, retailer: Retailer, blob_name: str, blob_content: str, db_session: "Session") -> None:
+    def process_csv(
+        self, retailer: Retailer, reward_file_log: RewardFileLog, blob_content: str, db_session: "Session"
+    ) -> None:
+        blob_name = reward_file_log.file_name
         content_reader = csv.reader(StringIO(blob_content), delimiter=",", quotechar="|")
 
         # This is a defaultdict(list) incase we encounter the reward code twice in one file
