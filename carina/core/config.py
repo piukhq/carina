@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     ROOT_LOG_LEVEL: LogLevels | None = None
     QUERY_LOG_LEVEL: LogLevels | None = None
     LOG_FORMATTER: Literal["json", "brief", "console"] = "json"
-    KEY_VAULT_URI: str = "https://bink-uksouth-dev-com.vault.azure.net/"
+    KEY_VAULT_URI: str = "https://uksouth-dev-2p5g.vault.azure.net/"
     KEY_VAULT: KeyVault = None  # type: ignore [assignment]
 
     @validator("KEY_VAULT", pre=True, always=True)
