@@ -1,4 +1,4 @@
-from typing import NoReturn
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -20,7 +20,7 @@ def client(exc: Exception) -> TestClient:
     app.add_exception_handler(status.HTTP_500_INTERNAL_SERVER_ERROR, unexpected_exception_handler)
 
     @app.get("/boom")
-    async def boom() -> NoReturn:
+    async def boom() -> Any:
         raise exc
 
     return TestClient(app, raise_server_exceptions=False)

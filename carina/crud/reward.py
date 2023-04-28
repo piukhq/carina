@@ -158,7 +158,7 @@ async def insert_or_update_reward_campaign(
             await db_session.commit()
             status_code = http_status.HTTP_200_OK
 
-        return status_code  # pylint: disable=lost-exception
+        return status_code
 
     return await async_run_query(_query, db_session)
 

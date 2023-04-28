@@ -1,9 +1,8 @@
-# pylint: disable=invalid-name
-
 import uuid
 
 from collections import namedtuple
-from typing import TYPE_CHECKING, Callable, Generator
+from collections.abc import Callable, Generator
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -30,7 +29,7 @@ SetupType = namedtuple("SetupType", ["db_session", "reward_config", "reward"])
 
 
 def _get_path(fun: Callable) -> str:
-    return fun.__module__ + "." + fun.__name__
+    return f"{fun.__module__}.{fun.__name__}"
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -314,7 +313,7 @@ def reward_status_adjustment_task_type(db_session: "Session") -> TaskType:
 
 @pytest.fixture
 def run_task_with_metrics() -> Generator:
-    val = getattr(settings, "ACTIVATE_TASKS_METRICS")
-    setattr(settings, "ACTIVATE_TASKS_METRICS", True)
+    val = settings.ACTIVATE_TASKS_METRICS
+    settings.ACTIVATE_TASKS_METRICS = True
     yield
-    setattr(settings, "ACTIVATE_TASKS_METRICS", val)
+    settings.ACTIVATE_TASKS_METRICS = val

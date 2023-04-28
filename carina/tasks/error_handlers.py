@@ -1,6 +1,7 @@
 # this file is excluded from coverage as there is no logic to test here beyond calling a library function.
 # if in the future we add any logic worth testing, please remove this file from the coveragerc ignore list.
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import rq
 
@@ -27,7 +28,7 @@ def log_internal_exception(func: Callable) -> Any:
 
 
 def default_handler(
-    job: rq.job.Job, exc_type: type, exc_value: Exception, traceback: "Traceback"  # pylint: disable=unused-argument
+    job: rq.job.Job, exc_type: type, exc_value: Exception, traceback: "Traceback"
 ) -> Any:  # pragma: no cover
     return True  # defer to the RQ default handler
 
@@ -36,7 +37,7 @@ def default_handler(
 # it is relevantly reflected in the TaskType table
 @log_internal_exception
 def handle_retry_task_request_error(
-    job: rq.job.Job, exc_type: type, exc_value: Exception, traceback: "Traceback"  # pylint: disable=unused-argument
+    job: rq.job.Job, exc_type: type, exc_value: Exception, traceback: "Traceback"
 ) -> None:
     with SyncSessionMaker() as db_session:
         handle_request_exception(
@@ -53,7 +54,7 @@ def handle_retry_task_request_error(
 # it is relevantly reflected in the TaskType table
 @log_internal_exception
 def handle_issue_reward_request_error(
-    job: rq.job.Job, exc_type: type, exc_value: Exception, traceback: "Traceback"  # pylint: disable=unused-argument
+    job: rq.job.Job, exc_type: type, exc_value: Exception, traceback: "Traceback"
 ) -> None:
     with SyncSessionMaker() as db_session:
         handle_request_exception(

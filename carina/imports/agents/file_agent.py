@@ -1,3 +1,4 @@
+import contextlib
 import csv
 import logging
 import string
@@ -7,12 +8,12 @@ from collections import defaultdict
 from datetime import date, datetime, timezone
 from functools import lru_cache
 from io import StringIO
-from typing import TYPE_CHECKING, DefaultDict, NamedTuple, cast
+from typing import TYPE_CHECKING, NamedTuple, cast
 
 import sentry_sdk
 
 from azure.core.exceptions import HttpResponseError, ResourceExistsError
-from azure.storage.blob import BlobClient, BlobLeaseClient, BlobServiceClient  # pylint: disable=unused-import
+from azure.storage.blob import BlobClient, BlobLeaseClient, BlobServiceClient
 from pydantic import ValidationError
 from retry_tasks_lib.utils.synchronous import enqueue_many_retry_tasks, sync_create_many_tasks
 from sqlalchemy import update
@@ -63,10 +64,8 @@ class BlobFileAgent:
             settings.BLOB_STORAGE_DSN, logger=blob_client_logger
         )
         # type hints for blob storage still not working properly, remove ignores if it gets fixed.
-        try:
+        with contextlib.suppress(ResourceExistsError):
             self.blob_service_client.create_container(self.container_name)
-        except ResourceExistsError:
-            pass  # this is fine
         self.container_client = self.blob_service_client.get_container_client(self.container_name)
 
     def _blob_name_is_duplicate(self, db_session: "Session", file_name: str) -> bool:
@@ -106,10 +105,8 @@ class BlobFileAgent:
         dst_blob_name: str | None = None,
     ) -> None:
 
-        try:
+        with contextlib.suppress(ResourceExistsError):
             self.blob_service_client.create_container(destination_container)
-        except ResourceExistsError:
-            pass  # this is fine
 
         dst_blob_client = self.blob_service_client.get_blob_client(
             destination_container,
@@ -152,20 +149,18 @@ class BlobFileAgent:
         except BlobProcessingError as ex:
             logger.error(f"Problem processing blob {blob.name} - {ex}. Moving to {settings.BLOB_ERROR_CONTAINER}")
             self.move_blob(settings.BLOB_ERROR_CONTAINER, blob_client, lease)
-            sync_run_query(lambda: db_session.rollback(), db_session)  # pylint: disable=unnecessary-lambda
+            sync_run_query(lambda: db_session.rollback(), db_session)
         except UnicodeDecodeError as ex:
             logger.error(
                 f"Problem decoding blob {blob.name} (files should be utf-8 encoded) - {ex}. "
                 f"Moving to {settings.BLOB_ERROR_CONTAINER}"
             )
             self.move_blob(settings.BLOB_ERROR_CONTAINER, blob_client, lease)
-            sync_run_query(lambda: db_session.rollback(), db_session)  # pylint: disable=unnecessary-lambda
+            sync_run_query(lambda: db_session.rollback(), db_session)
         except RewardConfigNotActiveError as ex:
             self._log_and_capture_msg(
-                (
-                    f"Received invalid set of {retailer.slug} reward codes to import due to non-active reward "
-                    f"type: {ex.reward_slug}, moving to errors blob container for manual fix"
-                )
+                f"Received invalid set of {retailer.slug} reward codes to import due to non-active reward "
+                f"type: {ex.reward_slug}, moving to errors blob container for manual fix"
             )
             self.move_blob(settings.BLOB_ERROR_CONTAINER, blob_client, lease)
         else:
@@ -244,7 +239,7 @@ class RewardImportAgent(BlobFileAgent):
     def do_import(self) -> None:  # pragma: no cover
         super()._do_import()
 
-    @lru_cache()
+    @lru_cache  # noqa: B019
     def reward_configs_by_reward_id(self, retailer_id: int, db_session: "Session") -> dict[str, RewardConfig]:
         reward_configs = sync_run_query(
             lambda: db_session.execute(select(RewardConfig).where(RewardConfig.retailer_id == retailer_id))
@@ -259,7 +254,7 @@ class RewardImportAgent(BlobFileAgent):
         if ".expires." in sub_blob_name:
             try:
                 extracted_date = sub_blob_name.split(".expires.")[1].split(".")[0]
-                expiry_date = datetime.strptime(extracted_date, "%Y-%m-%d").date()
+                expiry_date = datetime.strptime(extracted_date, "%Y-%m-%d").astimezone().date()
             except ValueError as ex:
                 raise BlobProcessingError(f"Invalid filename, expiry date is invalid: {blob_name}") from ex
         else:
@@ -298,7 +293,7 @@ class RewardImportAgent(BlobFileAgent):
 
         row_nums_by_code: defaultdict[str, list[int]] = defaultdict(list)
         for row_num, row in enumerate(content_reader, start=1):
-            if not len(row) == 1:
+            if len(row) != 1:
                 invalid_rows.append(row_num)
             elif code := row[0].strip():
                 row_nums_by_code[code].append(row_num)
@@ -325,7 +320,6 @@ class RewardImportAgent(BlobFileAgent):
         self._report_invalid_rows(invalid_rows, blob_name)
         return db_reward_codes, row_nums_by_code
 
-    # pylint: disable=too-many-locals
     def process_csv(
         self, retailer: Retailer, reward_file_log: RewardFileLog, blob_content: str, db_session: "Session"
     ) -> None:
@@ -337,10 +331,8 @@ class RewardImportAgent(BlobFileAgent):
         try:
             reward_slug = sub_blob_name.split(".", 1)[0]
             reward_config = self.reward_configs_by_reward_id(retailer.id, db_session)[reward_slug]
-        except KeyError:
-            raise BlobProcessingError(  # pylint: disable=raise-missing-from
-                f"No RewardConfig found for reward_slug {reward_slug}"
-            )
+        except KeyError as ex:
+            raise BlobProcessingError(f"No RewardConfig found for reward_slug {reward_slug}") from ex
 
         if reward_config.status != RewardTypeStatuses.ACTIVE:
             raise RewardConfigNotActiveError(reward_slug=reward_slug)
@@ -429,7 +421,7 @@ class RewardUpdatesAgent(BlobFileAgent):
 
         if invalid_rows:
             msg = f"Error validating RewardUpdate from CSV file {blob_name}:\n" + "\n".join(
-                [f"row {row_num}: {repr(e)}" for row_num, e in invalid_rows]
+                [f"row {row_num}: {err!r}" for row_num, err in invalid_rows]
             )
             logger.warning(msg)
             if settings.SENTRY_DSN:
@@ -449,7 +441,7 @@ class RewardUpdatesAgent(BlobFileAgent):
     def _report_unknown_codes(
         reward_codes_in_file: list[str],
         db_reward_data_by_code: dict[str, dict[str, str | bool]],
-        reward_update_rows_by_code: DefaultDict[str, list[RewardUpdateRow]],
+        reward_update_rows_by_code: defaultdict[str, list[RewardUpdateRow]],
         blob_name: str,
     ) -> None:
         unknown_reward_codes = list(set(reward_codes_in_file) - set(db_reward_data_by_code.keys()))
@@ -473,15 +465,12 @@ class RewardUpdatesAgent(BlobFileAgent):
         blob_name: str,
         reward_codes_in_file: list[str],
         db_reward_data_by_code: dict[str, dict[str, str | bool]],
-        reward_update_rows_by_code: DefaultDict[str, list[RewardUpdateRow]],
+        reward_update_rows_by_code: defaultdict[str, list[RewardUpdateRow]],
     ) -> None:
-        unallocated_reward_codes = list(
+        if unallocated_reward_codes := list(
             set(reward_codes_in_file)
             & {code for code, reward_data in db_reward_data_by_code.items() if reward_data["allocated"] is False}
-        )
-
-        # Soft delete unallocated reward codes
-        if unallocated_reward_codes:
+        ):
             update_rows: list[RewardUpdateRow] = []
             for unallocated_reward_code in unallocated_reward_codes:
                 rows = reward_update_rows_by_code.pop(unallocated_reward_code, [])
@@ -507,7 +496,7 @@ class RewardUpdatesAgent(BlobFileAgent):
         self,
         db_session: "Session",
         retailer: Retailer,
-        reward_update_rows_by_code: DefaultDict[str, list[RewardUpdateRow]],
+        reward_update_rows_by_code: defaultdict[str, list[RewardUpdateRow]],
         blob_name: str,
     ) -> None:
 
@@ -524,7 +513,7 @@ class RewardUpdatesAgent(BlobFileAgent):
             db_session,
         )
         # Provides a dict in the following format:
-        # {'<code>': {'id': 'f2c44cf7-9d0f-45d0-b199-44a3c8b72db3', 'allocated': True}}
+        # {'<code>': {'id': 'f2c44cf7-9d0f-45d0-b199-44a3c8b72db3', 'allocated': True}}  # noqa: ERA001
         db_reward_data_by_code: dict[str, dict[str, str | bool]] = {
             reward_data["code"]: {"id": str(reward_data["id"]), "allocated": reward_data["allocated"]}
             for reward_data in reward_datas
@@ -585,7 +574,7 @@ class RewardUpdatesAgent(BlobFileAgent):
             enqueue_many_retry_tasks(
                 db_session, retry_tasks_ids=[task.retry_task_id for task in tasks], connection=redis_raw
             )
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:
             sentry_sdk.capture_exception(ex)
             sync_run_query(_rollback, db_session, rollback_on_exc=False)
         else:

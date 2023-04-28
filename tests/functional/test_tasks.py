@@ -1,9 +1,7 @@
-# pylint: disable=import-outside-toplevel,no-value-for-parameter,too-many-arguments
-
 import json
 
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
-from typing import Callable
 from unittest import mock
 
 import httpretty
@@ -122,10 +120,10 @@ def test__process_issuance_http_errors(
     issuance_expected_payload["issued_date"] = mock_issued_date
     issuance_expected_payload["expiry_date"] = mock_expiry_date
 
-    for status, body in [
+    for status, body in (
         (401, "Unauthorized"),
         (500, "Internal Server Error"),
-    ]:
+    ):
 
         httpretty.register_uri("POST", reward_issuance_task_params["account_url"], body=body, status=status)
 
@@ -363,10 +361,10 @@ def test__process_status_adjustment_http_errors(
     adjustment_url: str,
 ) -> None:
 
-    for status, body in [
+    for status, body in (
         (401, "Unauthorized"),
         (500, "Internal Server Error"),
-    ]:
+    ):
         httpretty.register_uri("PATCH", adjustment_url, body=body, status=status)
 
         with pytest.raises(requests.RequestException) as excinfo:
@@ -390,9 +388,7 @@ def test__process_status_adjustment_404_not_found_soft_delete(
 ) -> None:
     reward.allocated = True
 
-    for status, body in [
-        (404, "Not Found for Url"),
-    ]:
+    for status, body in ((404, "Not Found for Url"),):
         httpretty.register_uri("PATCH", adjustment_url, body=body, status=status)
 
         with pytest.raises(requests.RequestException) as excinfo:
@@ -494,8 +490,8 @@ def test_reward_issuance_409_from_polaris(
     db_session.commit()
     db_session.refresh(reward)
 
-    assert all((item not in issuance_retry_task.get_params() for item in ["reward_uuid", "code"]))
-    assert all((item in control_task.get_params() for item in ["reward_uuid", "code"]))
+    assert all(item not in issuance_retry_task.get_params() for item in ("reward_uuid", "code"))
+    assert all(item in control_task.get_params() for item in ("reward_uuid", "code"))
 
     assert issuance_retry_task.attempts == 1
     assert issuance_retry_task.next_attempt_time is None  # Will be set by error handler

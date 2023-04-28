@@ -1,5 +1,3 @@
-# pylint: disable=too-many-arguments,too-many-locals
-
 import json
 
 from datetime import datetime, timedelta, timezone

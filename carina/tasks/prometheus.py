@@ -1,6 +1,7 @@
 import logging
 
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from prometheus_client import Counter, Gauge, Histogram
 
@@ -51,7 +52,6 @@ tasks_processing_time_histogram = Histogram(
 
 
 def update_metrics_hook(url_label: str) -> Callable:  # pragma: no cover
-    # pylint: disable=unused-argument
     def update_metrics(resp: "Response", *args: Any, **kwargs: Any) -> None:
         outgoing_http_requests_total.labels(
             app=settings.PROJECT_NAME,

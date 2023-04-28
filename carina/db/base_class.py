@@ -1,7 +1,8 @@
 # mypy checks for sqlalchemy core 2.0 require sqlalchemy2-stubs
 import logging
 
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import sentry_sdk
 
@@ -66,9 +67,9 @@ def sync_run_query(
                     session.rollback()
 
             if attempts > 0 and ex.connection_invalidated:
-                logger.warning(f"Interrupted transaction: {repr(ex)}, attempts remaining:{attempts}")
+                logger.warning(f"Interrupted transaction: {ex!r}, attempts remaining:{attempts}")
             else:
-                sentry_sdk.capture_message(f"Max db connection attempts reached: {repr(ex)}")
+                sentry_sdk.capture_message(f"Max db connection attempts reached: {ex!r}")
                 raise
 
 
@@ -90,7 +91,7 @@ async def async_run_query(
                 await session.rollback()
 
             if attempts > 0 and ex.connection_invalidated:
-                logger.warning(f"Interrupted transaction: {repr(ex)}, attempts remaining:{attempts}")
+                logger.warning(f"Interrupted transaction: {ex!r}, attempts remaining:{attempts}")
             else:
-                sentry_sdk.capture_message(f"Max db connection attempts reached: {repr(ex)}")
+                sentry_sdk.capture_message(f"Max db connection attempts reached: {ex!r}")
                 raise

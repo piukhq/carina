@@ -77,19 +77,10 @@ def send_request_with_metrics(
 
     """
 
-    label_kwargs: dict = {}
-    for k, v in url_kwargs.items():
-        if k in exclude_from_label_url:
-            label_kwargs[k] = f"[{k}]"
-        else:
-            label_kwargs[k] = v
-
+    label_kwargs: dict = {k: f"[{k}]" if k in exclude_from_label_url else v for k, v in url_kwargs.items()}
     label_url = url_template.format(**label_kwargs)
 
-    if settings.ACTIVATE_TASKS_METRICS:
-        hooks = {"response": update_metrics_hook(label_url)}
-    else:
-        hooks = {}
+    hooks = {"response": update_metrics_hook(label_url)} if settings.ACTIVATE_TASKS_METRICS else {}
 
     try:
         return requests.request(

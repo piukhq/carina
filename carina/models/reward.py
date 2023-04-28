@@ -13,7 +13,7 @@ from carina.enums import FileAgentType, RewardCampaignStatuses, RewardTypeStatus
 class Reward(Base, TimestampMixin):
     __tablename__ = "reward"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)  # noqa: A003
     code = Column(String, nullable=False, index=True)
     allocated = Column(Boolean, default=False, nullable=False)
     deleted = Column(Boolean, default=False, nullable=False)
@@ -39,7 +39,7 @@ class Reward(Base, TimestampMixin):
 class RewardConfig(Base, TimestampMixin):
     __tablename__ = "reward_config"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True)  # noqa: A003
     reward_slug = Column(String(32), index=True, nullable=False)
     retailer_id = Column(Integer, ForeignKey("retailer.id", ondelete="CASCADE"), nullable=False)
     fetch_type_id = Column(Integer, ForeignKey("fetch_type.id", ondelete="CASCADE"), nullable=False)
@@ -57,7 +57,7 @@ class RewardConfig(Base, TimestampMixin):
         return f"{self.__class__.__name__}({self.retailer.slug}, " f"{self.reward_slug})"
 
     def load_required_fields_values(self) -> dict:
-        if self.required_fields_values in ["", None]:
+        if self.required_fields_values in ("", None):
             return {}
 
         return yaml.safe_load(self.required_fields_values)
@@ -66,7 +66,7 @@ class RewardConfig(Base, TimestampMixin):
 class RewardUpdate(Base, TimestampMixin):
     __tablename__ = "reward_update"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True)  # noqa: A003
     reward_uuid = Column(UUID(as_uuid=True), ForeignKey("reward.id", ondelete="CASCADE"), nullable=False)
     date = Column(Date, nullable=False)
     status = Column(Enum(RewardUpdateStatuses), nullable=False)
@@ -82,7 +82,7 @@ class RewardUpdate(Base, TimestampMixin):
 class RewardFileLog(Base, TimestampMixin):
     __tablename__ = "reward_file_log"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True)  # noqa: A003
     file_name = Column(String(500), index=True, nullable=False)
     file_agent_type = Column(Enum(FileAgentType), index=True, nullable=False)
 
@@ -95,13 +95,13 @@ class RewardFileLog(Base, TimestampMixin):
         return f"{self.__class__.__name__}({self.id})"
 
 
-IDEMPOTENCY_TOKEN_REWARD_ALLOCATION_UNQ_CONSTRAINT_NAME = "idempotency_token_reward_allocation_unq"
+IDEMPOTENCY_TOKEN_REWARD_ALLOCATION_UNQ_CONSTRAINT_NAME = "idempotency_token_reward_allocation_unq"  # noqa: S105
 
 
 class Allocation(Base, TimestampMixin):
     __tablename__ = "allocation"
 
-    id = Column(BigInteger, primary_key=True)
+    id = Column(BigInteger, primary_key=True)  # noqa: A003
     idempotency_token = Column(String, nullable=False)
     count = Column(Integer, nullable=False)
     account_url = Column(String, nullable=False)
@@ -114,7 +114,7 @@ class Allocation(Base, TimestampMixin):
 class RewardCampaign(Base, TimestampMixin):
     __tablename__ = "reward_campaign"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True)  # noqa: A003
     reward_slug = Column(String(32), index=True, nullable=False)
     campaign_slug = Column(String(100), index=True, nullable=False)
     retailer_id = Column(Integer, ForeignKey("retailer.id", ondelete="CASCADE"), nullable=False)

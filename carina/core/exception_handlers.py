@@ -32,14 +32,12 @@ def _format_validation_errors(payload: list[dict]) -> tuple[int, list[dict] | di
 
 
 # customise Api RequestValidationError
-# pylint: disable=unused-argument
 async def request_validation_handler(request: Request, exc: RequestValidationError) -> Response:
     status_code, content = _format_validation_errors(cast(list[dict], exc.errors()))
     return UJSONResponse(status_code=status_code, content=content)
 
 
 # customise Api HTTPException to remove "details" and handle manually raised ValidationErrors
-# pylint: disable=unused-argument
 async def http_exception_handler(request: Request, exc: HTTPException) -> UJSONResponse:
 
     if exc.status_code == HTTP_422_UNPROCESSABLE_ENTITY and isinstance(exc.detail, list):
@@ -51,7 +49,6 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> UJSONR
     return UJSONResponse(content, status_code=status_code, headers=headers)
 
 
-# pylint: disable=unused-argument
 async def unexpected_exception_handler(request: Request, exc: Exception) -> UJSONResponse:
     try:
         return UJSONResponse(

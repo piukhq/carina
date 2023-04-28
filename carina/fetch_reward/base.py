@@ -50,7 +50,7 @@ class BaseAgent(ABC):
     def __enter__(self) -> "BaseAgent":
         return self
 
-    def __exit__(self, exc_type: type, exc_value: Exception, exc_traceback: "Traceback") -> None:
+    def __exit__(self, exc_type: type, exc_value: Exception, exc_traceback: "Traceback") -> None:  # noqa: B027
         pass
 
     def _load_agent_state_params_raw_instance(self) -> None:

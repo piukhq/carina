@@ -1,4 +1,4 @@
-from typing import Generator
+from collections.abc import Generator
 
 import pytest
 
@@ -17,7 +17,7 @@ def clean_redis() -> Generator:
 
 @pytest.fixture(scope="module", autouse=True)
 def populate_fernet_key() -> Generator:
-    setattr(settings, "JIGSAW_AGENT_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    settings.JIGSAW_AGENT_ENCRYPTION_KEY = Fernet.generate_key().decode()
     yield
 
 

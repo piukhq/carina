@@ -64,16 +64,16 @@ def test_cleanup_reward_ok(
     db_session.commit()
     assert reward.deleted is False
     assert pre_task_params["reward_uuid"] == str(reward.id)
-    assert all((key in pre_task_params for key in ("reward_uuid", "code")))
+    assert all(key in pre_task_params for key in ("reward_uuid", "code"))
 
     cleanup_reward(db_session, reward_config, issuance_retry_task)
 
     db_session.refresh(issuance_retry_task)
     db_session.refresh(reward)
     post_task_params = issuance_retry_task.get_params()
-    assert reward.allocated is False
+    assert not reward.allocated
     assert reward.deleted is False
-    assert all((key not in post_task_params for key in ("reward_uuid", "code", "issued_date", "expiry_date")))
+    assert all(key not in post_task_params for key in ("reward_uuid", "code", "issued_date", "expiry_date"))
 
 
 def test_cleanup_reward_reward_not_allocated(
@@ -86,7 +86,7 @@ def test_cleanup_reward_reward_not_allocated(
     assert reward.allocated is False
     assert reward.deleted is False
     assert pre_task_params["reward_uuid"] == str(reward.id)
-    assert all((key in pre_task_params for key in ("reward_uuid", "code")))
+    assert all(key in pre_task_params for key in ("reward_uuid", "code"))
 
     cleanup_reward(db_session, reward_config, issuance_retry_task)
 
@@ -95,7 +95,7 @@ def test_cleanup_reward_reward_not_allocated(
     post_task_params = issuance_retry_task.get_params()
     assert reward.allocated is False
     assert reward.deleted is False
-    assert all((key not in post_task_params for key in ("reward_uuid", "code", "issued_date", "expiry_date")))
+    assert all(key not in post_task_params for key in ("reward_uuid", "code", "issued_date", "expiry_date"))
 
 
 def test_cleanup_reward_reward_no_reward_uuid_in_task(
@@ -105,10 +105,10 @@ def test_cleanup_reward_reward_no_reward_uuid_in_task(
 ) -> None:
     db_session, reward_config, _ = setup
     pre_task_params = issuance_retry_task_no_reward.get_params()
-    assert all((key not in pre_task_params for key in ("reward_uuid", "code")))
+    assert all(key not in pre_task_params for key in ("reward_uuid", "code"))
 
     cleanup_reward(db_session, reward_config, issuance_retry_task_no_reward)
 
     db_session.refresh(issuance_retry_task_no_reward)
     post_task_params = issuance_retry_task_no_reward.get_params()
-    assert all((key not in post_task_params for key in ("reward_uuid", "code", "issued_date", "expiry_date")))
+    assert all(key not in post_task_params for key in ("reward_uuid", "code", "issued_date", "expiry_date"))
