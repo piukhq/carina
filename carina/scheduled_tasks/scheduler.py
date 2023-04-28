@@ -65,6 +65,7 @@ def acquire_lock(runner: Runner) -> Callable:
 class CronScheduler:  # pragma: no cover
     name = "cron-scheduler"
     default_schedule = "* * * * *"
+    trigger_timezone = "Europe/London"
 
     def __init__(self, *, log: Logger | None = None) -> None:
         self.uid = str(uuid4())
@@ -75,15 +76,14 @@ class CronScheduler:  # pragma: no cover
         return f"{self.__class__.__name__}(id: {self.uid})"
 
     def _get_trigger(self, schedule: Callable) -> CronTrigger:
-        tz = "Europe/London"
         try:
-            return CronTrigger.from_crontab(schedule, timezone=tz)
+            return CronTrigger.from_crontab(schedule, timezone=self.trigger_timezone)
         except ValueError:
             self.log.error(
                 f"Schedule '{schedule}' is not in a recognised format! "
                 f"Reverting to default of '{self.default_schedule}'."
             )
-            return CronTrigger.from_crontab(self.default_schedule, timezone=tz)
+            return CronTrigger.from_crontab(self.default_schedule, timezone=self.trigger_timezone)
 
     def add_job(
         self,

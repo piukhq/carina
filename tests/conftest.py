@@ -6,7 +6,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from retry_tasks_lib.db.models import TaskType, TaskTypeKey
+from retry_tasks_lib.db.models import RetryTask, TaskType, TaskTypeKey
+from retry_tasks_lib.enums import RetryTaskStatuses
 from sqlalchemy_utils import create_database, database_exists, drop_database
 from testfixtures import LogCapture
 
@@ -317,3 +318,25 @@ def run_task_with_metrics() -> Generator:
     settings.ACTIVATE_TASKS_METRICS = True
     yield
     settings.ACTIVATE_TASKS_METRICS = val
+
+
+@pytest.fixture(scope="function")
+def create_mock_task(db_session: "Session") -> Callable[..., RetryTask]:
+    params = {
+        "attempts": 0,
+        "audit_data": [],
+        "next_attempt_time": None,
+        "status": RetryTaskStatuses.PENDING,
+    }
+
+    def _create_task(task_type: TaskType, updated_params: dict | None = None) -> RetryTask:
+        params["task_type_id"] = task_type.task_type_id
+        if updated_params:
+            params.update(updated_params)
+
+        task = RetryTask(**params)
+        db_session.add(task)
+        db_session.commit()
+        return task
+
+    return _create_task

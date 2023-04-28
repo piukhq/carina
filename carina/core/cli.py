@@ -15,6 +15,7 @@ from carina.core.config import redis_raw, settings
 from carina.db.session import SyncSessionMaker
 from carina.imports.agents.file_agent import RewardImportAgent, RewardUpdatesAgent
 from carina.scheduled_tasks.scheduler import cron_scheduler as carina_cron_scheduler
+from carina.scheduled_tasks.task_cleanup import cleanup_old_tasks
 from carina.tasks.prometheus import job_queue_summary, task_statuses, tasks_summary
 
 cli = typer.Typer()
@@ -44,7 +45,11 @@ def task_worker(burst: bool = False) -> None:
 
 @cli.command()
 def cron_scheduler(
-    imports: bool = True, updates: bool = True, report_tasks: bool = True, report_rq_queues: bool = True
+    imports: bool = True,
+    updates: bool = True,
+    report_tasks: bool = True,
+    report_rq_queues: bool = True,
+    task_cleanup: bool = True,
 ) -> None:  # pragma: no cover
 
     logger.info("Initialising scheduler...")
@@ -95,6 +100,13 @@ def cron_scheduler(
                 "gauge": job_queue_summary,
             },
             schedule_fn=lambda: settings.REPORT_JOB_QUEUE_LENGTH_SCHEDULE,
+            coalesce_jobs=True,
+        )
+
+    if task_cleanup:
+        carina_cron_scheduler.add_job(
+            cleanup_old_tasks,
+            schedule_fn=lambda: settings.TASK_CLEANUP_SCHEDULE,
             coalesce_jobs=True,
         )
 
