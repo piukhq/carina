@@ -37,10 +37,7 @@ class ActivityType(Enum):
         data_payload = {"new_status": "issued", "reward_slug": reward_slug}
 
         if pending_reward_id:
-            if is_campaign_end:
-                reason = "Pending reward converted at campaign end"
-            else:
-                reason = "Pending Reward converted"
+            reason = "Pending reward converted at campaign end" if is_campaign_end else "Pending Reward converted"
             summary = f"{retailer_slug} Pending Reward issued for {campaign_slug}"
             data_payload["original_status"] = "pending"
             data_payload["pending_reward_id"] = pending_reward_id

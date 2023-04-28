@@ -63,15 +63,16 @@ def test_jigsaw_agent_expired_token(
     mock_datetime.fromisoformat = datetime.fromisoformat
     spy_logger = mocker.spy(Jigsaw, "logger")
 
-    with pytest.raises(AgentError):
-        with Jigsaw(db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward) as agent:
-            agent.fetch_reward()
+    with pytest.raises(AgentError), Jigsaw(
+        db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward
+    ) as agent:
+        agent.fetch_reward()
 
     spy_logger.exception.assert_called_once()
     assert db_session.scalar(select(Reward).where(Reward.reward_config_id == jigsaw_reward_config.id)) is None
     db_session.refresh(issuance_retry_task_no_reward)
     task_params = issuance_retry_task_no_reward.get_params()
-    assert all(val not in task_params for val in ["issued_date", "expiry_date", "reward_uuid", "reward_code"])
+    assert all(val not in task_params for val in ("issued_date", "expiry_date", "reward_uuid", "reward_code"))
 
     agent_state_params = json.loads(task_params["agent_state_params_raw"])
     assert "customer_card_ref" in agent_state_params
@@ -114,11 +115,10 @@ def test_jigsaw_agent_get_token_retry_paths(
             status=200,
         )
 
-        with pytest.raises(requests.RequestException) as exc_info:
-            with Jigsaw(
-                db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward
-            ) as agent:
-                agent.fetch_reward()
+        with pytest.raises(requests.RequestException) as exc_info, Jigsaw(
+            db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward
+        ) as agent:
+            agent.fetch_reward()
 
         assert exc_info.value.response.status_code == expected_status
         spy_redis_set.assert_not_called()
@@ -164,11 +164,10 @@ def test_jigsaw_agent_get_token_failure_paths(
             status=200,
         )
 
-        with pytest.raises(requests.RequestException) as exc_info:
-            with Jigsaw(
-                db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward
-            ) as agent:
-                agent.fetch_reward()
+        with pytest.raises(requests.RequestException) as exc_info, Jigsaw(
+            db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward
+        ) as agent:
+            agent.fetch_reward()
 
         assert exc_info.value.response.status_code == expected_status
         spy_redis_set.assert_not_called()
@@ -214,9 +213,10 @@ def test_jigsaw_agent_get_token_unexpected_error_response(
     mock_datetime.fromisoformat = datetime.fromisoformat
     spy_logger = mocker.spy(Jigsaw, "logger")
 
-    with pytest.raises(AgentError) as exc_info:
-        with Jigsaw(db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward) as agent:
-            agent.fetch_reward()
+    with pytest.raises(AgentError) as exc_info, Jigsaw(
+        db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward
+    ) as agent:
+        agent.fetch_reward()
 
     spy_logger.exception.assert_called_with(
         "Exception occurred while fetching a new Jigsaw reward or cleaning up an existing task, "
@@ -230,7 +230,7 @@ def test_jigsaw_agent_get_token_unexpected_error_response(
     assert db_session.scalar(select(Reward).where(Reward.reward_config_id == jigsaw_reward_config.id)) is None
     db_session.refresh(issuance_retry_task_no_reward)
     task_params = issuance_retry_task_no_reward.get_params()
-    assert all(val not in task_params for val in ["issued_date", "expiry_date", "reward_uuid", "reward_code"])
+    assert all(val not in task_params for val in ("issued_date", "expiry_date", "reward_uuid", "reward_code"))
 
     spy_redis_set.assert_not_called()
 

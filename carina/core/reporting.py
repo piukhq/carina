@@ -7,10 +7,10 @@ from prettyprinter import cpprint
 
 class JSONFormatter(logging.Formatter):
     # noinspection PyMissingConstructor
-    def __init__(self) -> None:  # pylint: disable=super-init-not-called
+    def __init__(self) -> None:
         pass
 
-    def format(self, record: logging.LogRecord) -> str:
+    def format(self, record: logging.LogRecord) -> str:  # noqa: A003
 
         return json.dumps(
             {
@@ -31,7 +31,7 @@ class JSONFormatter(logging.Formatter):
 
 class ConsoleFormatter(logging.Formatter):
     # noinspection PyMissingConstructor
-    def __init__(self) -> None:  # pylint: disable=super-init-not-called
+    def __init__(self) -> None:
         pass
 
     @staticmethod
@@ -40,7 +40,7 @@ class ConsoleFormatter(logging.Formatter):
         cpprint(values, stream=buf, width=120, end="")
         return buf.getvalue()
 
-    def format(self, record: logging.LogRecord) -> str:
+    def format(self, record: logging.LogRecord) -> str:  # noqa: A003
         return self._format_with_colour(
             {
                 "level": f"{record.levelname}",

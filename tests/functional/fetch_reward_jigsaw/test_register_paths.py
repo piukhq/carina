@@ -1,5 +1,3 @@
-# pylint: disable=too-many-arguments,too-many-locals
-
 import json
 
 from datetime import datetime, timedelta, timezone
@@ -74,11 +72,10 @@ def test_jigsaw_agent_register_retry_paths(
             status=200,
         )
 
-        with pytest.raises(requests.RequestException) as exc_info:
-            with Jigsaw(
-                db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward
-            ) as agent:
-                agent.fetch_reward()
+        with pytest.raises(requests.RequestException) as exc_info, Jigsaw(
+            db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward
+        ) as agent:
+            agent.fetch_reward()
 
         assert exc_info.value.response.status_code == expected_status
         mock_uuid.assert_called()
@@ -86,7 +83,7 @@ def test_jigsaw_agent_register_retry_paths(
         db_session.refresh(issuance_retry_task_no_reward)
         task_params = issuance_retry_task_no_reward.get_params()
         assert all(
-            val not in task_params.keys() for val in ["issued_date", "expiry_date", "reward_uuid", "reward_code"]
+            val not in task_params.keys() for val in ("issued_date", "expiry_date", "reward_uuid", "reward_code")
         )
         assert json.loads(task_params["agent_state_params_raw"])["customer_card_ref"] == str(card_ref)
 
@@ -135,16 +132,17 @@ def test_jigsaw_agent_register_failure_paths(
         status=200,
     )
 
-    with pytest.raises(requests.RequestException) as exc_info:
-        with Jigsaw(db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward) as agent:
-            agent.fetch_reward()
+    with pytest.raises(requests.RequestException) as exc_info, Jigsaw(
+        db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward
+    ) as agent:
+        agent.fetch_reward()
 
     assert exc_info.value.response.status_code == status.HTTP_401_UNAUTHORIZED
     mock_uuid.assert_called()
     spy_redis_set.assert_not_called()
     db_session.refresh(issuance_retry_task_no_reward)
     task_params = issuance_retry_task_no_reward.get_params()
-    assert all(val not in task_params.keys() for val in ["issued_date", "expiry_date", "reward_uuid", "reward_code"])
+    assert all(val not in task_params.keys() for val in ("issued_date", "expiry_date", "reward_uuid", "reward_code"))
 
     agent_state_params = json.loads(task_params["agent_state_params_raw"])
     assert agent_state_params["customer_card_ref"] == str(card_ref)
@@ -187,9 +185,10 @@ def test_jigsaw_agent_register_unexpected_error_response(
     spy_redis_set = mocker.spy(redis_raw, "set")
     spy_logger = mocker.spy(Jigsaw, "logger")
 
-    with pytest.raises(AgentError) as exc_info:
-        with Jigsaw(db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward) as agent:
-            agent.fetch_reward()
+    with pytest.raises(AgentError) as exc_info, Jigsaw(
+        db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward
+    ) as agent:
+        agent.fetch_reward()
 
     spy_logger.exception.assert_called_with(
         "Exception occurred while fetching a new Jigsaw reward or cleaning up an existing task, "
@@ -203,7 +202,7 @@ def test_jigsaw_agent_register_unexpected_error_response(
     assert db_session.scalar(select(Reward).where(Reward.reward_config_id == jigsaw_reward_config.id)) is None
     db_session.refresh(issuance_retry_task_no_reward)
     task_params = issuance_retry_task_no_reward.get_params()
-    assert all(val not in task_params for val in ["issued_date", "expiry_date", "reward_uuid", "reward_code"])
+    assert all(val not in task_params for val in ("issued_date", "expiry_date", "reward_uuid", "reward_code"))
 
     spy_redis_set.assert_not_called()
 
@@ -223,21 +222,20 @@ def test_jigsaw_agent_register_timeout_response(
     agent_config = jigsaw_retailer_fetch_type.load_agent_config()
     redis_raw.set(Jigsaw.REDIS_TOKEN_KEY, fernet.encrypt(b"test-token"), timedelta(days=1))
 
-    def timeout_response(
-        request: requests.Request, uri: str, response_headers: dict  # pylint: disable=unused-argument
-    ) -> None:
+    def timeout_response(request: requests.Request, uri: str, response_headers: dict) -> None:
         raise requests.Timeout("too bad")
 
     httpretty.register_uri("POST", f"{agent_config['base_url']}/order/V4/register", body=timeout_response)
 
-    with pytest.raises(requests.RequestException):
-        with Jigsaw(db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward) as agent:
-            agent.fetch_reward()
+    with pytest.raises(requests.RequestException), Jigsaw(
+        db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward
+    ) as agent:
+        agent.fetch_reward()
 
     assert db_session.scalar(select(Reward).where(Reward.reward_config_id == jigsaw_reward_config.id)) is None
     db_session.refresh(issuance_retry_task_no_reward)
     task_params = issuance_retry_task_no_reward.get_params()
-    assert all(val not in task_params for val in ["issued_date", "expiry_date", "reward_uuid", "reward_code"])
+    assert all(val not in task_params for val in ("issued_date", "expiry_date", "reward_uuid", "reward_code"))
 
     agent_state_params = json.loads(task_params["agent_state_params_raw"])
     assert "customer_card_ref" in agent_state_params
@@ -292,7 +290,7 @@ def test_jigsaw_agent_register_retry_get_token_success(
     )
 
     def register_response_generator(
-        request: requests.Request, uri: str, response_headers: dict  # pylint: disable=unused-argument
+        request: requests.Request, uri: str, response_headers: dict
     ) -> tuple[int, dict, str]:
 
         for msg_id in retry_error_ids:
@@ -450,9 +448,10 @@ def test_jigsaw_agent_register_retry_get_token_max_retries_exceeded(
     httpretty.register_uri("POST", f"{agent_config['base_url']}/order/V4/getToken", body=answer_bot.response_generator)
     httpretty.register_uri("POST", f"{agent_config['base_url']}/order/V4/register", body=answer_bot.response_generator)
 
-    with pytest.raises(requests.RequestException) as exc_info:
-        with Jigsaw(db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward) as agent:
-            agent.fetch_reward()
+    with pytest.raises(requests.RequestException) as exc_info, Jigsaw(
+        db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward
+    ) as agent:
+        agent.fetch_reward()
 
     assert answer_bot.calls["register"] == 4
     assert answer_bot.calls["getToken"] == 4
@@ -462,10 +461,10 @@ def test_jigsaw_agent_register_retry_get_token_max_retries_exceeded(
         f"customer card ref: {card_ref}"
     )
     task_params = issuance_retry_task_no_reward.get_params()
-    assert all(val not in task_params.keys() for val in ["issued_date", "expiry_date", "reward_uuid", "reward_code"])
+    assert all(val not in task_params.keys() for val in ("issued_date", "expiry_date", "reward_uuid", "reward_code"))
 
     task_params = issuance_retry_task_no_reward.get_params()
-    assert all(val not in task_params.keys() for val in ["issued_date", "expiry_date", "reward_uuid", "reward_code"])
+    assert all(val not in task_params.keys() for val in ("issued_date", "expiry_date", "reward_uuid", "reward_code"))
     agent_state_params = json.loads(task_params["agent_state_params_raw"])
     assert "customer_card_ref" in agent_state_params
     assert "might_need_reversal" not in agent_state_params

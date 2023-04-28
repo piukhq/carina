@@ -1,5 +1,3 @@
-# pylint: disable=too-many-arguments,too-many-locals
-
 import json
 
 from datetime import datetime, timedelta, timezone
@@ -75,9 +73,10 @@ def test_jigsaw_agent_register_reversal_paths_no_previous_error_max_retries_exce
     answer_bot = AnswerBot()
     httpretty.register_uri("POST", f"{agent_config['base_url']}/order/V4/register", body=answer_bot.response_generator)
 
-    with pytest.raises(AgentError) as exc_info:
-        with Jigsaw(db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward) as agent:
-            agent.fetch_reward()
+    with pytest.raises(AgentError) as exc_info, Jigsaw(
+        db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward
+    ) as agent:
+        agent.fetch_reward()
 
     assert answer_bot.calls["register"] == 4
     assert "reversal" not in answer_bot.calls
@@ -87,7 +86,7 @@ def test_jigsaw_agent_register_reversal_paths_no_previous_error_max_retries_exce
     )
     assert mock_uuid4.call_count == 4
     task_params = issuance_retry_task_no_reward.get_params()
-    assert all(val not in task_params.keys() for val in ["issued_date", "expiry_date", "reward_uuid", "reward_code"])
+    assert all(val not in task_params.keys() for val in ("issued_date", "expiry_date", "reward_uuid", "reward_code"))
     assert json.loads(task_params["agent_state_params_raw"])["customer_card_ref"] == str(expected_last_val)
 
 
@@ -172,9 +171,10 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_max_retries_exceede
     httpretty.register_uri("POST", f"{agent_config['base_url']}/order/V4/register", body=answer_bot.response_generator)
     httpretty.register_uri("POST", f"{agent_config['base_url']}/order/V4/reversal", body=answer_bot.response_generator)
 
-    with pytest.raises(AgentError):
-        with Jigsaw(db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward) as agent:
-            agent.fetch_reward()
+    with pytest.raises(AgentError), Jigsaw(
+        db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward
+    ) as agent:
+        agent.fetch_reward()
 
     assert answer_bot.calls["register"] == 4
     assert answer_bot.calls["reversal"] == 1
@@ -182,7 +182,7 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_max_retries_exceede
     assert mock_uuid.call_count == 4
     spy_redis_set.assert_not_called()
     task_params = issuance_retry_task_no_reward.get_params()
-    assert all(val not in task_params for val in ["issued_date", "expiry_date", "reward_uuid", "reward_code"])
+    assert all(val not in task_params for val in ("issued_date", "expiry_date", "reward_uuid", "reward_code"))
     agent_state_params = json.loads(task_params["agent_state_params_raw"])
     assert agent_state_params["customer_card_ref"] == str(card_ref)
     assert agent_state_params["might_need_reversal"] is True
@@ -362,7 +362,7 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_need_new_token(
     assert reward_data.validity_days is None
 
     task_params = issuance_retry_task_no_reward.get_params()
-    assert all(val not in task_params for val in ["issued_date", "expiry_date", "reward_uuid", "reward_code"])
+    assert all(val not in task_params for val in ("issued_date", "expiry_date", "reward_uuid", "reward_code"))
     agent_state_params = json.loads(task_params["agent_state_params_raw"])
 
     assert agent_state_params["customer_card_ref"] == str(success_card_ref)
@@ -447,11 +447,10 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_retry_paths(
             status=200,
         )
 
-        with pytest.raises(requests.RequestException) as exc_info:
-            with Jigsaw(
-                db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward
-            ) as agent:
-                agent.fetch_reward()
+        with pytest.raises(requests.RequestException) as exc_info, Jigsaw(
+            db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward
+        ) as agent:
+            agent.fetch_reward()
 
         assert exc_info.value.response.status_code == expected_status
 
@@ -459,7 +458,7 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_retry_paths(
         expected_call_count += 1
         spy_redis_set.assert_not_called()
         task_params = issuance_retry_task_no_reward.get_params()
-        assert all(val not in task_params for val in ["issued_date", "expiry_date", "reward_uuid", "reward_code"])
+        assert all(val not in task_params for val in ("issued_date", "expiry_date", "reward_uuid", "reward_code"))
         agent_state_params = json.loads(task_params["agent_state_params_raw"])
         assert agent_state_params["customer_card_ref"] == str(card_ref)
         assert agent_state_params["might_need_reversal"] is True
@@ -543,11 +542,10 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_failure_paths(
             status=200,
         )
 
-        with pytest.raises(requests.RequestException) as exc_info:
-            with Jigsaw(
-                db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward
-            ) as agent:
-                agent.fetch_reward()
+        with pytest.raises(requests.RequestException) as exc_info, Jigsaw(
+            db_session, jigsaw_reward_config, agent_config, retry_task=issuance_retry_task_no_reward
+        ) as agent:
+            agent.fetch_reward()
 
         assert exc_info.value.response.status_code == expected_status
 
@@ -555,7 +553,7 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_failure_paths(
         expected_call_count += 1
         spy_redis_set.assert_not_called()
         task_params = issuance_retry_task_no_reward.get_params()
-        assert all(val not in task_params for val in ["issued_date", "expiry_date", "reward_uuid", "reward_code"])
+        assert all(val not in task_params for val in ("issued_date", "expiry_date", "reward_uuid", "reward_code"))
         agent_state_params = json.loads(task_params["agent_state_params_raw"])
         assert agent_state_params["customer_card_ref"] == str(card_ref)
         assert agent_state_params["might_need_reversal"] is True

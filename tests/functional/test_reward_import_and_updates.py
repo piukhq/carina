@@ -1,10 +1,9 @@
-# pylint: disable=import-outside-toplevel,protected-access,invalid-name
-
 import logging
 
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import date, datetime, time, timezone
-from typing import TYPE_CHECKING, Callable, DefaultDict
+from typing import TYPE_CHECKING
 from unittest import mock
 
 import pytest
@@ -35,10 +34,7 @@ if TYPE_CHECKING:
 
 
 def _get_reward_update_rows(db_session: "Session", reward_codes: list[str]) -> list[RewardUpdate]:
-    reward_updates = (
-        db_session.execute(select(RewardUpdate).join(Reward).where(Reward.code.in_(reward_codes))).scalars().all()
-    )
-    return reward_updates
+    return db_session.execute(select(RewardUpdate).join(Reward).where(Reward.code.in_(reward_codes))).scalars().all()
 
 
 def _get_reward_rows(db_session: "Session") -> list[Reward]:
@@ -71,8 +67,7 @@ def test_import_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> N
     assert len(rewards) == 1
     assert rewards[0] == pre_existing_reward
 
-    blob_content = "\n".join(eligible_reward_codes + [pre_existing_reward.code])
-    blob_content += "\nthis,is,a,bad,line"  # this should be reported to sentry (line 5)
+    blob_content = "\n".join([*eligible_reward_codes, pre_existing_reward.code]) + "\nthis,is,a,bad,line"
     blob_content += "\nanother,bad,line"  # this should be reported to sentry (line 6)
 
     reward_agent.process_csv(
@@ -91,12 +86,14 @@ def test_import_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> N
     # We should be sentry warned about the existing token
     assert capture_message_spy.call_count == 2  # Errors should all be rolled up in to one call per error category
     assert (
-        "Invalid rows found in test-retailer/rewards.import.test-reward.new-reward.csv:\nrows: 5, 6"
-        == capture_message_spy.call_args_list[0][0][0]
+        capture_message_spy.call_args_list[0][0][0]
+        == "Invalid rows found in test-retailer/rewards.import.test-reward.new-reward.csv:\nrows: 5, 6"
     )
     assert (
-        "Pre-existing reward codes found in test-retailer/rewards.import.test-reward.new-reward.csv:" "\nrows: 4"
-    ) == capture_message_spy.call_args_list[1][0][0]
+        capture_message_spy.call_args_list[1][0][0]
+        == "Pre-existing reward codes found in test-retailer/rewards.import.test-reward.new-reward.csv:"
+        "\nrows: 4"
+    )
 
 
 def test_import_agent__process_csv_with_expiry_date(setup: SetupType, mocker: MockerFixture) -> None:
@@ -118,7 +115,7 @@ def test_import_agent__process_csv_with_expiry_date(setup: SetupType, mocker: Mo
         db_session=db_session,
     )
 
-    expiry_date = datetime.strptime("2023-01-16", "%Y-%m-%d").date()
+    expiry_date = datetime.strptime("2023-01-16", "%Y-%m-%d").astimezone().date()
     rewards = _get_reward_rows(db_session)
     for reward in rewards[1:4]:
         assert reward.expiry_date == expiry_date
@@ -150,7 +147,6 @@ def test_import_agent__process_csv_with_bad_expiry_date(setup: SetupType, mocker
     )
 
 
-# pylint: disable=too-many-locals
 def test_import_agent__process_csv_soft_deleted(
     setup: SetupType, create_reward_config: Callable, mocker: MockerFixture
 ) -> None:
@@ -183,7 +179,7 @@ def test_import_agent__process_csv_soft_deleted(
     reward_agent = RewardImportAgent()
     eligible_reward_codes = ["reward1", "reward2", "reward3"]
 
-    blob_content = "\n".join(eligible_reward_codes + [pre_existing_reward.code])
+    blob_content = "\n".join([*eligible_reward_codes, pre_existing_reward.code])
 
     reward_agent.process_csv(
         retailer=reward_config.retailer,
@@ -198,7 +194,6 @@ def test_import_agent__process_csv_soft_deleted(
     assert capture_message_spy.call_count == 0  # All rewards should import OK
 
 
-# pylint: disable=too-many-locals
 def test_import_agent__process_csv_not_soft_deleted(
     setup: SetupType, create_reward_config: Callable, mocker: MockerFixture
 ) -> None:
@@ -229,7 +224,7 @@ def test_import_agent__process_csv_not_soft_deleted(
     reward_agent = RewardImportAgent()
     eligible_reward_codes = ["reward1", "reward2", "reward3"]
 
-    blob_content = "\n".join(eligible_reward_codes + [pre_existing_reward.code])
+    blob_content = "\n".join([*eligible_reward_codes, pre_existing_reward.code])
 
     reward_agent.process_csv(
         retailer=reward_config.retailer,
@@ -243,9 +238,9 @@ def test_import_agent__process_csv_not_soft_deleted(
     assert all(v in [reward.code for reward in rewards] for v in eligible_reward_codes)
     # We should be sentry warned about the existing token
     assert capture_message_spy.call_count == 1
-    assert (
+    assert capture_message_spy.call_args_list[0][0][0] == (
         "Pre-existing reward codes found in test-retailer/rewards.import.test-reward.new-reward.csv:" "\nrows: 4"
-    ) == capture_message_spy.call_args_list[0][0][0]
+    )
 
 
 def test_import_agent__process_csv_same_reward_slug_not_soft_deleted(setup: SetupType, mocker: MockerFixture) -> None:
@@ -275,7 +270,7 @@ def test_import_agent__process_csv_same_reward_slug_not_soft_deleted(setup: Setu
     reward_agent = RewardImportAgent()
     eligible_reward_codes = ["reward1", "reward2", "reward3"]
 
-    blob_content = "\n".join(eligible_reward_codes + [pre_existing_reward.code])
+    blob_content = "\n".join([*eligible_reward_codes, pre_existing_reward.code])
 
     reward_agent.process_csv(
         retailer=reward_config.retailer,
@@ -289,9 +284,9 @@ def test_import_agent__process_csv_same_reward_slug_not_soft_deleted(setup: Setu
     assert all(v in [reward.code for reward in rewards] for v in eligible_reward_codes)
     # We should be sentry warned about the existing token
     assert capture_message_spy.call_count == 1
-    assert (
+    assert capture_message_spy.call_args_list[0][0][0] == (
         "Pre-existing reward codes found in test-retailer/rewards.import.test-reward.new-reward.csv:" "\nrows: 4"
-    ) == capture_message_spy.call_args_list[0][0][0]
+    )
 
 
 def test_import_agent__reward_config_non_active_status_error(
@@ -300,7 +295,9 @@ def test_import_agent__reward_config_non_active_status_error(
     db_session, reward_config, _ = setup
     reward_config.status = RewardTypeStatuses.ENDED
     db_session.commit()
-    MockBlobServiceClient = mocker.patch("carina.imports.agents.file_agent.BlobServiceClient", autospec=True)
+    MockBlobServiceClient = mocker.patch(  # noqa: N806
+        "carina.imports.agents.file_agent.BlobServiceClient", autospec=True
+    )
     mock_blob_service_client = mocker.MagicMock(spec=BlobServiceClient)
 
     MockBlobServiceClient.from_connection_string.return_value = mock_blob_service_client
@@ -385,12 +382,12 @@ def test_updates_agent__process_csv(setup: SetupType, mocker: MockerFixture) -> 
     mocker.patch("carina.imports.agents.file_agent.BlobServiceClient")
     reward_agent = RewardUpdatesAgent()
     mock__process_updates = mocker.patch.object(reward_agent, "_process_updates")
-    content = """
+    content = """\
 TEST12345678,2021-07-30,cancelled
 TEST87654321,2021-07-21,redeemed
 TEST87654322,2021-07-30,CANCELLED
-TEST87654322,2021-07-30,redeemed
-""".strip()
+TEST87654322,2021-07-30,redeemed\
+"""
 
     reward_agent.process_csv(
         retailer=reward_config.retailer,
@@ -466,11 +463,11 @@ def test_updates_agent__process_csv_reward_code_fails_non_validating_rows(
     reward_agent = RewardUpdatesAgent()
     bad_date = "20210830"
     bad_status = "nosuchstatus"
-    content = f"""
+    content = f"""\
 TSTCD1234,2021-07-30,redeemed
 TEST12345678,{bad_date},redeemed
-TEST666666,2021-07-30,{bad_status}
-""".strip()
+TEST666666,2021-07-30,{bad_status}\
+"""
 
     # WHEN
     reward_agent.process_csv(
@@ -543,7 +540,7 @@ def test_updates_agent__process_updates(setup: SetupType, mocker: MockerFixture)
         date="2021-07-30",
         status=RewardUpdateStatuses("redeemed"),
     )
-    reward_update_rows_by_code: DefaultDict[str, list[RewardUpdateRow]] = defaultdict(list[RewardUpdateRow])
+    reward_update_rows_by_code: defaultdict[str, list[RewardUpdateRow]] = defaultdict(list[RewardUpdateRow])
     reward_update_rows_by_code[reward.code].append(RewardUpdateRow(data=data, row_num=1))
 
     # WHEN
@@ -586,7 +583,7 @@ def test_updates_agent__process_updates_reward_code_not_allocated(setup: SetupTy
         date="2021-07-30",
         status=RewardUpdateStatuses("redeemed"),
     )
-    reward_update_rows_by_code: DefaultDict[str, list[RewardUpdateRow]] = defaultdict(list[RewardUpdateRow])
+    reward_update_rows_by_code: defaultdict[str, list[RewardUpdateRow]] = defaultdict(list[RewardUpdateRow])
     reward_update_rows_by_code[reward.code].append(RewardUpdateRow(data=data, row_num=1))
 
     # WHEN
@@ -602,7 +599,7 @@ def test_updates_agent__process_updates_reward_code_not_allocated(setup: SetupTy
     assert capture_message_spy.call_count == 1  # Errors should all be rolled up in to a single call
     expected_error_msg: str = capture_message_spy.call_args.args[0]
     assert "Unallocated reward codes found" in expected_error_msg
-    assert len(reward_update_rows) == 0
+    assert not reward_update_rows
 
 
 def test_updates_agent__process_updates_reward_code_does_not_exist(setup: SetupType, mocker: MockerFixture) -> None:
@@ -626,7 +623,7 @@ def test_updates_agent__process_updates_reward_code_does_not_exist(setup: SetupT
         date="2021-07-30",
         status=RewardUpdateStatuses("cancelled"),
     )
-    reward_update_rows_by_code: DefaultDict[str, list[RewardUpdateRow]] = defaultdict(list[RewardUpdateRow])
+    reward_update_rows_by_code: defaultdict[str, list[RewardUpdateRow]] = defaultdict(list[RewardUpdateRow])
     reward_update_rows_by_code[bad_reward_code].append(RewardUpdateRow(data=data, row_num=1))
 
     # WHEN
@@ -645,17 +642,19 @@ def test_updates_agent__process_updates_reward_code_does_not_exist(setup: SetupT
         "Unknown reward codes found while processing /test-retailer/rewards.update.test.csv, rows: 1"
         in expected_error_msg
     )
-    assert len(reward_update_rows) == 0
+    assert not reward_update_rows
 
 
 class Blob:
-    def __init__(self, name: str):
+    def __init__(self, name: str) -> None:
         self.name = name
 
 
 def test_process_blobs(setup: SetupType, mocker: MockerFixture) -> None:
     db_session, reward_config, _ = setup
-    MockBlobServiceClient = mocker.patch("carina.imports.agents.file_agent.BlobServiceClient", autospec=True)
+    MockBlobServiceClient = mocker.patch(  # noqa: N806
+        "carina.imports.agents.file_agent.BlobServiceClient", autospec=True
+    )
     mock_blob_service_client = mocker.MagicMock(spec=BlobServiceClient)
 
     MockBlobServiceClient.from_connection_string.return_value = mock_blob_service_client
@@ -686,7 +685,9 @@ def test_process_blobs(setup: SetupType, mocker: MockerFixture) -> None:
 
 def test_process_blobs_unicodedecodeerror(capture: LogCapture, setup: SetupType, mocker: MockerFixture) -> None:
     db_session, reward_config, _ = setup
-    MockBlobServiceClient = mocker.patch("carina.imports.agents.file_agent.BlobServiceClient", autospec=True)
+    MockBlobServiceClient = mocker.patch(  # noqa: N806
+        "carina.imports.agents.file_agent.BlobServiceClient", autospec=True
+    )
     mock_blob_service_client = mocker.MagicMock(spec=BlobServiceClient)
 
     MockBlobServiceClient.from_connection_string.return_value = mock_blob_service_client
@@ -714,7 +715,9 @@ def test_process_blobs_unicodedecodeerror(capture: LogCapture, setup: SetupType,
 
 def test_process_blobs_not_csv(setup: SetupType, mocker: MockerFixture) -> None:
     db_session, reward_config, _ = setup
-    MockBlobServiceClient = mocker.patch("carina.imports.agents.file_agent.BlobServiceClient", autospec=True)
+    MockBlobServiceClient = mocker.patch(  # noqa: N806
+        "carina.imports.agents.file_agent.BlobServiceClient", autospec=True
+    )
     mock_blob_service_client = mocker.MagicMock(spec=BlobServiceClient)
     MockBlobServiceClient.from_connection_string.return_value = mock_blob_service_client
     from carina.imports.agents.file_agent import sentry_sdk
@@ -737,8 +740,8 @@ def test_process_blobs_not_csv(setup: SetupType, mocker: MockerFixture) -> None:
     reward_agent.process_blobs(reward_config.retailer, db_session=db_session)
     assert capture_message_spy.call_count == 1  # Errors should all be rolled up in to a single call
     assert (
-        "test-retailer/rewards.update.update.docx does not have .csv ext. Moving to ERROR-CONTAINER for checking"
-        == capture_message_spy.call_args.args[0]
+        capture_message_spy.call_args.args[0]
+        == "test-retailer/rewards.update.update.docx does not have .csv ext. Moving to ERROR-CONTAINER for checking"
     )
     mock_move_blob.assert_called_once()
     assert mock_move_blob.call_args[0][0] == "ERROR-CONTAINER"
@@ -755,7 +758,9 @@ def test_process_blobs_filename_is_duplicate(setup: SetupType, mocker: MockerFix
         )
     )
     db_session.commit()
-    MockBlobServiceClient = mocker.patch("carina.imports.agents.file_agent.BlobServiceClient", autospec=True)
+    MockBlobServiceClient = mocker.patch(  # noqa: N806
+        "carina.imports.agents.file_agent.BlobServiceClient", autospec=True
+    )
     mock_blob_service_client = mocker.MagicMock(spec=BlobServiceClient)
     MockBlobServiceClient.from_connection_string.return_value = mock_blob_service_client
     from carina.imports.agents.file_agent import sentry_sdk
@@ -778,8 +783,8 @@ def test_process_blobs_filename_is_duplicate(setup: SetupType, mocker: MockerFix
     reward_agent.process_blobs(reward_config.retailer, db_session=db_session)
     assert capture_message_spy.call_count == 1  # Errors should all be rolled up in to a single call
     assert (
-        "test-retailer/rewards.update.update.csv is a duplicate. Moving to ERROR-CONTAINER for checking"
-        == capture_message_spy.call_args.args[0]
+        capture_message_spy.call_args.args[0]
+        == "test-retailer/rewards.update.update.csv is a duplicate. Moving to ERROR-CONTAINER for checking"
     )
     mock_move_blob.assert_called_once()
     assert mock_move_blob.call_args[0][0] == "ERROR-CONTAINER"
@@ -797,7 +802,9 @@ def test_process_blobs_filename_is_not_duplicate(setup: SetupType, mocker: Mocke
         )
     )
     db_session.commit()
-    MockBlobServiceClient = mocker.patch("carina.imports.agents.file_agent.BlobServiceClient", autospec=True)
+    MockBlobServiceClient = mocker.patch(  # noqa: N806
+        "carina.imports.agents.file_agent.BlobServiceClient", autospec=True
+    )
     mock_blob_service_client = mocker.MagicMock(spec=BlobServiceClient)
 
     MockBlobServiceClient.from_connection_string.return_value = mock_blob_service_client
@@ -828,7 +835,9 @@ def test_process_blobs_filename_is_not_duplicate(setup: SetupType, mocker: Mocke
 
 def test_move_blob(mocker: MockerFixture) -> None:
     # GIVEN
-    MockBlobServiceClient = mocker.patch("carina.imports.agents.file_agent.BlobServiceClient", autospec=True)
+    MockBlobServiceClient = mocker.patch(  # noqa: N806
+        "carina.imports.agents.file_agent.BlobServiceClient", autospec=True
+    )
     MockBlobServiceClient.from_connection_string.return_value = mocker.MagicMock(spec=BlobServiceClient)
     mock_src_blob_client = mocker.patch("carina.imports.agents.file_agent.BlobClient", autospec=True)
     mock_src_blob_client.url = "https://a-blob-url"
@@ -866,7 +875,7 @@ def test_enqueue_reward_updates(
     mock_enqueue_many_retry_tasks = mocker.patch("carina.imports.agents.file_agent.enqueue_many_retry_tasks")
     mock_redis = mocker.patch("carina.imports.agents.file_agent.redis_raw")
 
-    today = date.today()
+    today = datetime.now(tz=timezone.utc).date()
     reward_update = RewardUpdate(
         reward=reward,
         date=today,
@@ -902,7 +911,7 @@ def test_enqueue_reward_updates_exception(
     mock_enqueue_many_retry_tasks = mocker.patch("carina.imports.agents.file_agent.enqueue_many_retry_tasks")
     error = redis.RedisError("Fake connection error")
     mock_enqueue_many_retry_tasks.side_effect = error
-    today = date.today()
+    today = datetime.now(tz=timezone.utc).date()
 
     reward_update = RewardUpdate(
         reward=reward,

@@ -25,7 +25,7 @@ logger = logging.getLogger("reward")
     status_code=status.HTTP_202_ACCEPTED,
     dependencies=[Depends(user_is_authorised)],
 )
-async def allocation(  # pylint: disable=too-many-arguments
+async def allocation(  # noqa: PLR0913
     payload: RewardAllocationSchema,
     response: Response,
     reward_slug: str,
@@ -57,7 +57,7 @@ async def allocation(  # pylint: disable=too-many-arguments
     path="/{retailer_slug}/{reward_slug}/campaign",
     dependencies=[Depends(user_is_authorised)],
 )
-async def reward_campaign(  # pylint: disable=too-many-arguments
+async def reward_campaign(
     payload: RewardCampaignSchema,
     response: Response,
     reward_slug: str,
@@ -66,7 +66,7 @@ async def reward_campaign(  # pylint: disable=too-many-arguments
 ) -> Any:
     reward_config = await crud.get_reward_config(db_session, retailer, reward_slug, for_update=True)
 
-    if reward_config.status not in [RewardTypeStatuses.ACTIVE]:
+    if reward_config.status != RewardTypeStatuses.ACTIVE:
         raise HttpErrors.UNKNOWN_REWARD_SLUG.value
 
     response.status_code = await crud.insert_or_update_reward_campaign(
@@ -89,7 +89,7 @@ async def deactivate_reward_type(
     reward_slug: str,
     retailer: Retailer = Depends(retailer_is_valid),
     db_session: AsyncSession = Depends(get_session),
-) -> Any:
+) -> None:
     reward_config = await crud.get_reward_config(db_session, retailer, reward_slug)
     active_campaign = await crud.check_for_active_campaigns(db_session, retailer, reward_slug)
     if active_campaign:
@@ -109,5 +109,3 @@ async def deactivate_reward_type(
         return await db_session.commit()
 
     await async_run_query(_query, db_session)
-
-    return {}

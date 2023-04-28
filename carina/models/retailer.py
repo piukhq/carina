@@ -10,7 +10,7 @@ from carina.enums import RetailerStatuses
 class Retailer(Base, TimestampMixin):
     __tablename__ = "retailer"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True)  # noqa: A003
     slug = Column(String, nullable=False, index=True)
     status = Column(Enum(RetailerStatuses), nullable=False, index=True, default=RetailerStatuses.TEST)
 
@@ -28,7 +28,7 @@ class Retailer(Base, TimestampMixin):
 class FetchType(Base, TimestampMixin):
     __tablename__ = "fetch_type"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True)  # noqa: A003
     name = Column(String, nullable=False, unique=True)
     required_fields = Column(Text, nullable=True)
     path = Column(String, nullable=False)
@@ -60,7 +60,7 @@ class RetailerFetchType(Base, TimestampMixin):
         return f"{self.__class__.__name__}: {self.retailer} - {self.fetch_type}"
 
     def load_agent_config(self) -> dict:
-        if self.agent_config in ["", None]:
+        if self.agent_config in ("", None):
             return {}
 
         return yaml.safe_load(self.agent_config)

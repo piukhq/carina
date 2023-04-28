@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Any, Callable, cast
+from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
 import requests
@@ -153,7 +154,7 @@ class Jigsaw(BaseAgent):
                 msg_info = ""
 
         except (requests.exceptions.JSONDecodeError, KeyError) as ex:
-            raise requests.HTTPError(f"Jigsaw: unexpected response format. info: {ex}", response=resp)
+            raise requests.HTTPError(f"Jigsaw: unexpected response format. info: {ex}", response=resp) from None
 
         return response_payload, jigsaw_status, description, msg_id, msg_info
 
@@ -217,7 +218,7 @@ class Jigsaw(BaseAgent):
     def _get_response_body_or_raise_for_status(
         self,
         resp: requests.Response,
-        try_again_call: Callable[..., requests.Response] = None,
+        try_again_call: Callable[..., requests.Response] | None = None,
         reversal_allowed: bool = True,
     ) -> dict:
         """Validates a http response based on Jigsaw specific status codes and errors ids."""
@@ -285,7 +286,7 @@ class Jigsaw(BaseAgent):
 
         try:
             return self.fernet.decrypt(raw_token).decode()
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:
             self.logger.exception(
                 f"Jigsaw: Unexpected value retrieved from redis for {self.REDIS_TOKEN_KEY}.", exc_info=ex
             )
@@ -300,7 +301,7 @@ class Jigsaw(BaseAgent):
                 self.fernet.encrypt(token.encode()),
                 expires_in,
             )
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:
             self.logger.exception("Jigsaw: Unexpected error while encrypting and saving token to redis.", exc_info=ex)
 
     def _get_auth_token(self) -> str:
@@ -428,8 +429,7 @@ class Jigsaw(BaseAgent):
         raise NotImplementedError
 
     def cleanup_reward(self) -> None:
-        reward_uuid: str | None = self.retry_task.get_params().get("reward_uuid", None)
-        if reward_uuid:
+        if reward_uuid := self.retry_task.get_params().get("reward_uuid", None):
             self.set_agent_state_params(self.agent_state_params | {self.REVERSAL_CARD_REF_KEY: reward_uuid})
             self.update_reward_and_remove_references_from_task(reward_uuid, {"deleted": True})
 

@@ -20,9 +20,9 @@ async def readyz(db_session: AsyncSession = Depends(get_session)) -> Any:
     try:
         await db_session.execute(text("SELECT 1"))
     except Exception as ex:  # pragma: no cover
-        raise HTTPException(  # pylint: disable=raise-missing-from
-            detail={"postgres": f"failed to connect to postgres due to error: {repr(ex)}"},
+        raise HTTPException(
+            detail={"postgres": f"failed to connect to postgres due to error: {ex!r}"},
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
+        ) from None
 
     return {}

@@ -315,7 +315,7 @@ redis_raw = Redis.from_url(
 if settings.SENTRY_DSN:  # pragma: no cover
     # by default sentry_sdk.init will integrate with logging and capture error messages as events
     # docs: https://docs.sentry.io/platforms/python/guides/logging/
-    sentry_sdk.init(  # pylint: disable=abstract-class-instantiated
+    sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
         environment=settings.SENTRY_ENV,
         integrations=[
