@@ -83,7 +83,7 @@ def test_post_reward_allocation_happy_path(
     resp = client.post(
         f"{settings.API_PREFIX}/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/allocation",
         json=payload,
-        headers={**auth_headers, "idempotency-token": str(uuid4())},
+        headers=auth_headers | {"idempotency-token": str(uuid4())},
     )
 
     assert resp.status_code == status.HTTP_202_ACCEPTED
@@ -119,7 +119,7 @@ def test_post_reward_allocation_with_count(
     resp = client.post(
         f"{settings.API_PREFIX}/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/allocation",
         json=payload_with_count,
-        headers={**auth_headers, "idempotency-token": str(uuid4())},
+        headers=auth_headers | {"idempotency-token": str(uuid4())},
     )
 
     assert resp.status_code == status.HTTP_202_ACCEPTED
@@ -145,7 +145,7 @@ def test_post_reward_allocation_with_pending_reward_id(
     resp = client.post(
         f"{settings.API_PREFIX}/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/allocation",
         json=payload_with_pending_reward_id,
-        headers={"idempotency-token": idempotency_token, **auth_headers},
+        headers=auth_headers | {"idempotency-token": idempotency_token},
     )
 
     assert resp.status_code == status.HTTP_202_ACCEPTED
@@ -169,7 +169,7 @@ def test_post_reward_allocation_wrong_retailer(setup: SetupType, reward_issuance
     resp = client.post(
         f"{settings.API_PREFIX}/WRONG-RETAILER/rewards/{reward_config.reward_slug}/allocation",
         json=payload,
-        headers={**auth_headers, "idempotency-token": str(uuid4())},
+        headers=auth_headers | {"idempotency-token": str(uuid4())},
     )
 
     assert resp.status_code == HttpErrors.INVALID_RETAILER.value.status_code
@@ -185,7 +185,7 @@ def test_post_reward_allocation_wrong_reward_type(setup: SetupType, reward_issua
     resp = client.post(
         f"{settings.API_PREFIX}/{reward_config.retailer.slug}/rewards/WRONG-TYPE/allocation",
         json=payload,
-        headers={**auth_headers, "idempotency-token": str(uuid4())},
+        headers=auth_headers | {"idempotency-token": str(uuid4())},
     )
 
     assert resp.status_code == HttpErrors.UNKNOWN_REWARD_TYPE.value.status_code
@@ -208,7 +208,7 @@ def test_post_reward_allocation_no_more_rewards(
     resp = client.post(
         f"{settings.API_PREFIX}/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/allocation",
         json=payload,
-        headers={"idempotency-token": idempotency_token, **auth_headers},
+        headers=auth_headers | {"idempotency-token": idempotency_token},
     )
 
     assert resp.status_code == status.HTTP_202_ACCEPTED
@@ -237,7 +237,7 @@ def test_post_reward_allocation_existing_idempotency_token(
     first_allocation_response = client.post(
         f"{settings.API_PREFIX}/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/allocation",
         json=payload,
-        headers={**auth_headers, "idempotency-token": str(idempotency_token)},
+        headers=auth_headers | {"idempotency-token": str(idempotency_token)},
     )
 
     assert first_allocation_response.status_code == status.HTTP_202_ACCEPTED
@@ -251,7 +251,7 @@ def test_post_reward_allocation_existing_idempotency_token(
     second_allocation_response = client.post(
         f"{settings.API_PREFIX}/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/allocation",
         json=payload,
-        headers={**auth_headers, "idempotency-token": str(idempotency_token)},
+        headers=auth_headers | {"idempotency-token": str(idempotency_token)},
     )
 
     assert second_allocation_response.status_code == status.HTTP_202_ACCEPTED
@@ -284,7 +284,7 @@ def test_post_reward_allocation_invalid_idempotency_token(
     allocation_response = client.post(
         f"{settings.API_PREFIX}/{reward_config.retailer.slug}/rewards/{reward_config.reward_slug}/allocation",
         json=payload,
-        headers={**auth_headers, "idempotency-token": "invalid-token"},
+        headers=auth_headers | {"idempotency-token": "invalid-token"},
     )
 
     assert allocation_response.status_code == HttpErrors.MISSING_OR_INVALID_IDEMPOTENCY_TOKEN_HEADER.value.status_code

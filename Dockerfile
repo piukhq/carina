@@ -1,23 +1,35 @@
-FROM ghcr.io/binkhq/python:3.10-poetry as build
+FROM ghcr.io/binkhq/python:3.10 as build
+
+ENV VENV /app/venv
 
 WORKDIR /src
-RUN poetry config virtualenvs.create false
-RUN poetry self add poetry-dynamic-versioning[plugin]
 ADD . .
+ARG AZURE_DEVOPS_PAT
+ENV VIRTUAL_ENV=$VENV
+ENV PATH=$VENV/bin:$PATH
+
+# gcc required for hiredis and git for poetry-dynamic-versioning
+RUN apt update && apt -y install git gcc
+RUN pip install poetry==1.7.1
+RUN poetry config http-basic.azure jeff $AZURE_DEVOPS_PAT
+RUN poetry self add poetry-dynamic-versioning[plugin]
+RUN python -m venv $VENV
+RUN poetry install --without=dev --no-root
 RUN poetry build
+RUN pip install dist/*.whl
 
 FROM ghcr.io/binkhq/python:3.10
 
-ENV PIP_INDEX_URL=https://269fdc63-af3d-4eca-8101-8bddc22d6f14:b694b5b1-f97e-49e4-959e-f3c202e3ab91@pypi.tools.uksouth.bink.sh/simple
 WORKDIR /app
-ARG wheel=carina-*-py3-none-any.whl
+ENV VENV /app/venv
+ENV PATH="$VENV/bin:$PATH"
+ENV PROMETHEUS_MULTIPROC_DIR=/dev/shm
+
+COPY --from=build $VENV $VENV
 COPY --from=build /src/alembic/ ./alembic/
 COPY --from=build /src/alembic.ini .
 COPY --from=build /src/asgi.py .
-COPY --from=build /src/dist/$wheel .
-# gcc required for hiredis
-RUN apt update && apt -y install gcc && pip install $wheel && rm $wheel && apt -y autoremove gcc
-ENV PROMETHEUS_MULTIPROC_DIR=/dev/shm
+
 ENTRYPOINT [ "linkerd-await", "--" ]
 CMD [ "gunicorn", "--workers=2", "--error-logfile=-", "--access-logfile=-", \
     "--worker-class=uvicorn.workers.UvicornWorker", \

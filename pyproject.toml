@@ -7,10 +7,13 @@ readme = "README.md"
 repository = "https://github.com/binkhq/carina"
 
 [[tool.poetry.source]]
-name = "bink-pypi"
-url = "https://pypi.gb.bink.com/simple"
-default = false
-secondary = false
+name = "PyPI"
+priority = "primary"
+
+[[tool.poetry.source]]
+name = "azure"
+url = "https://pkgs.dev.azure.com/binkhq/_packaging/binkhq/pypi/simple/"
+priority = "explicit"
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -39,10 +42,11 @@ APScheduler = "^3.9.1"
 PyYAML = "^6.0"
 typer = "^0.6.1"
 cryptography = "^39.0.1"
-retry-tasks-lib = {version = "2.0.*", source = "bink-pypi"}
-cosmos-message-lib = {version = "^1.2.0", source = "bink-pypi"}
-fastapi-prometheus-metrics = {version = "^0.2.3", source = "bink-pypi"}
+retry-tasks-lib = { version = "^2.2.1", source = "azure" }
+cosmos-message-lib = { version = "^1.2.0", source = "azure" }
+fastapi-prometheus-metrics = { version = "^0.2.7", source = "azure" }
 future = "^0.18.3"
+tzdata = "^2023.4"
 
 [tool.poetry.group.dev.dependencies]
 isort = "^5.10.1"
@@ -161,3 +165,9 @@ files = ['carina/version.py']
 [build-system]
 requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning"]
 build-backend = "poetry_dynamic_versioning.backend"
+
+[tool.refurb]
+ignore = [
+    "FURB184",  # some chaining suggestions don't make sense
+    "FURB111", # conflicts with sync and async run query
+]

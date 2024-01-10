@@ -56,7 +56,7 @@ jobs:
           python-version: "3.10"
       - run: pip install poetry
       - run: poetry config virtualenvs.create false
-      - run: poetry config http-basic.bink-pypi 269fdc63-af3d-4eca-8101-8bddc22d6f14 b694b5b1-f97e-49e4-959e-f3c202e3ab91
+      - run: poetry config http-basic.azure jeff ${{ secrets.AZURE_DEVOPS_PAT }}
       - run: poetry install
       - run: alembic upgrade head
       - run: black --check .
@@ -85,6 +85,8 @@ jobs:
       - uses: docker/build-push-action@v4
         with:
           context: .
+          build-args: |
+            AZURE_DEVOPS_PAT=${{ secrets.AZURE_DEVOPS_PAT }}
           push: true
           tags: |
             binkcore.azurecr.io/${{ github.event.repository.name }}:${{ env.container_tag }}
@@ -112,6 +114,8 @@ jobs:
       - uses: docker/build-push-action@v4
         with:
           context: .
+          build-args: |
+            AZURE_DEVOPS_PAT=${{ secrets.AZURE_DEVOPS_PAT }}
           push: true
           tags: |
             binkcore.azurecr.io/${{ github.event.repository.name }}:${{ github.event.release.tag_name }}

@@ -95,7 +95,6 @@ def test_jigsaw_agent_get_token_retry_paths(
         (5000, "Internal Server Error", status.HTTP_500_INTERNAL_SERVER_ERROR),
         (5003, "Service Unavailable", status.HTTP_503_SERVICE_UNAVAILABLE),
     ):
-
         httpretty.register_uri(
             "POST",
             f"{agent_config['base_url']}/order/V4/getToken",
@@ -120,7 +119,7 @@ def test_jigsaw_agent_get_token_retry_paths(
         ) as agent:
             agent.fetch_reward()
 
-        assert exc_info.value.response.status_code == expected_status
+        assert exc_info.value.response.status_code == expected_status  # type: ignore [union-attr]
         spy_redis_set.assert_not_called()
 
         task_params = issuance_retry_task_no_reward.get_params()
@@ -144,7 +143,6 @@ def test_jigsaw_agent_get_token_failure_paths(
         (4003, "Forbidden", status.HTTP_403_FORBIDDEN),
         (4001, "Unauthorised", status.HTTP_401_UNAUTHORIZED),
     ):
-
         httpretty.register_uri(
             "POST",
             f"{agent_config['base_url']}/order/V4/getToken",
@@ -169,7 +167,7 @@ def test_jigsaw_agent_get_token_failure_paths(
         ) as agent:
             agent.fetch_reward()
 
-        assert exc_info.value.response.status_code == expected_status
+        assert exc_info.value.response.status_code == expected_status  # type: ignore [union-attr]
         spy_redis_set.assert_not_called()
 
         task_params = issuance_retry_task_no_reward.get_params()
