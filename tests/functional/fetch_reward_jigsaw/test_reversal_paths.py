@@ -126,7 +126,6 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_max_retries_exceede
         def response_generator(
             self, request: httpretty.core.HTTPrettyRequest, uri: str, response_headers: dict
         ) -> tuple[int, dict, str]:
-
             match self._update_calls_and_get_endpoint(uri):
                 case "register":
                     return (
@@ -232,7 +231,6 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_need_new_token(
         def response_generator(
             self, request: httpretty.core.HTTPrettyRequest, uri: str, response_headers: dict
         ) -> tuple[int, dict, str]:
-
             match self._update_calls_and_get_endpoint(uri):
                 case "register":
                     if self.calls["reversal"] < 2:
@@ -452,7 +450,7 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_retry_paths(
         ) as agent:
             agent.fetch_reward()
 
-        assert exc_info.value.response.status_code == expected_status
+        assert exc_info.value.response.status_code == expected_status  # type: ignore [union-attr]
 
         assert mock_uuid.call_count == expected_call_count
         expected_call_count += 1
@@ -547,7 +545,7 @@ def test_jigsaw_agent_register_reversal_paths_previous_error_failure_paths(
         ) as agent:
             agent.fetch_reward()
 
-        assert exc_info.value.response.status_code == expected_status
+        assert exc_info.value.response.status_code == expected_status  # type: ignore [union-attr]
 
         assert mock_uuid.call_count == expected_call_count
         expected_call_count += 1

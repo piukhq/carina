@@ -124,14 +124,13 @@ def test__process_issuance_http_errors(
         (401, "Unauthorized"),
         (500, "Internal Server Error"),
     ):
-
         httpretty.register_uri("POST", reward_issuance_task_params["account_url"], body=body, status=status)
 
         with pytest.raises(requests.RequestException) as excinfo:
             _process_issuance(reward_issuance_task_params, validity_days)
 
         assert isinstance(excinfo.value, requests.RequestException)
-        assert excinfo.value.response.status_code == status
+        assert excinfo.value.response.status_code == status  # type: ignore [union-attr]
 
         last_request = httpretty.last_request()
         assert last_request.method == "POST"
@@ -178,7 +177,6 @@ def test_reward_issuance_wrong_status(
     issuance_retry_task: RetryTask,
     reward_campaign: RewardCampaign,
 ) -> None:
-
     issuance_retry_task.status = RetryTaskStatuses.FAILED
     db_session.commit()
 
@@ -333,7 +331,6 @@ def test__process_status_adjustment_ok(
     adjustment_expected_payload: dict,
     adjustment_url: str,
 ) -> None:
-
     mock_datetime.now.return_value = fake_now
     mock_datetime.fromisoformat = datetime.fromisoformat
 
@@ -360,7 +357,6 @@ def test__process_status_adjustment_http_errors(
     adjustment_expected_payload: dict,
     adjustment_url: str,
 ) -> None:
-
     for status, body in (
         (401, "Unauthorized"),
         (500, "Internal Server Error"),
@@ -371,7 +367,7 @@ def test__process_status_adjustment_http_errors(
             _process_status_adjustment(db_session, reward_status_adjustment_retry_task.get_params())
 
         assert isinstance(excinfo.value, requests.RequestException)
-        assert excinfo.value.response.status_code == status
+        assert excinfo.value.response.status_code == status  # type: ignore [union-attr]
 
         last_request = httpretty.last_request()
         assert last_request.method == "PATCH"
@@ -395,7 +391,7 @@ def test__process_status_adjustment_404_not_found_soft_delete(
             _process_status_adjustment(db_session, reward_status_adjustment_retry_task.get_params())
 
         assert isinstance(excinfo.value, requests.RequestException)
-        assert excinfo.value.response.status_code == status
+        assert excinfo.value.response.status_code == status  # type: ignore [union-attr]
 
         last_request = httpretty.last_request()
         assert last_request.method == "PATCH"
@@ -411,7 +407,6 @@ def test__process_status_adjustment_connection_error(
     db_session: "Session",
     reward_status_adjustment_retry_task: RetryTask,
 ) -> None:
-
     mock_send_request_with_metrics.side_effect = requests.Timeout("Request timed out")
 
     with pytest.raises(requests.RequestException) as excinfo:
@@ -425,7 +420,6 @@ def test__process_status_adjustment_connection_error(
 def test_status_adjustment(
     db_session: "Session", reward_status_adjustment_retry_task: RetryTask, adjustment_url: str
 ) -> None:
-
     httpretty.register_uri("PATCH", adjustment_url, body="OK", status=200)
 
     status_adjustment(reward_status_adjustment_retry_task.retry_task_id)
@@ -480,7 +474,7 @@ def test_reward_issuance_409_from_polaris(
     db_session.refresh(issuance_retry_task)
 
     assert isinstance(excinfo.value, requests.RequestException)
-    assert excinfo.value.response.status_code == 409
+    assert excinfo.value.response.status_code == 409  # type: ignore [union-attr]
     assert (
         # The error handler will set the status to RETRYING
         issuance_retry_task.status
@@ -534,7 +528,7 @@ def test_reward_issuance_no_reward_but_one_available_and_409(
         issue_reward(issuance_retry_task_no_reward.retry_task_id)
 
     assert isinstance(excinfo.value, requests.RequestException)
-    assert excinfo.value.response.status_code == 409
+    assert excinfo.value.response.status_code == 409  # type: ignore [union-attr]
 
     db_session.refresh(issuance_retry_task_no_reward)
     db_session.refresh(reward)

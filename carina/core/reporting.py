@@ -11,7 +11,6 @@ class JSONFormatter(logging.Formatter):
         pass
 
     def format(self, record: logging.LogRecord) -> str:  # noqa: A003
-
         return json.dumps(
             {
                 "timestamp": record.created,
@@ -43,7 +42,7 @@ class ConsoleFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:  # noqa: A003
         return self._format_with_colour(
             {
-                "level": f"{record.levelname}",
+                "level": str(record.levelname),
                 "logger": record.name,
                 "when": self.formatTime(record),
                 "where": f"{record.module}.{record.funcName}, line: {record.lineno}",
