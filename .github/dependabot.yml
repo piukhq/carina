@@ -1,0 +1,17 @@
+version: 2
+registries:
+  python-azure:
+    url: https://pkgs.dev.azure.com/binkhq/_packaging/binkhq/pypi/simple
+    type: python-index
+    token: jeff:${{ secrets.AZURE_DEVOPS_PAT }}
+    replaces-base: true
+updates:
+  - package-ecosystem: "pip"
+    insecure-external-code-execution: allow
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    registries:
+      - python-azure
+    assignees:
+      - backwardspy
