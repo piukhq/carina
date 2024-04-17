@@ -1,0 +1,46 @@
+name: test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    env:
+      LOG_FORMATTER: brief
+      SQLALCHEMY_DATABASE_URI: "postgresql://postgres@127.0.0.1:5432/carina"
+      REDIS_URL: redis://127.0.0.1:6379/0
+      TESTING: "True"
+      PRE_LOADED_REWARD_BASE_URL: http://test.url
+    services:
+      postgres:
+        image: postgres:latest
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: carina_test
+      redis:
+        image: redis:latest
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install poetry
+      - run: poetry config http-basic.azure jeff ${{ secrets.AZURE_DEVOPS_PAT }}
+      - run: poetry install
+      - run: poetry run alembic upgrade head
+      - run: poetry run black --check .
+      - run: poetry run isort --check .
+      - run: poetry run xenon --no-assert --max-average A --max-modules B --max-absolute B .
+      - run: poetry run ruff carina tests asgi.py
+      - run: poetry run mypy .
+      - run: poetry run refurb carina tests asgi.py
+      - run: poetry run pytest --verbose --cov carina --cov-report term-missing
