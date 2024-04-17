@@ -3,8 +3,7 @@ registries:
   python-azure:
     url: https://pkgs.dev.azure.com/binkhq/_packaging/binkhq/pypi/simple
     type: python-index
-    username: cpressland@bink.com
-    password: ${{ secrets.AZURE_DEVOPS_PAT }}
+    token: binkhq:${{ secrets.AZURE_DEVOPS_PAT }}
     replaces-base: true
 updates:
   - package-ecosystem: "pip"
