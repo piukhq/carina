@@ -1,8 +1,8 @@
 import logging
 
+from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from alembic import context
 from carina.core.config import settings
 from carina.db.base import Base
 
