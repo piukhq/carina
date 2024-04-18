@@ -3,6 +3,9 @@
   "extends": [
     "config:recommended"
   ],
+  "reviewers": [
+    "team:developers"
+  ],
   "hostRules": [
     {
       "hostType": "pypi",
