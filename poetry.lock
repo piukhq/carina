@@ -1979,13 +1979,13 @@ ocsp = ["cryptography (>=36.0.1)", "pyopenssl (==20.0.1)", "requests (>=2.26.0)"
 
 [[package]]
 name = "refurb"
-version = "1.27.0"
+version = "1.28.0"
 description = "A tool for refurbish and modernize Python codebases"
 optional = false
 python-versions = ">=3.10"
 files = [
-    {file = "refurb-1.27.0-py3-none-any.whl", hash = "sha256:ca80b9f06878d2a6d87e534ad8aeaf784cf157613dd68c85b86d647abc8cc42b"},
-    {file = "refurb-1.27.0.tar.gz", hash = "sha256:91c76fdc00573e316ea5f6ce9015f2511722ff113d67154955c2d9dbf7cb63ff"},
+    {file = "refurb-1.28.0-py3-none-any.whl", hash = "sha256:c89516b77745df67a1fc099e876bf31fe41ac48b80d1e7c8ced29aae902343ae"},
+    {file = "refurb-1.28.0.tar.gz", hash = "sha256:9fb4dc340e475818a4d2a7f274c77b81861d2ed8115a3f4fabff53e0ee350aa1"},
 ]
 
 [package.dependencies]
