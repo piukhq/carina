@@ -22,7 +22,7 @@ uvicorn = { extras = ["standard"], version = "^0.18.3" }
 sqlalchemy = { extras = ["asyncio"], version = "^1.4.41" }
 alembic = "^1.8.1"
 pydantic = "^1.10.2"
-asyncpg = "^0.26.0"
+asyncpg = "^0.29.0"
 psycopg2-binary = "^2.9.3"
 prettyprinter = "^0.18.0"
 ujson = "^5.5.0"
