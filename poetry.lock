@@ -947,24 +947,24 @@ files = [
 
 [[package]]
 name = "httpcore"
-version = "1.0.5"
+version = "0.17.3"
 description = "A minimal low-level HTTP client."
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.7"
 files = [
-    {file = "httpcore-1.0.5-py3-none-any.whl", hash = "sha256:421f18bac248b25d310f3cacd198d55b8e6125c107797b609ff9b7a6ba7991b5"},
-    {file = "httpcore-1.0.5.tar.gz", hash = "sha256:34a38e2f9291467ee3b44e89dd52615370e152954ba21721378a87b2960f7a61"},
+    {file = "httpcore-0.17.3-py3-none-any.whl", hash = "sha256:c2789b767ddddfa2a5782e3199b2b7f6894540b17b16ec26b2c4d8e103510b87"},
+    {file = "httpcore-0.17.3.tar.gz", hash = "sha256:a6f30213335e34c1ade7be6ec7c47f19f50c56db36abef1a9dfa3815b1cb3888"},
 ]
 
 [package.dependencies]
+anyio = ">=3.0,<5.0"
 certifi = "*"
 h11 = ">=0.13,<0.15"
+sniffio = "==1.*"
 
 [package.extras]
-asyncio = ["anyio (>=4.0,<5.0)"]
 http2 = ["h2 (>=3,<5)"]
 socks = ["socksio (==1.*)"]
-trio = ["trio (>=0.22.0,<0.26.0)"]
 
 [[package]]
 name = "httpretty"
@@ -1026,19 +1026,18 @@ test = ["Cython (>=0.29.24,<0.30.0)"]
 
 [[package]]
 name = "httpx"
-version = "0.27.0"
+version = "0.24.1"
 description = "The next generation HTTP client."
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.7"
 files = [
-    {file = "httpx-0.27.0-py3-none-any.whl", hash = "sha256:71d5465162c13681bff01ad59b2cc68dd838ea1f10e51574bac27103f00c91a5"},
-    {file = "httpx-0.27.0.tar.gz", hash = "sha256:a0cb88a46f32dc874e04ee956e4c2764aba2aa228f650b06788ba6bda2962ab5"},
+    {file = "httpx-0.24.1-py3-none-any.whl", hash = "sha256:06781eb9ac53cde990577af654bd990a4949de37a28bdb4a230d434f3a30b9bd"},
+    {file = "httpx-0.24.1.tar.gz", hash = "sha256:5853a43053df830c20f8110c5e69fe44d035d850b2dfe795e196f00fdb774bdd"},
 ]
 
 [package.dependencies]
-anyio = "*"
 certifi = "*"
-httpcore = "==1.*"
+httpcore = ">=0.15.0,<0.18.0"
 idna = "*"
 sniffio = "*"
 
@@ -2044,18 +2043,18 @@ reference = "azure"
 
 [[package]]
 name = "rq"
-version = "1.15.1"
+version = "1.16.2"
 description = "RQ is a simple, lightweight, library for creating background jobs, and processing them."
 optional = false
-python-versions = ">=3.6"
+python-versions = ">=3.7"
 files = [
-    {file = "rq-1.15.1-py2.py3-none-any.whl", hash = "sha256:6e243d8d9c4af4686ded4b01b25ea1ff4bac4fc260b02638fbe9c8c17b004bd1"},
-    {file = "rq-1.15.1.tar.gz", hash = "sha256:1f49f4ac1a084044bb8e95b3f305c0bf17e55618b08c18e0b60c080f12d6f008"},
+    {file = "rq-1.16.2-py3-none-any.whl", hash = "sha256:52e619f6cb469b00e04da74305045d244b75fecb2ecaa4f26422add57d3c5f09"},
+    {file = "rq-1.16.2.tar.gz", hash = "sha256:5c5b9ad5fbaf792b8fada25cc7627f4d206a9a4455aced371d4f501cc3f13b34"},
 ]
 
 [package.dependencies]
-click = ">=5.0.0"
-redis = ">=4.0.0"
+click = ">=5"
+redis = ">=3.5"
 
 [[package]]
 name = "ruff"
@@ -2570,29 +2569,28 @@ zstd = ["zstandard (>=0.18.0)"]
 
 [[package]]
 name = "uvicorn"
-version = "0.29.0"
+version = "0.18.3"
 description = "The lightning-fast ASGI server."
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.7"
 files = [
-    {file = "uvicorn-0.29.0-py3-none-any.whl", hash = "sha256:2c2aac7ff4f4365c206fd773a39bf4ebd1047c238f8b8268ad996829323473de"},
-    {file = "uvicorn-0.29.0.tar.gz", hash = "sha256:6a69214c0b6a087462412670b3ef21224fa48cae0e452b5883e8e8bdfdd11dd0"},
+    {file = "uvicorn-0.18.3-py3-none-any.whl", hash = "sha256:0abd429ebb41e604ed8d2be6c60530de3408f250e8d2d84967d85ba9e86fe3af"},
+    {file = "uvicorn-0.18.3.tar.gz", hash = "sha256:9a66e7c42a2a95222f76ec24a4b754c158261c4696e683b9dadc72b590e0311b"},
 ]
 
 [package.dependencies]
 click = ">=7.0"
 colorama = {version = ">=0.4", optional = true, markers = "sys_platform == \"win32\" and extra == \"standard\""}
 h11 = ">=0.8"
-httptools = {version = ">=0.5.0", optional = true, markers = "extra == \"standard\""}
+httptools = {version = ">=0.4.0", optional = true, markers = "extra == \"standard\""}
 python-dotenv = {version = ">=0.13", optional = true, markers = "extra == \"standard\""}
 pyyaml = {version = ">=5.1", optional = true, markers = "extra == \"standard\""}
-typing-extensions = {version = ">=4.0", markers = "python_version < \"3.11\""}
 uvloop = {version = ">=0.14.0,<0.15.0 || >0.15.0,<0.15.1 || >0.15.1", optional = true, markers = "(sys_platform != \"win32\" and sys_platform != \"cygwin\") and platform_python_implementation != \"PyPy\" and extra == \"standard\""}
 watchfiles = {version = ">=0.13", optional = true, markers = "extra == \"standard\""}
-websockets = {version = ">=10.4", optional = true, markers = "extra == \"standard\""}
+websockets = {version = ">=10.0", optional = true, markers = "extra == \"standard\""}
 
 [package.extras]
-standard = ["colorama (>=0.4)", "httptools (>=0.5.0)", "python-dotenv (>=0.13)", "pyyaml (>=5.1)", "uvloop (>=0.14.0,!=0.15.0,!=0.15.1)", "watchfiles (>=0.13)", "websockets (>=10.4)"]
+standard = ["colorama (>=0.4)", "httptools (>=0.4.0)", "python-dotenv (>=0.13)", "pyyaml (>=5.1)", "uvloop (>=0.14.0,!=0.15.0,!=0.15.1)", "watchfiles (>=0.13)", "websockets (>=10.0)"]
 
 [[package]]
 name = "uvloop"
@@ -2847,4 +2845,4 @@ requests = ">=2.0,<3.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "9ed875b0b13fd02d60eaeb2aa8b15ba2d46268a1fe0075a45522d51258c32260"
+content-hash = "82facdfdc957fb7f289d3b23c3a0ad87420f31c77a9f382f8687d2dd4aa5a1ed"
